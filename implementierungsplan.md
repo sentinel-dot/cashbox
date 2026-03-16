@@ -527,7 +527,52 @@ durch BSI geprüft. Stand 2025 nach wie vor vollständig KassenSichV-konform.
 
 ---
 
-## 4. Fiskaly TSE — Transaktionsflow
+## 4. Fiskaly TSE — Überblick & Transaktionsflow
+
+### Wer macht was (Begriffe)
+
+| Begriff | Was es ist | Wer/Wann |
+|---------|-----------|----------|
+| **Fiskaly** | Cloud-TSE-Anbieter, REST-API | cashbox-Backend spricht mit Fiskaly-API |
+| **TSS** (Transaction Security System) | Eine TSE-Instanz pro Tenant — wird einmalig angelegt | Phase 2: bei `POST /onboarding/register` |
+| **TSE-Client** | Fiskaly-Objekt für jedes Gerät — wird einmalig angelegt | Phase 2: bei `POST /devices/register` |
+| **TSE-Transaktion** | Kryptografische Signatur für jeden einzelnen Bon | Phase 2+: bei jeder Zahlung |
+| **ELSTER** | Finanzamt-Portal (Steuerübermittlung) — ist **nicht** Teil des täglichen Kassenflusses | Nur bei: (1) Neue TSS → Finanzamt melden, (2) TSE-Ausfall >48h → Pflichtmeldung |
+| **DSFinV-K** | Export-Format das das Finanzamt bei Betriebsprüfung anfordert | Auf Anfrage via `GET /export/dsfinvk` |
+
+### Phase 1 vs. Phase 2 (kritisch!)
+
+**Phase 1 (aktuell):** Fiskaly wird bei Registrierung **nicht** aufgerufen.
+- `tenants.fiskaly_tss_id = NULL`
+- `devices.tse_client_id = NULL`
+- Bons haben keine TSE-Felder (tse_transaction_id = NULL)
+- **Für den Shishabar-Piloten legal** — muss vor Produktiveinsatz auf Phase 2 umgestellt werden
+
+**Phase 2 (kommt):** Fiskaly wird in zwei Schritten eingebunden:
+```typescript
+// 1. Bei POST /onboarding/register (Phase 2):
+const tss = await fiskaly.post('/tss', { ... })
+await fiskaly.put(`/tss/${tss.id}`, { state: 'INITIALIZED' })
+await db.query('UPDATE tenants SET fiskaly_tss_id = ? WHERE id = ?', [tss.id, tenantId])
+
+// 2. Bei POST /devices/register (Phase 2):
+const client = await fiskaly.post(`/tss/${tss_id}/client`, { ... })
+await db.query('UPDATE devices SET tse_client_id = ? WHERE id = ?', [client.id, deviceId])
+```
+
+### ELSTER — nur zwei Situationen relevant
+
+**1. Neue Kasse beim Finanzamt melden (einmalig, manuell durch Tenant)**
+- Passiert nach TSS-Erstellung in Phase 2
+- Tenant öffnet ELSTER-Portal, meldet neue Kasse mit TSS-Seriennummer
+- cashbox zeigt Checkliste im Onboarding — keine automatische API-Verbindung zu ELSTER
+- Ohne diese Meldung darf die Kasse **nicht produktiv** genutzt werden (KassenSichV)
+
+**2. TSE-Ausfall >48h melden (KassenSichV-Pflicht)**
+- cashbox trackt Ausfälle in `tse_outages`-Tabelle
+- Nach 48h: automatische E-Mail an Owner (Cron-Job — noch nicht implementiert)
+- Tenant meldet Ausfall an Finanzamt (in manchen Bundesländern via ELSTER, teils per Brief)
+- Kasse bleibt weiter nutzbar (Offline-Modus mit "TSE-Signatur ausstehend"-Vermerk)
 
 ### Standard-Zahlung
 ```
@@ -730,7 +775,7 @@ Bon:
 
 ### Screens
 ```
-LoginView
+LoginView ✅ (implementiert 2026-03-15)
 ├── TableOverviewView (Haupt-Screen)
 │   ├── Tabs: Zonen (Innen / Außen / Bar)
 │   ├── Tischkarten: Status (frei/besetzt/Rechnung)
@@ -1135,7 +1180,7 @@ if appVersion < min_app_version → 426 Upgrade Required
 | Phase | Inhalt | Deliverable |
 |-------|--------|-------------|
 | **Phase 0** | Fiskaly Sandbox testen, SwiftUI lernen, Steuerberater, AGB, Testing-Setup | Fundament |
-| **Phase 1** (Monat 1-2) | Backend: Auth + Produkte + Tische + Bestellungen + Kassensitzungen (kein TSE) | SwiftUI MVP, digitaler Bon ohne TSE, DSFinV-K-Datenmodell vorhanden |
+| **Phase 1** (Monat 1-2) | Backend: Auth + Produkte + Tische + Bestellungen + Kassensitzungen (kein TSE) ✅ | SwiftUI: LoginView ✅, TableOverviewView ❌, OrderView ❌, PaymentView ❌ |
 | **Phase 2** (Monat 3) | Fiskaly TSE + Receipts mit allen Pflichtfeldern + Storno + Split Bill + Gemischte Zahlung + Z-Bericht | TSE-konformer digitaler Bon |
 | **Phase 3** (Monat 4) ✅ | Stripe Abo + Onboarding (Register+Checkout+Webhook) + Trial-Logik (14 Tage) + Offline-Queue + Pilotkunde | Produktiveinsatz Shishabar |
 | **Phase 4** (Monat 5-6) ✅ Backend | DSFinV-K Export (✅) + Reports (✅) + Admin-Panel (❌ noch offen) + erste zahlende Kunden | Recurring Revenue |
@@ -1292,3 +1337,5 @@ Kein Template für Environment-Variablen. Neues Deployment ohne Dokumentation wa
 | 2.3 | Logik-Konsistenzprüfung: `receipts.tip_cents` wiederhergestellt, `products.updated_at` korrigiert (nur price_cents immutable), `product_modifier_groups.is_active` ergänzt, Trinkgeld/Außer-Haus im UI als Phase-markiert, doppelter Z-Bericht-Endpoint bereinigt, `sessionMiddleware` ergänzt, Modifier-Tenant-Validierung dokumentiert |
 | 2.5 | Vollständigkeitsprüfung: Abschnitte 17 (offene Backend-Punkte) und 18 (priorisierte nächste Schritte) ergänzt. TypeScript-Fehler behoben (`exportController`, `receiptsController`, `rateLimitMiddleware`). TS-Build sauber. |
 | 2.4 | Phase 4 Backend vollständig: `GET /receipts` (Liste + Plan-Limit), `GET /reports/daily` + `/summary` (Plan-Limit Starter/Pro/Business), `GET /export/dsfinvk` + `/:id/status` + `/:id/file` (Fiskaly TAR-Proxy, async mit 202-Fallback). Fiskaly-Doku ausgewertet (SIGN_DE_V2_API-DOC.json): `start_date`/`end_date` als Unix-Timestamps, Polling auf PENDING→COMPLETED, TAR-Format. Teststruktur aktualisiert (20 Integration-Testdateien, 302 Tests). |
+| 2.6 | SwiftUI Phase 1 gestartet: LoginView ✅ implementiert. Neue Files: DesignSystem.swift (alle Tokens aus Design System v1.2), AppError.swift, Models.swift, AuthStore.swift, NetworkMonitor.swift, OfflineBanner.swift, LoginView.swift, ContentView.swift (Auth-Router), zettel_frontendApp.swift. Screen-Bauplan und Phasenstatus aktualisiert. |
+| 2.7 | Frontend-Backend-Integration: APIClient.swift (HTTP-Client, JWT+DeviceToken-Header, snake_case encoder), KeychainHelper.swift, RegisterView.swift (Onboarding-Formular mit Inline-Validation + Passwort-Stärke-Anzeige). AuthResponse-Modell an echtes Backend-Format angepasst (AuthUser statt User, kein tenant). login() um device_token ergänzt. Pino-Logging im Backend (pino + pino-http, src/logger.ts, Request-Logging in app.ts). |

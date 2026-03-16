@@ -1,24 +1,28 @@
-//
-//  ContentView.swift
-//  zettel-frontend
-//
-//  Created by x on 15.03.26.
-//
+// ContentView.swift
+// cashbox — Root-Router: Login ↔ App
 
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var authStore: AuthStore
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if authStore.isAuthenticated {
+                // TODO: Phase 1 — TableOverviewView einbinden
+                Text("✅ Eingeloggt als \(authStore.currentUser?.name ?? "Unbekannt")")
+                    .font(.jakarta(20, weight: .semibold))
+                    .foregroundColor(DS.C.text)
+            } else {
+                LoginView()
+            }
         }
-        .padding()
+        .animation(.easeInOut(duration: 0.3), value: authStore.isAuthenticated)
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AuthStore.preview)
+        .environmentObject(NetworkMonitor.preview)
 }

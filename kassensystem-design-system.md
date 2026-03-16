@@ -3,7 +3,7 @@
 > Stack: SwiftUI (iOS/iPadOS)  
 > Basis-Screen: Tischübersicht  
 > Stand: Final abgenommen
-
+ 
 ---
 
 ## 1. Typografie

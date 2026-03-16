@@ -2,11 +2,30 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import pinoHttp from 'pino-http';
 import { apiRateLimit } from './middleware/rateLimitMiddleware.js';
+import { logger } from './logger.js';
 
 dotenv.config();
 
 const app = express();
+
+// Request-Logging (alle Requests: Methode, URL, Status, Dauer, tenant_id aus JWT)
+app.use(pinoHttp({
+  logger,
+  // Gesundheits-Check nicht loggen (zu viel Rauschen)
+  autoLogging: { ignore: (req) => req.url === '/health' },
+  customLogLevel: (_req, res) => res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
+  serializers: {
+    req: (req) => ({
+      method: req.method,
+      url:    req.url,
+      // tenant_id aus JWT wenn vorhanden (gesetzt von tenantMiddleware)
+      tenant: (req.raw as any).auth?.tenantId,
+    }),
+    res: (res) => ({ status: res.statusCode }),
+  },
+}));
 
 // Security headers
 app.use(helmet());
@@ -67,9 +86,11 @@ app.use('/export',          exportRouter);
 
 // Globaler Error Handler — muss als letztes registriert werden
 // Express 5 leitet abgelehnte Promises automatisch hierher weiter
-app.use((err: any, _req: any, res: any, _next: any) => {
-  console.error(err);
+app.use((err: any, req: any, res: any, _next: any) => {
   const status = err.status ?? err.statusCode ?? 500;
+  if (status >= 500) {
+    logger.error({ err, url: req.url, method: req.method, tenant: req.auth?.tenantId }, 'Unhandled error');
+  }
   // Kein Stack Trace in Produktion
   res.status(status).json({
     error: process.env['NODE_ENV'] === 'production'

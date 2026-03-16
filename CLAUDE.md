@@ -118,6 +118,18 @@ Orders und Payments können nur erstellt werden wenn eine offene `cash_register_
 
 ## TSE / Fiskaly
 
+### Begriffe (nicht verwechseln!)
+- **TSS** = eine Fiskaly-TSE-Instanz pro Tenant — wird einmalig angelegt (Phase 2, bei Registrierung)
+- **TSE-Client** = Fiskaly-Objekt pro Gerät — wird einmalig angelegt (Phase 2, bei Geräte-Registrierung)
+- **TSE-Transaktion** = Signatur pro Bon — läuft bei jeder Zahlung (Phase 2+)
+- **ELSTER** = Finanzamt-Portal — ist **nicht** Teil des täglichen TSE-Flows; relevant nur bei: (1) neue Kasse anmelden (manuell, einmalig), (2) TSE-Ausfall >48h melden (KassenSichV-Pflicht)
+- **DSFinV-K** = Export auf Anfrage des Finanzamts (Betriebsprüfung) — kein Alltagsbetrieb
+
+### Phase 1 vs. Phase 2
+- **Phase 1 (aktuell):** Fiskaly wird gar nicht aufgerufen. `tenants.fiskaly_tss_id = NULL`, `devices.tse_client_id = NULL`. Bons haben keine TSE-Felder. Für Piloten-Betrieb okay, muss vor Go-live umgestellt werden.
+- **Phase 2:** TSS anlegen bei `POST /onboarding/register`, TSE-Client anlegen bei `POST /devices/register`.
+
+### API-Regeln
 - Jede TSE-Operation braucht einen `idempotency_key` (UUID) in `offline_queue`
 - Bei Timeout: GET /tx/{tx_id} prüfen bevor neuer Request gesendet wird
 - TSE-Transaktionen laufen immer mit `client_id = device.tse_client_id`
@@ -178,7 +190,48 @@ npm run test:coverage        # Coverage-Report
 | Bereich | Endpoints | Phase |
 |---------|-----------|-------|
 | Bon-PDF | GET /receipts/:id/pdf | Phase 5 |
-| SwiftUI App | — | Phase 1 (parallel) |
+
+---
+
+## Implementierungsstand SwiftUI Frontend
+
+### Fertig implementiert ✅
+| Screen / File | Inhalt | Stand |
+|---------------|--------|-------|
+| `DesignSystem.swift` | Alle Design-Tokens (Farben, Typo, Radii, Spacing) aus Design System v1.2 | ✅ |
+| `AppError.swift` | App-weite Fehlertypen (LocalizedError, deutsche Meldungen) | ✅ |
+| `Models.swift` | User, Tenant, UserRole, SubscriptionPlan, AuthResponse | ✅ |
+| `AuthStore.swift` | ObservableObject: Login, PIN-Login, Logout, User-Cache (UserDefaults) | ✅ |
+| `NetworkMonitor.swift` | NWPathMonitor Wrapper, isOnline @Published | ✅ |
+| `OfflineBanner.swift` | Offline-Hinweisband "TSE-Signatur ausstehend" | ✅ |
+| `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular, PIN-Liste, Dark-Mode-Toggle, PINEntrySheet | ✅ |
+| `ContentView.swift` | Auth-Router: LoginView ↔ App | ✅ |
+| `zettel_frontendApp.swift` | Root mit @StateObject Stores + EnvironmentObject Injection | ✅ |
+
+### Noch nicht implementiert ❌ (SwiftUI — Reihenfolge laut Design System §7)
+| Screen | Abhängigkeiten | Phase |
+|--------|----------------|-------|
+| `TableOverviewView` | OrderStore, SessionStore | Phase 1 |
+| `OrderView` | OrderStore, ProductStore | Phase 1 |
+| `ModifierSheet` | an OrderView gebunden (Modal) | Phase 1 |
+| `PaymentView` | OrderStore, TSE-Flow | Phase 2 |
+| `ReceiptView` | receipts-API, QR-Code | Phase 2 |
+| `KassensitzungView` | SessionStore | Phase 1 (Pflicht vor Go-live) |
+| `ZBerichtView` | sessions-API | Phase 2 (Pflicht vor Go-live) |
+| `BerichteView` | reports-API | Phase 2 |
+| `ProdukteView` | products-API | Phase 1 |
+| `KategorienView` | products/categories-API | Phase 1 |
+| `EinstellungenView` | tenants/users/devices-API | Phase 1 |
+
+### SwiftUI — Offene Punkte
+| Punkt | Details |
+|-------|---------|
+| Plus Jakarta Sans | Font-Dateien bundlen + Info.plist UIAppFonts + Font.jakarta() umstellen |
+| APIClient | HTTP-Client mit JWT-Handling, Refresh-Logic, Base-URL konfigurierbar |
+| OrderStore | @EnvironmentObject für Bestellungen, Tischstatus |
+| SessionStore | @EnvironmentObject für Kassensitzung |
+| SyncManager | Offline-Queue-Status, Retry-Logic |
+| KeychainWrapper | JWT sicher im Keychain statt UserDefaults speichern |
 
 ### Offene Backend-Punkte (dokumentiert, noch nicht implementiert)
 | Bereich | Details | Priorität |
@@ -188,6 +241,19 @@ npm run test:coverage        # Coverage-Report
 | E-Mail-Service | Trial-Ablauf-Warnung, Subscription-Events, Passwort-Reset (Nodemailer/SES) | Vor Go-Live |
 | Cron-Jobs | Trial-Ablauf (Tag 10+13), `past_due`-Sperrung, ELSTER-Frist-Prüfung bei TSE-Ausfall | Vor Go-Live |
 | Admin-Panel | Tenant-Übersicht, manuelle Plan-Änderung, Audit-Einsicht | Phase 4 |
+
+### Backend — Logging (implementiert ✅)
+- **Pino** (`pino` + `pino-http`) — JSON-Logs in Production, Pretty-Print in Development
+- `src/logger.ts` — zentraler Logger, via `LOG_LEVEL` env konfigurierbar (default: `info`)
+- Jeder Request loggt: `method`, `url`, `status`, `responseTime`, `tenant` (aus JWT)
+- 4xx → `warn`, 5xx → `error`, 2xx → `info` — `/health` wird nicht geloggt
+- Globaler Error Handler nutzt `logger.error` statt `console.error`
+
+### Auth — kritische Backend-Details
+- `POST /auth/login` erwartet **auch `device_token`** — Gerät muss registriert sein (via `/onboarding/register` oder `/devices/register`)
+- Login/Register-Response: `{token, refreshToken, user: {id, name, role}}` — **kein `tenant`-Objekt**
+- iOS-Modell `AuthUser` ist deshalb schlanker als `User` (nur id, name, role)
+- iOS `AuthStore.login()` sendet `deviceToken` aus Keychain mit
 
 ---
 
