@@ -31,3 +31,14 @@ export async function down(db: Connection): Promise<void> {
 
 **Format der Eingabe:** Beschreibe was geändert werden soll, z.B.:
 "Füge `note VARCHAR(255) NULL` zu `order_items` hinzu für Sonderwunsch-Kommentare"
+
+---
+
+## Pflicht nach jeder Implementierung: CLAUDE.md aktualisieren
+
+Nach dem Erstellen der Migration **immer** diesen Abschnitt in `CLAUDE.md` aktualisieren:
+
+**"Projektstruktur Backend → db/migrations/"** — neuen Migrations-Eintrag zur Liste hinzufügen, Format:
+`V00X__<beschreibung>` — kurze Erklärung was die Migration macht
+
+Ohne diesen Schritt fehlt die Migration in der Übersicht und ich werde in der nächsten Konversation annehmen, dass sie noch nicht existiert.

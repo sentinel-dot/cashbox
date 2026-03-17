@@ -32,3 +32,15 @@ Erstelle eine neue API-Route für das Kassensystem. Ich gebe dir den Routennamen
 
 **Format der Eingabe:** Beschreibe die Route kurz, z.B.:
 "POST /orders/:id/items — fügt ein Produkt zur Bestellung hinzu, mit optionalen Modifiers"
+
+---
+
+## Pflicht nach jeder Implementierung: CLAUDE.md aktualisieren
+
+Nach dem Erstellen von Route + Controller + Test **immer** diese Abschnitte in `CLAUDE.md` aktualisieren:
+
+1. **"Implementierungsstand Backend → Fertig implementiert ✅"** — neuen Eintrag in der Tabelle hinzufügen (Bereich, Endpoints, Tests-Status)
+2. **"Projektstruktur Backend → controllers/"** — neuen Controller in der Liste eintragen (mit Hinweis falls er nicht an eigener Route hängt)
+3. Falls der neue Endpoint vorher als ❌ gelistet war — Zeile entfernen
+
+Ohne diesen Schritt ist CLAUDE.md veraltet und ich werde in der nächsten Konversation falsche Annahmen über fehlende Endpoints machen.

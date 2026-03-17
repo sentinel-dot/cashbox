@@ -3,11 +3,12 @@ Scaffolde oder erweitere den Onboarding-Flow für neue Tenants im Kassensystem.
 **Was der Onboarding-Flow abdeckt:**
 
 ### Schritt 1: Tenant registrieren (`POST /onboarding/register`)
-Erstellt Tenant + Admin-User atomisch in einer Transaktion:
-- Tenant anlegen (`tenants`-Tabelle): Name, Slug, `subscription_status = 'trial'`
+Erstellt Tenant + Admin-User + erstes Gerät atomisch in einer Transaktion:
+- Tenant anlegen (`tenants`-Tabelle): Name, `subscription_status = 'trial'`
 - Admin-User anlegen (`users`-Tabelle): Rolle `owner`, bcrypt-Hash
-- `receipt_sequences`-Eintrag anlegen (Startwert 1)
-- JWT zurückgeben (kein separater Login-Step nötig)
+- Erstes Gerät anlegen (`devices`-Tabelle): `device_name` + `device_token` aus Request
+- `receipt_sequences`-Eintrag anlegen (Startwert 0)
+- Vollständiges JWT zurückgeben (userId + tenantId + deviceId) — sofortiger Login
 
 Zod-Schema:
 ```typescript
@@ -15,13 +16,15 @@ z.object({
   business_name: z.string().min(2).max(100),
   email: z.string().email(),
   password: z.string().min(8),
+  device_name: z.string().min(1),    // z.B. "iPad Theke" — für Bon-Pflichtfeld device_name
+  device_token: z.string().min(10),  // vom iOS-Client generierter UUID, persistent im Keychain
   // Für Bon-Pflichtfelder (KassenSichV):
   address: z.string().min(5),
-  tax_number: z.string().min(5),  // Steuernummer oder USt-IdNr.
+  tax_number: z.string().min(5),     // Steuernummer oder USt-IdNr.
 })
 ```
 
-### Schritt 2: Erstes Gerät registrieren (`POST /devices` — existiert bereits)
+### Schritt 2: Weiteres Gerät registrieren (`POST /devices/register` — existiert bereits)
 - Nach Register sofort Gerät anlegen
 - `tse_client_id` bei Fiskaly registrieren (TSE-Client anlegen) — **NUR in Phase 2**
 - In Phase 1: `tse_client_id = NULL`, kein Fiskaly-Aufruf
@@ -33,8 +36,8 @@ z.object({
 - Nach `checkout.session.completed`-Webhook: `subscription_status = 'active'`
 
 ### Trial-Logik
-- `subscription_status = 'trial'` erlaubt vollen Zugang für 14 Tage
-- `subscriptionMiddleware` prüft: `trial` oder `active` → OK; `past_due` → 402; `cancelled` → 403
+- `subscription_status = 'trial'` erlaubt vollen Zugang für 14 Tage ab `tenants.created_at`
+- `subscriptionMiddleware` prüft: `trial` → OK (mit `X-Trial-Expires` Header); `active` → OK; `past_due` → OK + Warning-Header (Grace Period, noch nicht vollständig implementiert); `cancelled` → 402
 
 ### Fiskaly TSS-Erstellung (Phase 2 — noch nicht aktiv)
 Bei Registrierung muss in Phase 2 zusätzlich eine TSS angelegt werden:

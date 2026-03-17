@@ -33,7 +33,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 
   try {
-    const payload = jwt.verify(token, secret) as AuthPayload;
+    const payload = jwt.verify(token, secret) as AuthPayload & { type?: string };
+    if (payload.type === 'refresh') {
+      res.status(401).json({ error: 'Refresh-Token darf nicht als Access-Token verwendet werden.' });
+      return;
+    }
     req.auth = payload;
     next();
   } catch {

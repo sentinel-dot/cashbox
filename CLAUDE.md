@@ -10,6 +10,27 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 
 ---
 
+## Aktueller Stand
+
+**Phase:** Phase 1 Frontend läuft ⏳ (Backend Phase 1–3 vollständig ✅, Phase 4 Backend ✅)
+**Nächste Aufgaben (Reihenfolge):**
+1. `OrderStore` + `SessionStore` implementieren
+2. `KassensitzungView` (Pflicht vor allem anderen — App ohne Session nicht nutzbar)
+3. `TableOverviewView` → `OrderView` → `ModifierSheet` → `PaymentView` → `ReceiptView`
+
+**Bekannte offene Sicherheitslücken:** keine ✅
+
+**Pilot-Ziel:** Shishabar-Test — kein festes Datum
+
+---
+
+## Pflicht bei jeder Änderung (Code, Fix, Refactor)
+
+Nach **jeder** Änderung — egal ob über Skill oder direkt — folgendes prüfen:
+- Steht der Punkt unter "Aktueller Stand → Bekannte offene Sicherheitslücken"? → entfernen
+- Ist der Punkt in `implementierungsplan.md` §17 als offen gelistet? → als erledigt markieren oder entfernen
+- Ist der Punkt in `implementierungsplan.md` §18 Nächste Schritte? → streichen oder verschieben
+
 ## Pflicht bei jeder Implementierung
 
 Nach jeder Implementierung (neue Route, neuer Controller, neue Funktion) **immer** den Abschnitt "Implementierungsstand Backend" in dieser Datei aktualisieren:
@@ -18,6 +39,8 @@ Nach jeder Implementierung (neue Route, neuer Controller, neue Funktion) **immer
 - Neue Endpoints sofort mit ❌ eintragen, damit sie nicht als "vergessen" gelten
 
 **Warum:** Ohne aktuellen Stand liest Claude neue Controller-Dateien und schlußfolgert fälschlicherweise, dass zugehörige Endpoints fehlen — obwohl sie z.B. in einer anderen Route eingebunden sind (Beispiel: `paymentsController` hängt an `POST /orders/:id/pay`, NICHT an einem eigenen `/payments`-Endpoint).
+
+Dasselbe gilt für das **Frontend (SwiftUI):** Nach jeder Implementierung (neuer Screen, neue View, neuer Store, neue Funktion) **immer** den Abschnitt "Implementierungsstand SwiftUI Frontend" in dieser Datei aktualisieren — ✅ wenn Screen/File fertig ist, ❌ bei noch offenen Punkten oder falschen Annahmen.
 
 ---
 
@@ -142,14 +165,15 @@ Orders und Payments können nur erstellt werden wenn eine offene `cash_register_
 
 ## Phasenplan (Überblick)
 
-| Phase | Was | Besonderheit |
-|-------|-----|--------------|
-| 0 | Vorbereitung | Fiskaly Sandbox, SwiftUI lernen, Steuerberater, AGB |
-| 1 | Backend MVP + SwiftUI ohne TSE | DSFinV-K-Datenmodell bereits kompatibel |
-| 2 | TSE + Receipts + Split Bill + Z-Bericht | Erster TSE-konformer digitaler Bon |
-| 3 | Stripe + Onboarding + Offline-Queue + Pilot | Produktiveinsatz Shishabar |
-| 4 | DSFinV-K Export + Admin-Panel | Erste zahlende Kunden |
-| 5 | Drucker + Multi-iPad + DATEV | Skalierung |
+Vollständiger Plan mit Deliverables, Priorisierung und offenen Punkten: **`implementierungsplan.md` §15–18**
+
+| Phase | Backend | SwiftUI |
+|-------|---------|---------|
+| 1 | ✅ Auth, Produkte, Tische, Bestellungen, Kassensitzungen | ⏳ LoginView ✅, alle anderen Screens ❌ |
+| 2 | ✅ TSE, Receipts, Split Bill, Z-Bericht | ❌ PaymentView, ReceiptView |
+| 3 | ✅ Stripe, Onboarding, Offline-Queue | ❌ SyncManager |
+| 4 | ✅ DSFinV-K Export, Berichte | ❌ BerichteView, Admin-Panel |
+| 5 | ❌ Bondrucker, Multi-iPad, DATEV | ❌ |
 
 ---
 
@@ -200,11 +224,14 @@ npm run test:coverage        # Coverage-Report
 |---------------|--------|-------|
 | `DesignSystem.swift` | Alle Design-Tokens (Farben, Typo, Radii, Spacing) aus Design System v1.2 | ✅ |
 | `AppError.swift` | App-weite Fehlertypen (LocalizedError, deutsche Meldungen) | ✅ |
-| `Models.swift` | User, Tenant, UserRole, SubscriptionPlan, AuthResponse | ✅ |
-| `AuthStore.swift` | ObservableObject: Login, PIN-Login, Logout, User-Cache (UserDefaults) | ✅ |
+| `Models.swift` | User, AuthUser, Tenant, UserRole, SubscriptionPlan, SubscriptionStatus, AuthResponse | ✅ |
+| `AuthStore.swift` | ObservableObject: Login, Register, PIN-Login, Logout, User-Cache (UserDefaults), sendet deviceToken aus Keychain | ✅ |
+| `APIClient.swift` | async/await HTTP-Client: JWT im Keychain, Device-Token persistent, get/post/patch/delete, Refresh-Logic | ✅ |
+| `KeychainHelper.swift` | Sicherer Token-Speicher (save/load/delete, Service: com.cashbox.app) | ✅ |
 | `NetworkMonitor.swift` | NWPathMonitor Wrapper, isOnline @Published | ✅ |
 | `OfflineBanner.swift` | Offline-Hinweisband "TSE-Signatur ausstehend" | ✅ |
 | `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular, PIN-Liste, Dark-Mode-Toggle, PINEntrySheet | ✅ |
+| `RegisterView.swift` | 2-Spalten Registrierung: Business-Name, E-Mail, Passwort, Adresse, Steuernummer, Gerätename → POST /onboarding/register | ✅ |
 | `ContentView.swift` | Auth-Router: LoginView ↔ App | ✅ |
 | `zettel_frontendApp.swift` | Root mit @StateObject Stores + EnvironmentObject Injection | ✅ |
 
@@ -227,11 +254,9 @@ npm run test:coverage        # Coverage-Report
 | Punkt | Details |
 |-------|---------|
 | Plus Jakarta Sans | Font-Dateien bundlen + Info.plist UIAppFonts + Font.jakarta() umstellen |
-| APIClient | HTTP-Client mit JWT-Handling, Refresh-Logic, Base-URL konfigurierbar |
 | OrderStore | @EnvironmentObject für Bestellungen, Tischstatus |
 | SessionStore | @EnvironmentObject für Kassensitzung |
 | SyncManager | Offline-Queue-Status, Retry-Logic |
-| KeychainWrapper | JWT sicher im Keychain statt UserDefaults speichern |
 
 ### Offene Backend-Punkte (dokumentiert, noch nicht implementiert)
 | Bereich | Details | Priorität |
@@ -297,7 +322,8 @@ src/
 │   ├── receipts.ts     -- Bon-Generierung + Pflichtfeld-Prüfung
 │   └── sequences.ts    -- receipt_sequences FOR UPDATE
 ├── db/
-│   ├── migrations/     -- V001__initial_schema, V002__order_items_soft_delete
+│   ├── migrations/     -- V001__initial_schema, V002__order_items_soft_delete,
+│   │                      V003__onboarding_trial_stripe, V004__tenants_subscription_period_end
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/

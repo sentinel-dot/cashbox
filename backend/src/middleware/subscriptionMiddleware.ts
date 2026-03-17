@@ -11,7 +11,7 @@ export async function subscriptionMiddleware(req: Request, res: Response, next: 
   }
 
   const [rows] = await db.execute<any[]>(
-    'SELECT subscription_status, created_at FROM tenants WHERE id = ?',
+    'SELECT subscription_status, created_at, subscription_current_period_end FROM tenants WHERE id = ?',
     [req.auth.tenantId]
   );
 
@@ -20,7 +20,7 @@ export async function subscriptionMiddleware(req: Request, res: Response, next: 
     return;
   }
 
-  const { subscription_status: status, created_at } = rows[0];
+  const { subscription_status: status, created_at, subscription_current_period_end } = rows[0];
 
   if (status === 'trial') {
     const trialExpiry = new Date(created_at);
@@ -42,6 +42,14 @@ export async function subscriptionMiddleware(req: Request, res: Response, next: 
   }
 
   if (status === 'past_due') {
+    if (subscription_current_period_end) {
+      const graceExpiry = new Date(subscription_current_period_end);
+      graceExpiry.setDate(graceExpiry.getDate() + GRACE_PERIOD_DAYS);
+      if (new Date() > graceExpiry) {
+        res.status(402).json({ error: 'Zahlung überfällig. Bitte Zahlungsmethode aktualisieren.' });
+        return;
+      }
+    }
     res.setHeader('X-Subscription-Warning', `Zahlung überfällig. Grace period: ${GRACE_PERIOD_DAYS} Tage.`);
   }
 

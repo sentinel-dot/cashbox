@@ -281,3 +281,16 @@ let result: MyModel = try await APIClient.shared.post("/some/endpoint", body: bo
 - "OrderView — offene Bestellung für Tisch, Produktgitter, Warenkorb mit Summe"
 - "SessionView — Kassensitzung öffnen/schließen mit Bargeld-Eingabe"
 - "ModifierSheet — Bottom Sheet für Produktvarianten, Pflichtauswahl-Validierung"
+
+---
+
+## Pflicht nach jeder Implementierung: CLAUDE.md aktualisieren
+
+Nach dem Erstellen der View-Datei **immer** diese Abschnitte in `CLAUDE.md` aktualisieren:
+
+1. **"Implementierungsstand SwiftUI Frontend → Fertig implementiert ✅"** — neuen Eintrag hinzufügen (Screen/File, Inhalt, Stand ✅)
+2. **"Implementierungsstand SwiftUI Frontend → Noch nicht implementiert ❌"** — View aus der Tabelle entfernen
+3. Falls ein neuer Store implementiert wurde (OrderStore, SessionStore, SyncManager): aus "Offene Punkte" entfernen und in ✅-Tabelle eintragen
+4. Falls `zettel_frontendApp.swift` angepasst wurde (neuer Store injiziert): Beschreibung dort aktualisieren
+
+Ohne diesen Schritt ist CLAUDE.md veraltet und ich werde in der nächsten Konversation Views als "fehlend" behandeln, die längst existieren.

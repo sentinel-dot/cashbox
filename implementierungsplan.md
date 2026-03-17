@@ -842,6 +842,21 @@ CDOfflineQueue (id, order_id, idempotency_key, payload, status, created_at)
 - Device-Revocation: `POST /devices/:id/revoke` → sofort wirksam (Middleware prüft `is_revoked`)
 - PIN-basierter Benutzerwechsel auf Gerät (nicht für sensitive Operationen)
 
+### ✅ Behobene Sicherheitslücken (2026-03-16)
+
+**Refresh-Token kann als Access-Token missbraucht werden**
+`authMiddleware` prüft `type`-Feld im Payload nicht. Refresh-Tokens werden mit demselben `JWT_SECRET` signiert und haben identische Payload-Struktur (`userId, tenantId, deviceId, role`) — lediglich `type: 'refresh'` und längere Laufzeit (7 Tage) unterscheiden sie. Ein abgefangener Refresh-Token funktioniert direkt als Access-Token.
+```typescript
+// Fix: in authMiddleware.ts nach jwt.verify():
+if ((payload as any).type === 'refresh') {
+  res.status(401).json({ error: 'Refresh-Token darf nicht als Access-Token verwendet werden.' });
+  return;
+}
+```
+
+**`past_due` Grace Period nicht durchgesetzt**
+`subscriptionMiddleware` setzt bei `past_due` nur einen `X-Subscription-Warning`-Header, blockt aber nie — auch nicht nach Ablauf der 3-tägigen Grace Period. Der `GRACE_PERIOD_DAYS = 3`-Wert ist definiert aber wird gegen kein Datum geprüft. Aktuell hat `past_due` identisches Verhalten wie `active`.
+
 ### Rate Limiting (Express Rate Limit)
 ```
 Login:          5 Versuche / Minute / IP
@@ -1213,7 +1228,15 @@ if appVersion < min_app_version → 426 Upgrade Required
 
 ## 17. Offene Backend-Punkte (nach Vollständigkeitsprüfung)
 
-### Kritisch — vor Go-live
+### Kritisch — vor Go-live (Sicherheit) ✅ behoben
+
+**Refresh-Token Security Fix** ✅
+`authMiddleware.ts` prüft jetzt `payload.type === 'refresh'` → 401. Behoben 2026-03-16.
+
+**`past_due` Grace Period** ✅
+`subscriptionMiddleware.ts` prüft jetzt `subscription_current_period_end + GRACE_PERIOD_DAYS` gegen `now` → 402 nach Ablauf. Behoben 2026-03-16.
+
+### Kritisch — vor Go-live (Features)
 
 **E-Mail-Service (kein Transactional-Mail implementiert)**
 Wird benötigt für:
@@ -1265,11 +1288,21 @@ Aktuell: `apiRateLimit` läuft vor `authMiddleware` → effektiv per IP.
 Nachteil: Tenant hinter NAT/Proxy kann andere Tenants blockieren.
 Lösung: `apiRateLimit` nach `tenantMiddleware` verschieben, `keyGenerator: req.auth.tenantId`.
 
+### Wichtig — nach Pilot
+
+**Error-Monitoring (Sentry)**
+Pino loggt in stdout — in Produktion weiß man nicht was schiefläuft ohne aktiv Logs zu lesen. Bei einem SaaS-Kassensystem (Bugs blockieren direkt Einnahmen) ist Alerting kein Nice-to-have. Sentry Free Tier, ~20min Integration: `@sentry/node` + `Sentry.init()` in `app.ts`, `Sentry.captureException(err)` im globalen Error Handler.
+
+**`subscriptionMiddleware` macht DB-Query pro Request**
+Jeder authentifizierte API-Call feuert `SELECT subscription_status, created_at FROM tenants WHERE id = ?`. Bei aktivem Kassenbetrieb mit vielen Order-Calls unnötig. Subscription-Status ändert sich selten. Lösung: `subscriptionStatus` in JWT-Payload einbauen — `subscriptionMiddleware` prüft dann nur den Token (kein DB-Hit) und macht die DB-Query nur bei `trial` (für Ablaufberechnung). Auth- und Stripe-Webhook aktualisieren den JWT bei Status-Änderung.
+
+**Rate-Limit per Tenant statt per IP** *(bereits in Plan dokumentiert)*
+Aktuell: `apiRateLimit` läuft vor `authMiddleware` → effektiv per IP. Tenant hinter NAT/Proxy kann andere blockieren. Fix: nach `tenantMiddleware`, `keyGenerator: req.auth!.tenantId`.
+
 ### Nice-to-have
 
-**Structured Logging**
-Aktuell: nur `console.error` im Error-Handler.
-Produktion braucht JSON-Logs mit Request-ID, Tenant-ID, Dauer (Winston oder Pino).
+**Docker Compose für lokale Entwicklung**
+Kein `docker-compose.yml` vorhanden. Lokale Entwicklung erfordert manuell MariaDB + `npm run db:setup`. Ein `docker-compose.yml` (Node + MariaDB) reduziert das auf `docker compose up`. Nicht kritisch für Soloprojekt, aber nötig sobald ein zweiter Entwickler oder neues Gerät hinzukommt.
 
 **Graceful Shutdown**
 Kein `SIGTERM`-Handler — bei PM2 Rolling Restart können laufende TSE-Transaktionen abbrechen.
@@ -1280,47 +1313,46 @@ process.on('SIGTERM', async () => {
 });
 ```
 
-**`.env.example` fehlt**
-Kein Template für Environment-Variablen. Neues Deployment ohne Dokumentation was zu setzen ist.
+**`.env.example`** ✅ vorhanden — `backend/.env.example` existiert.
 
 ---
 
 ## 18. Nächste Schritte (priorisiert)
 
-### Diese Woche — Blocker für Pilot
+### Jetzt — Blocker für Pilot (SwiftUI)
 
-1. **SwiftUI starten** — kritischer Pfad, alles andere ist zweitrangig
-   Reihenfolge: `LoginView` → `SessionView` → `TableOverviewView` → `OrderView` → `PaymentView` → `ReceiptView`
-   ModifierSheet, SplitBill, ReportsView danach.
+3. **SwiftUI Phase 1 Screens** — kritischer Pfad, alles andere ist zweitrangig
+   Reihenfolge: `OrderStore` → `SessionStore` → `KassensitzungView` → `TableOverviewView` → `OrderView` → `ModifierSheet` → `PaymentView` → `ReceiptView`
+   Danach: `ProdukteView`, `EinstellungenView`, `BerichteView`
 
-2. **E-Mail-Service + Cron-Jobs** — KassenSichV-Pflicht
-   TSE-Ausfall-Meldung nach 48h ist gesetzlich vorgeschrieben. Muss vor Produktiveinsatz laufen.
+### Vor Go-live — Backend (nicht optional)
 
-3. **`versionMiddleware`** — klein (~2h), aber nötig sobald erste App-Version deployed
+4. **E-Mail-Service + Cron-Jobs** — KassenSichV-Pflicht (TSE-Ausfall-Meldung nach 48h)
+5. **Passwort-Reset-Flow** (`POST /auth/forgot-password` + `/reset-password`)
+6. **`versionMiddleware`** — klein (~2h), nötig sobald erste App-Version deployed
+7. **`GET /tenants/me` Subscription-Details** — `trial_expires_at`, `subscription_current_period_end` fehlen in Response
 
-4. **`.env.example`** — 30 Minuten, verhindert Fehler beim Deployment
+### Vor Go-live — Infrastruktur & Recht
 
-### Vor Go-live — nicht optional
-
-5. **Rechtliches**: AGB, AVV, Verfahrensdokumentation (Anwalt beauftragen)
-6. **Infrastruktur**: Hetzner-Server, GitHub Actions CI/CD, Nginx, SSL, PM2
-7. **Fiskaly Live-Account** anlegen + TSS für Shishabar + ELSTER-Meldung
-8. **Stripe Live-Keys** + Webhook-Endpoint in Stripe-Dashboard eintragen
-9. **Passwort-Reset-Flow** implementieren
-10. **Apple Developer Account** (99€/Jahr) für TestFlight-Verteilung
+8. **Rechtliches**: AGB, AVV, Verfahrensdokumentation (Anwalt beauftragen)
+9. **Infrastruktur**: Hetzner-Server, GitHub Actions CI/CD, Nginx, SSL, PM2
+10. **Fiskaly Live-Account** anlegen + TSS für Shishabar + ELSTER-Meldung
+11. **Stripe Live-Keys** + Webhook-Endpoint in Stripe-Dashboard eintragen
+12. **Apple Developer Account** (99€/Jahr) für TestFlight-Verteilung
 
 ### Nach Pilot
 
-11. ELSTER-Onboarding-Checkliste enforcement
-12. Tenant-Daten-Export (ZIP nach Kündigung)
-13. Rate-Limit per Tenant
-14. Structured Logging (Pino/Winston)
-15. Graceful Shutdown
-16. `GET /tenants/me` Subscription-Details ergänzen
+13. Error-Monitoring (Sentry)
+14. ELSTER-Onboarding-Checkliste enforcement
+15. Tenant-Daten-Export (ZIP nach Kündigung)
+16. Rate-Limit per Tenant (statt per IP)
+17. `subscriptionMiddleware` Performance (Status in JWT)
+18. Graceful Shutdown (SIGTERM-Handler)
+19. Docker Compose für lokale Entwicklung
 
 ---
 
-*Plan-Version: 2.4 | Stack: SwiftUI / Node.js+TS / MariaDB / Fiskaly / Stripe*
+*Plan-Version: 2.5 | Stack: SwiftUI / Node.js+TS / MariaDB / Fiskaly / Stripe*
 *Scope Phase 1-4: Digitaler Bon (kein Drucker), Single-iPad (kein Multi-Device-Sync)*
 *Trinkgeld: deaktiviert bis Phase 3 | Außer-Haus-Toggle: deaktiviert bis Phase 4*
 
@@ -1339,3 +1371,4 @@ Kein Template für Environment-Variablen. Neues Deployment ohne Dokumentation wa
 | 2.4 | Phase 4 Backend vollständig: `GET /receipts` (Liste + Plan-Limit), `GET /reports/daily` + `/summary` (Plan-Limit Starter/Pro/Business), `GET /export/dsfinvk` + `/:id/status` + `/:id/file` (Fiskaly TAR-Proxy, async mit 202-Fallback). Fiskaly-Doku ausgewertet (SIGN_DE_V2_API-DOC.json): `start_date`/`end_date` als Unix-Timestamps, Polling auf PENDING→COMPLETED, TAR-Format. Teststruktur aktualisiert (20 Integration-Testdateien, 302 Tests). |
 | 2.6 | SwiftUI Phase 1 gestartet: LoginView ✅ implementiert. Neue Files: DesignSystem.swift (alle Tokens aus Design System v1.2), AppError.swift, Models.swift, AuthStore.swift, NetworkMonitor.swift, OfflineBanner.swift, LoginView.swift, ContentView.swift (Auth-Router), zettel_frontendApp.swift. Screen-Bauplan und Phasenstatus aktualisiert. |
 | 2.7 | Frontend-Backend-Integration: APIClient.swift (HTTP-Client, JWT+DeviceToken-Header, snake_case encoder), KeychainHelper.swift, RegisterView.swift (Onboarding-Formular mit Inline-Validation + Passwort-Stärke-Anzeige). AuthResponse-Modell an echtes Backend-Format angepasst (AuthUser statt User, kein tenant). login() um device_token ergänzt. Pino-Logging im Backend (pino + pino-http, src/logger.ts, Request-Logging in app.ts). |
+| 2.8 | Sicherheitsanalyse + Priorisierung: Refresh-Token Security Bug dokumentiert (Abschnitt 8), past_due Grace Period Bug dokumentiert, subscriptionMiddleware Performance-Problem dokumentiert. Neue Punkte in Abschnitt 17 (Kritisch/Wichtig/Nice-to-have) und Abschnitt 18 (priorisierte Reihenfolge). Veraltete Einträge korrigiert (Structured Logging ✅, .env.example ✅). |
