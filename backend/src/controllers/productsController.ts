@@ -8,7 +8,7 @@ import { writePriceHistory } from '../services/priceHistory.js';
 
 export const createCategorySchema = z.object({
   name:       z.string().min(1).max(255),
-  color:      z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color:      z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   sort_order: z.number().int().nonnegative().optional(),
 });
 
@@ -20,7 +20,7 @@ export const updateCategorySchema = z.object({
 
 export const createProductSchema = z.object({
   name:               z.string().min(1).max(255),
-  category_id:        z.number().int().positive().optional(),
+  category_id:        z.number().int().positive().nullable().optional(),
   price_cents:        z.number().int().nonnegative(),
   vat_rate_inhouse:   z.enum(['7', '19']),
   vat_rate_takeaway:  z.enum(['7', '19']).optional(),
@@ -236,8 +236,8 @@ export async function createProduct(req: Request, res: Response): Promise<void> 
   const { name, category_id, price_cents, vat_rate_inhouse, vat_rate_takeaway } =
     req.body as z.infer<typeof createProductSchema>;
 
-  // Kategorie-Zugehörigkeit prüfen
-  if (category_id !== undefined) {
+  // Kategorie-Zugehörigkeit prüfen (nur wenn explizit eine ID angegeben)
+  if (category_id != null) {
     const [catRows] = await db.execute<any[]>(
       'SELECT id FROM product_categories WHERE id = ? AND tenant_id = ? AND is_active = TRUE',
       [category_id, tenantId]

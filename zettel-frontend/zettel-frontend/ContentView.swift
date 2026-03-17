@@ -9,10 +9,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if authStore.isAuthenticated {
-                // TODO: Phase 1 — TableOverviewView einbinden
-                Text("✅ Eingeloggt als \(authStore.currentUser?.name ?? "Unbekannt")")
-                    .font(.jakarta(20, weight: .semibold))
-                    .foregroundColor(DS.C.text)
+                TableOverviewView()
             } else {
                 LoginView()
             }

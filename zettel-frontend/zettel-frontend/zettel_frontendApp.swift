@@ -8,10 +8,14 @@ import SwiftUI
 struct zettel_frontendApp: App {
     @StateObject private var authStore      = AuthStore()
     @StateObject private var networkMonitor = NetworkMonitor()
+    @StateObject private var sessionStore   = SessionStore()
+    @StateObject private var orderStore     = OrderStore()
+    @StateObject private var tableStore     = TableStore()
+    @StateObject private var productStore   = ProductStore()
+    @StateObject private var reportStore    = ReportStore()
+    @StateObject private var usersStore     = UsersStore()
 
-    // Weitere Stores folgen in Phase 1:
-    // @StateObject private var orderStore   = OrderStore()
-    // @StateObject private var sessionStore = SessionStore()
+    // Phase 3:
     // @StateObject private var syncManager  = SyncManager()
 
     var body: some Scene {
@@ -19,6 +23,12 @@ struct zettel_frontendApp: App {
             ContentView()
                 .environmentObject(authStore)
                 .environmentObject(networkMonitor)
+                .environmentObject(sessionStore)
+                .environmentObject(orderStore)
+                .environmentObject(tableStore)
+                .environmentObject(productStore)
+                .environmentObject(reportStore)
+                .environmentObject(usersStore)
         }
     }
 }

@@ -7,6 +7,8 @@ enum AppError: LocalizedError {
     case invalidCredentials
     case unauthorized
     case noActiveSession
+    case wrongPin
+    case conflict(String)
     case networkError(String)
     case serverError(Int, String)
     case fiskalyError(String)
@@ -20,6 +22,10 @@ enum AppError: LocalizedError {
             return "Keine Berechtigung für diese Aktion."
         case .noActiveSession:
             return "Keine offene Kassensitzung. Bitte Sitzung öffnen."
+        case .wrongPin:
+            return "Falsche PIN. Bitte erneut versuchen."
+        case .conflict(let msg):
+            return msg
         case .networkError(let msg):
             return "Netzwerkfehler: \(msg)"
         case .serverError(let code, let msg):

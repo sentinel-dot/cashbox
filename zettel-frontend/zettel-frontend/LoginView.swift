@@ -520,7 +520,7 @@ private struct PINUserRow: View {
         isLoadingPIN = true
         defer { isLoadingPIN = false }
         do {
-            try await authStore.loginWithPin(userId: user.id, pin: pin)
+            try await authStore.loginWithPin(pin: pin)
         } catch let appError as AppError {
             pinError = appError
             showPINError = true

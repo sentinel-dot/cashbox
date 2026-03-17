@@ -110,7 +110,7 @@ class APIClient {
         switch code {
         case 401: throw AppError.unauthorized
         case 402: throw AppError.serverError(402, "Abonnement abgelaufen oder Trial beendet")
-        case 409: throw AppError.noActiveSession
+        case 409: throw AppError.conflict(msg)
         case 422: throw AppError.serverError(422, msg)
         case 426: throw AppError.serverError(426, "App-Version veraltet — bitte Update installieren")
         default:  throw AppError.serverError(code, msg)

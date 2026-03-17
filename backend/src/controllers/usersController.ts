@@ -11,7 +11,7 @@ export const createUserSchema = z.object({
   email:    z.string().email(),
   password: z.string().min(8),
   role:     z.enum(['owner', 'manager', 'staff']),
-  pin:      z.string().length(4).regex(/^\d{4}$/).optional(),
+  pin:      z.string().length(4).regex(/^\d{4}$/).nullable().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -38,7 +38,8 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
   const tenantId = req.auth!.tenantId;
 
   const [rows] = await db.execute<any[]>(
-    `SELECT id, name, email, role, is_active, created_at
+    `SELECT id, name, email, role, is_active, created_at,
+            (pin_hash IS NOT NULL) AS has_pin
      FROM users
      WHERE tenant_id = ? AND is_active = TRUE
      ORDER BY name ASC`,

@@ -12,11 +12,14 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 
 ## Aktueller Stand
 
-**Phase:** Phase 1 Frontend läuft ⏳ (Backend Phase 1–3 vollständig ✅, Phase 4 Backend ✅)
+**Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
 **Nächste Aufgaben (Reihenfolge):**
-1. `OrderStore` + `SessionStore` implementieren
-2. `KassensitzungView` (Pflicht vor allem anderen — App ohne Session nicht nutzbar)
-3. `TableOverviewView` → `OrderView` → `ModifierSheet` → `PaymentView` → `ReceiptView`
+1. ~~`OrderStore` + `SessionStore` implementieren~~ ✅
+2. ~~`KassensitzungView`~~ ✅
+3. ~~`TableOverviewView`~~ ✅ → ~~`OrderView`~~ ✅ → ~~`PaymentView`~~ ✅ → ~~`ReceiptView`~~ ✅
+4. ~~`ZBerichtView`~~ ✅, ~~`BerichteView`~~ ✅, ~~`ProdukteView`~~ ✅, ~~`KategorienView`~~ ✅, ~~`EinstellungenView`~~ ✅
+5. ~~Bug-Fixes: JSON-Decode-Fehler, PIN-Login, Produkt-/Kategorie-Anzeige, Berichte, 409-Mapping~~ ✅
+6. Plus Jakarta Sans Font-Dateien bundlen (Info.plist UIAppFonts)
 
 **Bekannte offene Sicherheitslücken:** keine ✅
 
@@ -234,29 +237,34 @@ npm run test:coverage        # Coverage-Report
 | `RegisterView.swift` | 2-Spalten Registrierung: Business-Name, E-Mail, Passwort, Adresse, Steuernummer, Gerätename → POST /onboarding/register | ✅ |
 | `ContentView.swift` | Auth-Router: LoginView ↔ App | ✅ |
 | `zettel_frontendApp.swift` | Root mit @StateObject Stores + EnvironmentObject Injection | ✅ |
+| `SessionStore.swift` | ObservableObject: Session laden/öffnen/schließen, Movements, Preview-Factories | ✅ |
+| `OrderStore.swift` | ObservableObject: Orders laden, erstellen, Items add/remove, Storno, Preview-Factories | ✅ |
+| `KassensitzungView.swift` | Session öffnen (Eröffnungsbestand), aktive Session mit Stats + Movements, Schicht schließen + Z-Bericht-Sheet | ✅ |
+| `TableStore.swift` | ObservableObject: Tischliste + Zonen laden, occupiedCount, Preview-Factories | ✅ |
+| `TableOverviewView.swift` | Haupt-App-Shell: Topbar (Session-Chip, User), Sidebar (Nav + KPIs + Schnellkasse), Tischgitter 3-Spalten mit Zone-Filter-Pills, Kacheln mit Status-Badge + Streifen | ✅ |
+| `ProductStore.swift` | ObservableObject: GET /products laden (inkl. Modifier-Gruppen), Kategorien aus Produkten ableiten, filterProducts(for:), CRUD für Produkte + Kategorien inkl. GoBD-konformer Preisänderung, Preview-Factories | ✅ |
+| `OrderView.swift` | Produktkatalog (links: Kategorie-Pills, 3-Spalten-Grid) + Warenkorb-Panel (rechts: Items, Total, Bezahlen). ModifierSelectionSheet für Pflicht-Modifier integriert. Öffnet PaymentView nach "Bezahlen". | ✅ |
+| `PaymentView.swift` | Bar / Karte / Gemischt-Auswahl, MwSt-Aufschlüsselung (7% + 19%), Gemischt-Aufteilung mit Barbetrag-Eingabe, POST /orders/:id/pay, ReceiptSummarySheet nach Zahlung, Auto-Dismiss zu TableOverview. | ✅ |
+| `ReportStore.swift` | ObservableObject: Tagesbericht (GET /reports/daily), Zusammenfassung (GET /reports/summary), Preview-Factories | ✅ |
+| `UsersStore.swift` | ObservableObject: User laden/erstellen/bearbeiten/löschen (soft-delete), Preview-Factories | ✅ |
+| `ReceiptView.swift` | Compliance-Bon (KassenSichV + GoBD + §14 UStG): 2-Spalten (Bon-Details links, TSE + QR-Code rechts), Tenant-Snapshot, Positionen, MwSt, TSE-Pending-Hinweis | ✅ |
+| `ZBerichtView.swift` | Z-Bericht aus lastZReport (SessionStore), KPI-Kacheln, Kassenbestand mit Differenzanzeige, Empty-State | ✅ |
+| `BerichteView.swift` | Täglich/Zeitraum-Tab, Datumsnavigation, KPI-Kacheln, Sessionsliste, MwSt-Aufschlüsselung, Quick-Buttons (7/30 Tage) | ✅ |
+| `ProdukteView.swift` | 4-Spalten Produktverwaltung, Suche, Kategorie-Filter, ProduktFormSheet, PreisAendernSheet (GoBD-konform), Aktiv/Inaktiv-Badge | ✅ |
+| `KategorienView.swift` | Kategorienliste mit Farbchips, KategorieFormSheet (Name + Farb-Preset + HEX-Input + Sort-Order), Delete-Confirmation | ✅ |
+| `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
 
-### Noch nicht implementiert ❌ (SwiftUI — Reihenfolge laut Design System §7)
+### Noch nicht implementiert ❌ (SwiftUI)
 | Screen | Abhängigkeiten | Phase |
 |--------|----------------|-------|
-| `TableOverviewView` | OrderStore, SessionStore | Phase 1 |
-| `OrderView` | OrderStore, ProductStore | Phase 1 |
-| `ModifierSheet` | an OrderView gebunden (Modal) | Phase 1 |
-| `PaymentView` | OrderStore, TSE-Flow | Phase 2 |
-| `ReceiptView` | receipts-API, QR-Code | Phase 2 |
-| `KassensitzungView` | SessionStore | Phase 1 (Pflicht vor Go-live) |
-| `ZBerichtView` | sessions-API | Phase 2 (Pflicht vor Go-live) |
-| `BerichteView` | reports-API | Phase 2 |
-| `ProdukteView` | products-API | Phase 1 |
-| `KategorienView` | products/categories-API | Phase 1 |
-| `EinstellungenView` | tenants/users/devices-API | Phase 1 |
+| Bon-PDF senden | GET /receipts/:id/pdf + ShareSheet | Phase 5 |
+| SyncManager | Offline-Queue-Status-UI, Retry-Logic | Phase 3 |
 
 ### SwiftUI — Offene Punkte
 | Punkt | Details |
 |-------|---------|
 | Plus Jakarta Sans | Font-Dateien bundlen + Info.plist UIAppFonts + Font.jakarta() umstellen |
-| OrderStore | @EnvironmentObject für Bestellungen, Tischstatus |
-| SessionStore | @EnvironmentObject für Kassensitzung |
-| SyncManager | Offline-Queue-Status, Retry-Logic |
+| SyncManager | Offline-Queue-Status, Retry-Logic (Phase 3) |
 
 ### Offene Backend-Punkte (dokumentiert, noch nicht implementiert)
 | Bereich | Details | Priorität |

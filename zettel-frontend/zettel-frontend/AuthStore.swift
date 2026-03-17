@@ -72,13 +72,23 @@ class AuthStore: ObservableObject {
 
     // MARK: - PIN-Login (Benutzer-Schnellwechsel)
 
-    func loginWithPin(userId: Int, pin: String) async throws {
-        struct Body: Encodable { let userId: Int; let pin: String }
-        let response: AuthResponse = try await api.post(
-            "/auth/pin",
-            body: Body(userId: userId, pin: pin)
-        )
-        await applyAuthResponse(response)
+    func loginWithPin(pin: String) async throws {
+        struct Body: Encodable { let deviceToken: String; let pin: String }
+        do {
+            let response: AuthResponse = try await api.post(
+                "/auth/pin",
+                body: Body(deviceToken: api.deviceTokenOrCreate, pin: pin)
+            )
+            await applyAuthResponse(response)
+        } catch AppError.unauthorized {
+            throw AppError.wrongPin
+        }
+    }
+
+    // Aktualisiert die PIN-Liste — nur User mit gesetzter PIN
+    func updatePINUsers(_ users: [User]) {
+        let authUsers = users.filter { $0.hasPin }.map { AuthUser(id: $0.id, name: $0.name, role: $0.role) }
+        cacheUsers(authUsers)
     }
 
     // MARK: - Token-Refresh
