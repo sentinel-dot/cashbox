@@ -518,7 +518,12 @@ private struct TableGridContent: View {
                         spacing: 12
                     ) {
                         ForEach(filteredTables) { table in
-                            TableCard(table: table) {
+                            let status: TableCardStatus = {
+                                if table.openOrdersCount == 0 { return .frei }
+                                if tableStore.payingTableIds.contains(table.id) { return .zahlung }
+                                return .besetzt
+                            }()
+                            TableCard(table: table, status: status) {
                                 onTableTap(table.id, table.name)
                             }
                         }
@@ -675,12 +680,26 @@ private struct ZonePill: View {
 // MARK: - Tischkachel
 
 private struct TableCard: View {
-    let table: TableItem
-    let onTap: () -> Void
+    let table:  TableItem
+    let status: TableCardStatus
+    let onTap:  () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isOccupied: Bool { table.openOrdersCount > 0 }
-    private var bgColor: Color { isOccupied ? DS.C.busyBg : DS.C.sur }
+    private var bgColor: Color {
+        switch status {
+        case .frei:    return DS.C.sur
+        case .besetzt: return DS.C.busyBg
+        case .zahlung: return DS.C.billBg
+        }
+    }
+
+    private var stripeColor: Color? {
+        switch status {
+        case .frei:    return nil
+        case .besetzt: return DS.C.stripeBusy
+        case .zahlung: return DS.C.stripeBill
+        }
+    }
 
     private var minutesOpen: Int? {
         guard let oldest = table.oldestOrderAt else { return nil }
@@ -698,13 +717,6 @@ private struct TableCard: View {
         "\(table.totalOpenCents / 100),\(String(format: "%02d", table.totalOpenCents % 100)) €"
     }
 
-    private var metaText: String {
-        guard isOccupied else { return "verfügbar" }
-        let minPart = minutesOpen.map { "\($0) min · " } ?? ""
-        let itemText = table.totalOpenItems == 1 ? "1 Position" : "\(table.totalOpenItems) Positionen"
-        return "\(minPart)\(itemText)"
-    }
-
     var body: some View {
         Button(action: onTap) {
             ZStack(alignment: .leading) {
@@ -718,12 +730,12 @@ private struct TableCard: View {
                             .foregroundColor(DS.C.text)
                             .lineLimit(1)
                         Spacer()
-                        TableStatusBadge(isOccupied: isOccupied)
+                        TableStatusBadge(status: status)
                     }
                     .padding(.bottom, 10)
 
                     // Zeile 2: Betrag
-                    if isOccupied {
+                    if status != .frei {
                         Text(amountText)
                             .font(.jakarta(DS.T.tableAmount, weight: .bold))
                             .foregroundColor(DS.C.text)
@@ -741,17 +753,36 @@ private struct TableCard: View {
                         .foregroundColor(DS.C.brd(colorScheme))
                         .padding(.bottom, 8)
 
-                    // Zeile 3: Meta
-                    Text(metaText)
-                        .font(.jakarta(DS.T.tableMeta, weight: .regular))
-                        .foregroundColor(DS.C.text2)
+                    // Zeile 3: Meta mit Dot-Separator
+                    if status == .frei {
+                        Text("verfügbar")
+                            .font(.jakarta(DS.T.tableMeta, weight: .regular))
+                            .foregroundColor(DS.C.text2)
+                    } else {
+                        HStack(spacing: 5) {
+                            if let min = minutesOpen {
+                                Text("\(min) min")
+                                    .font(.jakarta(DS.T.tableMeta, weight: .regular))
+                                    .foregroundColor(DS.C.text2)
+                                Circle()
+                                    .fill(DS.C.brd(colorScheme))
+                                    .frame(width: 3, height: 3)
+                            }
+                            let itemText = table.totalOpenItems == 1
+                                ? "1 Position"
+                                : "\(table.totalOpenItems) Positionen"
+                            Text(itemText)
+                                .font(.jakarta(DS.T.tableMeta, weight: .regular))
+                                .foregroundColor(DS.C.text2)
+                        }
+                    }
                 }
                 .padding(14)
 
-                // Linker Akzent-Streifen (nur bei besetzt)
-                if isOccupied {
+                // Linker Akzent-Streifen
+                if let stripe = stripeColor {
                     Rectangle()
-                        .fill(DS.C.stripeBusy)
+                        .fill(stripe)
                         .frame(width: 3)
                 }
             }
@@ -767,23 +798,52 @@ private struct TableCard: View {
 }
 
 private struct TableStatusBadge: View {
-    let isOccupied: Bool
+    let status: TableCardStatus
+
+    private var dotColor: Color {
+        switch status {
+        case .frei:    return DS.C.freeText
+        case .besetzt: return DS.C.busyText
+        case .zahlung: return DS.C.billText
+        }
+    }
+
+    private var label: String {
+        switch status {
+        case .frei:    return "Frei"
+        case .besetzt: return "Besetzt"
+        case .zahlung: return "Zahlung"
+        }
+    }
+
+    private var bg: Color {
+        switch status {
+        case .frei:    return DS.C.freeBg
+        case .besetzt: return DS.C.busyBg
+        case .zahlung: return DS.C.billBg
+        }
+    }
 
     var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(isOccupied ? DS.C.busyText : DS.C.freeText)
+                .fill(dotColor)
                 .frame(width: 5, height: 5)
-            Text(isOccupied ? "Besetzt" : "Frei")
+            Text(label)
                 .font(.jakarta(DS.T.badge, weight: .semibold))
-                .foregroundColor(isOccupied ? DS.C.busyText : DS.C.freeText)
+                .foregroundColor(dotColor)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(isOccupied ? DS.C.busyBg : DS.C.freeBg)
+        .background(bg)
         .cornerRadius(DS.R.badge)
         .fixedSize()
     }
+}
+
+// Lokales Status-Enum für die Darstellung der Tischkachel
+enum TableCardStatus {
+    case frei, besetzt, zahlung
 }
 
 // MARK: - Brand Mark (lokal — LoginView hat eigene private Version)

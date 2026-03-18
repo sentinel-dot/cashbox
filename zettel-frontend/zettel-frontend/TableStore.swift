@@ -27,10 +27,14 @@ private struct CreateTableResponse: Decodable {
 final class TableStore: ObservableObject {
 
     // ── Published State ────────────────────────────────────────────────────
-    @Published private(set) var tables: [TableItem] = []
-    @Published private(set) var zones:  [TableZone] = []
+    @Published private(set) var tables:         [TableItem] = []
+    @Published private(set) var zones:          [TableZone] = []
     @Published private(set) var isLoading = false
     @Published private(set) var error: AppError?
+
+    /// Tisch-IDs die sich gerade im Zahlungsvorgang befinden.
+    /// Wird von PaymentView gesetzt wenn der Bezahl-Screen für einen Tisch geöffnet wird.
+    @Published var payingTableIds: Set<Int> = []
 
     // ── Dependencies ───────────────────────────────────────────────────────
     private let api = APIClient.shared
@@ -83,17 +87,21 @@ final class TableStore: ObservableObject {
     static var preview: TableStore {
         let store = TableStore()
         let innen = TableZone(id: 1, name: "Innen", sortOrder: 0)
-        let bar   = TableZone(id: 2, name: "Bar",   sortOrder: 1)
-        store.zones = [innen, bar]
+        let aussen = TableZone(id: 2, name: "Außen", sortOrder: 1)
+        let bar   = TableZone(id: 3, name: "Bar",   sortOrder: 2)
+        store.zones = [innen, aussen, bar]
         store.tables = [
-            TableItem(id: 1, name: "Tisch 1",    isActive: true, openOrdersCount: 2, totalOpenCents: 4250,  totalOpenItems: 4, oldestOrderAt: "2026-03-17T06:22:00.000Z", zone: innen),
-            TableItem(id: 2, name: "Tisch 2",    isActive: true, openOrdersCount: 0, totalOpenCents: 0,     totalOpenItems: 0, oldestOrderAt: nil,                        zone: innen),
-            TableItem(id: 3, name: "Tisch 3",    isActive: true, openOrdersCount: 1, totalOpenCents: 1800,  totalOpenItems: 2, oldestOrderAt: "2026-03-17T07:39:00.000Z", zone: innen),
-            TableItem(id: 4, name: "Tisch 4",    isActive: true, openOrdersCount: 0, totalOpenCents: 0,     totalOpenItems: 0, oldestOrderAt: nil,                        zone: innen),
-            TableItem(id: 5, name: "Bar 1",      isActive: true, openOrdersCount: 3, totalOpenCents: 8950,  totalOpenItems: 6, oldestOrderAt: "2026-03-17T06:48:00.000Z", zone: bar),
-            TableItem(id: 6, name: "Bar 2",      isActive: true, openOrdersCount: 0, totalOpenCents: 0,     totalOpenItems: 0, oldestOrderAt: nil,                        zone: bar),
-            TableItem(id: 7, name: "Terrasse 1", isActive: true, openOrdersCount: 1, totalOpenCents: 1200,  totalOpenItems: 1, oldestOrderAt: "2026-03-17T08:55:00.000Z", zone: nil),
+            TableItem(id: 1, name: "Tisch 1", isActive: true, openOrdersCount: 2, totalOpenCents: 4250,  totalOpenItems: 4, oldestOrderAt: "2026-03-17T06:22:00.000Z", zone: innen),
+            TableItem(id: 2, name: "Tisch 2", isActive: true, openOrdersCount: 0, totalOpenCents: 0,     totalOpenItems: 0, oldestOrderAt: nil,                        zone: innen),
+            TableItem(id: 3, name: "Tisch 3", isActive: true, openOrdersCount: 1, totalOpenCents: 1800,  totalOpenItems: 2, oldestOrderAt: "2026-03-17T07:39:00.000Z", zone: innen),
+            TableItem(id: 4, name: "Tisch 4", isActive: true, openOrdersCount: 3, totalOpenCents: 6700,  totalOpenItems: 6, oldestOrderAt: "2026-03-17T06:05:00.000Z", zone: aussen),
+            TableItem(id: 5, name: "Tisch 5", isActive: true, openOrdersCount: 0, totalOpenCents: 0,     totalOpenItems: 0, oldestOrderAt: nil,                        zone: aussen),
+            TableItem(id: 6, name: "Tisch 6", isActive: true, openOrdersCount: 3, totalOpenCents: 8950,  totalOpenItems: 6, oldestOrderAt: "2026-03-17T06:48:00.000Z", zone: aussen),
+            TableItem(id: 7, name: "Tisch 7", isActive: true, openOrdersCount: 0, totalOpenCents: 0,     totalOpenItems: 0, oldestOrderAt: nil,                        zone: bar),
+            TableItem(id: 8, name: "Tisch 8", isActive: true, openOrdersCount: 1, totalOpenCents: 1200,  totalOpenItems: 1, oldestOrderAt: "2026-03-17T08:55:00.000Z", zone: bar),
         ]
+        // Tisch 4 ist im Zahlungsvorgang (Zahlung-Status)
+        store.payingTableIds = [4]
         return store
     }
 
