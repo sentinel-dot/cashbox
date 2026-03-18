@@ -6,12 +6,13 @@ import SwiftUI
 // MARK: - Root
 
 struct EinstellungenView: View {
-    @EnvironmentObject var authStore:     AuthStore
-    @EnvironmentObject var usersStore:    UsersStore
+    @EnvironmentObject var authStore:      AuthStore
+    @EnvironmentObject var usersStore:     UsersStore
+    @EnvironmentObject var tableStore:     TableStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
     @Environment(\.colorScheme) private var colorScheme
 
-    enum Tab { case betrieb, mitarbeiter }
+    enum Tab { case betrieb, tische, mitarbeiter }
     @State private var activeTab = Tab.betrieb
 
     var body: some View {
@@ -26,16 +27,13 @@ struct EinstellungenView: View {
 
                 EinstellungenTopBar(activeTab: $activeTab)
 
-                if activeTab == .betrieb {
+                switch activeTab {
+                case .betrieb:
                     BetriebTab()
-                } else {
+                case .tische:
+                    TischverwaltungView()
+                case .mitarbeiter:
                     MitarbeiterTab()
-                        .task {
-            await usersStore.loadUsers()
-            if !usersStore.users.isEmpty {
-                authStore.updatePINUsers(usersStore.users)
-            }
-        }
                 }
             }
         }
@@ -59,6 +57,7 @@ private struct EinstellungenTopBar: View {
             Spacer()
             HStack(spacing: 0) {
                 ETabPill(label: "Betrieb",      isActive: activeTab == .betrieb)      { activeTab = .betrieb }
+                ETabPill(label: "Tische",       isActive: activeTab == .tische)       { activeTab = .tische }
                 ETabPill(label: "Mitarbeiter",  isActive: activeTab == .mitarbeiter)  { activeTab = .mitarbeiter }
             }
             .background(DS.C.sur2)
@@ -108,18 +107,15 @@ private struct BetriebTab: View {
     @State private var showError  = false
     @State private var showSaved  = false
 
-    @FocusState private var focused: BetriebField?
-    enum BetriebField { case name, address, vatId, taxNumber }
-
     var body: some View {
         HStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     ESection("BETRIEBSDATEN (§14 UStG PFLICHTFELDER)") {
-                        EInputRow(label: "Betriebsname", placeholder: "Mein Café GmbH", text: $name, focused: $focused, field: .name)
-                        EInputRow(label: "Adresse",      placeholder: "Musterstr. 1, 10115 Berlin", text: $address, focused: $focused, field: .address)
-                        EInputRow(label: "USt-IdNr.",    placeholder: "DE123456789", text: $vatId, focused: $focused, field: .vatId)
-                        EInputRow(label: "Steuernummer", placeholder: "12/345/67890", text: $taxNumber, focused: $focused, field: .taxNumber)
+                        EInputRow(label: "Betriebsname", placeholder: "Mein Café GmbH",               text: $name)
+                        EInputRow(label: "Adresse",      placeholder: "Musterstr. 1, 10115 Berlin",   text: $address)
+                        EInputRow(label: "USt-IdNr.",    placeholder: "DE123456789",                  text: $vatId)
+                        EInputRow(label: "Steuernummer", placeholder: "12/345/67890",                 text: $taxNumber)
                     }
 
                     HStack(spacing: 6) {
@@ -212,34 +208,34 @@ private struct UpdateTenantBody: Encodable {
     let taxNumber:  String?
 }
 
-private struct EInputRow<Field: Hashable>: View {
+private struct EInputRow: View {
     let label:       String
     let placeholder: String
     @Binding var text: String
-    var focused:     FocusState<Field?>.Binding
-    let field:       Field
     @Environment(\.colorScheme) private var colorScheme
-
-    var isFocused: Bool { focused.wrappedValue == field }
+    @State private var isFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.jakarta(DS.T.loginFooter, weight: .semibold))
                 .foregroundColor(DS.C.text2)
-            TextField(placeholder, text: $text)
-                .font(.jakarta(14, weight: .regular))
-                .foregroundColor(DS.C.text)
-                .focused(focused, equals: field)
-                .padding(.horizontal, 12)
-                .frame(height: DS.S.inputHeight)
-                .background(DS.C.bg)
-                .cornerRadius(DS.R.input)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.R.input)
-                        .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
-                )
-                .animation(.easeInOut(duration: 0.15), value: isFocused)
+            NoAssistantTextField(
+                placeholder: placeholder,
+                text:        $text,
+                uiFont:      UIFont.systemFont(ofSize: 14),
+                uiTextColor: UIColor(DS.C.text),
+                isFocused:   $isFocused
+            )
+            .padding(.horizontal, 12)
+            .frame(height: DS.S.inputHeight)
+            .background(DS.C.bg)
+            .cornerRadius(DS.R.input)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+            )
+            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
     }
 }
@@ -317,6 +313,12 @@ private struct MitarbeiterTab: View {
             .frame(maxWidth: .infinity)
         }
         .background(DS.C.bg)
+        .task {
+            await usersStore.loadUsers()
+            if !usersStore.users.isEmpty {
+                authStore.updatePINUsers(usersStore.users)
+            }
+        }
         .sheet(isPresented: $showAddSheet) {
             UserFormSheet(user: nil) { name, email, password, role, pin in
                 Task {
@@ -466,8 +468,6 @@ private struct UserFormSheet: View {
     @State private var role     = UserRole.staff
     @State private var pin      = ""
 
-    @FocusState private var focused: UserField?
-    enum UserField { case name, email, password, pin }
 
     var isEdit: Bool { user != nil }
     var canSave: Bool {
@@ -492,13 +492,12 @@ private struct UserFormSheet: View {
                         .foregroundColor(DS.C.text)
                         .padding(.top, 8)
 
-                    UFormField(label: "Name", placeholder: "Vollständiger Name", text: $name, focused: $focused, field: .name)
+                    UFormField(label: "Name", placeholder: "Vollständiger Name", text: $name)
 
                     if !isEdit {
-                        UFormField(label: "E-Mail", placeholder: "mitarbeiter@example.com", text: $email, focused: $focused, field: .email)
-                            .autocapitalization(.none)
-                            .keyboardType(.emailAddress)
-                        UFormField(label: "Passwort", placeholder: "Mindestens 8 Zeichen", text: $password, focused: $focused, field: .password, isSecure: true)
+                        UFormField(label: "E-Mail", placeholder: "mitarbeiter@example.com", text: $email,
+                                   keyboardType: .emailAddress, autocapitalizationType: .none)
+                        UFormField(label: "Passwort", placeholder: "Mindestens 8 Zeichen", text: $password, isSecure: true)
                     }
 
                     // Rolle
@@ -524,7 +523,8 @@ private struct UserFormSheet: View {
                         }
                     }
 
-                    UFormField(label: "PIN (4 Stellen, optional)", placeholder: "1234", text: $pin, focused: $focused, field: .pin)
+                    UFormField(label: "PIN (4 Stellen, optional)", placeholder: "1234", text: $pin,
+                               keyboardType: .numberPad, autocapitalizationType: .none)
                         .keyboardType(.numberPad)
 
                     HStack(spacing: 10) {
@@ -565,32 +565,31 @@ private struct UserFormSheet: View {
     }
 }
 
-private struct UFormField<Field: Hashable>: View {
+private struct UFormField: View {
     let label:       String
     let placeholder: String
     @Binding var text: String
-    var focused:     FocusState<Field?>.Binding
-    let field:       Field
-    var isSecure:    Bool = false
+    var isSecure:               Bool                           = false
+    var keyboardType:           UIKeyboardType                 = .default
+    var autocapitalizationType: UITextAutocapitalizationType   = .words
     @Environment(\.colorScheme) private var colorScheme
-
-    var isFocused: Bool { focused.wrappedValue == field }
+    @State private var isFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.jakarta(DS.T.loginFooter, weight: .semibold))
                 .foregroundColor(DS.C.text2)
-            Group {
-                if isSecure {
-                    SecureField(placeholder, text: $text)
-                } else {
-                    TextField(placeholder, text: $text)
-                }
-            }
-            .font(.jakarta(14, weight: .regular))
-            .foregroundColor(DS.C.text)
-            .focused(focused, equals: field)
+            NoAssistantTextField(
+                placeholder:            placeholder,
+                text:                   $text,
+                keyboardType:           keyboardType,
+                uiFont:                 UIFont.systemFont(ofSize: 14),
+                uiTextColor:            UIColor(DS.C.text),
+                isSecure:               isSecure,
+                autocapitalizationType: autocapitalizationType,
+                isFocused:              $isFocused
+            )
             .padding(.horizontal, 12)
             .frame(height: DS.S.inputHeight)
             .background(DS.C.bg)
@@ -630,6 +629,7 @@ private struct ESection<Content: View>: View {
     EinstellungenView()
         .environmentObject(AuthStore.previewLoggedIn)
         .environmentObject(UsersStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -637,6 +637,7 @@ private struct ESection<Content: View>: View {
     EinstellungenView()
         .environmentObject(AuthStore.previewLoggedIn)
         .environmentObject(UsersStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -644,6 +645,7 @@ private struct ESection<Content: View>: View {
     EinstellungenView()
         .environmentObject(AuthStore.previewLoggedIn)
         .environmentObject(UsersStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.preview)
         .preferredColorScheme(.dark)
 }

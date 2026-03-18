@@ -6,6 +6,16 @@ import SwiftUI
 
 @main
 struct zettel_frontendApp: App {
+
+    init() {
+        // Entfernt die iPad-Input-Accessory-Bar (QuickType/Undo-Bar), die sonst
+        // AutoLayout-Constraint-Konflikte ("Unable to simultaneously satisfy constraints")
+        // verursacht und den ersten Keyboard-Aufbau verlangsamt.
+        UITextField.appearance().inputAssistantItem.leadingBarButtonGroups  = []
+        UITextField.appearance().inputAssistantItem.trailingBarButtonGroups = []
+        UITextView.appearance().inputAssistantItem.leadingBarButtonGroups   = []
+        UITextView.appearance().inputAssistantItem.trailingBarButtonGroups  = []
+    }
     @StateObject private var authStore      = AuthStore()
     @StateObject private var networkMonitor = NetworkMonitor()
     @StateObject private var sessionStore   = SessionStore()

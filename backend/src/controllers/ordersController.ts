@@ -82,7 +82,7 @@ export async function listOrders(req: Request, res: Response): Promise<void> {
   res.json(orders.map(o => ({
     id:             o.id,
     status:         o.status,
-    is_takeaway:    o.is_takeaway,
+    is_takeaway:    Boolean(o.is_takeaway),
     created_at:     o.created_at,
     opened_by_name: o.opened_by_name,
     table: o.table_id ? { id: o.table_id, name: o.table_name } : null,
@@ -155,7 +155,7 @@ export async function getOrder(req: Request, res: Response): Promise<void> {
   res.json({
     id:             o.id,
     status:         o.status,
-    is_takeaway:    o.is_takeaway,
+    is_takeaway:    Boolean(o.is_takeaway),
     created_at:     o.created_at,
     closed_at:      o.closed_at,
     session_id:     o.session_id,

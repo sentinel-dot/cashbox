@@ -19,9 +19,8 @@ struct OrderView: View {
     // Aktuelle Order-ID — nil solange noch keine Order erstellt
     @State private var currentOrderId: Int? = nil
 
-    // Produkt für ModifierSheet
+    // Produkt für ModifierSheet — sheet(item:) verhindert Timing-Probleme mit nil-State
     @State private var pendingProduct: Product? = nil
-    @State private var showModifierSheet = false
 
     // Error
     @State private var error: AppError?
@@ -30,90 +29,99 @@ struct OrderView: View {
     // Storno-Bestätigung
     @State private var showCancelConfirm = false
 
-    // Bezahlung
+    // Bezahlung — paymentOrder cacht die Order beim Öffnen, damit selectedOrder=nil nach pay() den Screen nicht leert
     @State private var showPaymentView = false
+    @State private var paymentOrder: OrderDetail? = nil
 
     var body: some View {
-        ZStack(alignment: .top) {
-            DS.C.bg.ignoresSafeArea()
+        // NavigationStack verhindert den nested-fullScreenCover-Bug (weißer Screen bei erstem Bezahlen).
+        // PaymentView wird per navigationDestination gepusht — kein verschachteltes Modal.
+        NavigationStack {
+            ZStack(alignment: .top) {
+                DS.C.bg.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                if !networkMonitor.isOnline {
-                    OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
+                VStack(spacing: 0) {
+                    if !networkMonitor.isOnline {
+                        OfflineBanner()
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
 
-                OrderTopBar(
-                    tableName: tableName,
-                    orderId:   currentOrderId,
-                    hasItems:  !(orderStore.selectedOrder?.items.isEmpty ?? true),
-                    onClose:   { dismiss() },
-                    onCancel:  { showCancelConfirm = true }
-                )
-
-                HStack(spacing: 0) {
-                    // Links: Produktkatalog
-                    ProductCatalog(onProductTap: handleProductTap)
-                        .frame(maxWidth: .infinity)
-
-                    Rectangle()
-                        .fill(DS.C.brdLight)
-                        .frame(width: 1)
-
-                    // Rechts: Warenkorb
-                    CartPanel(
-                        tableName:  tableName,
-                        orderId:    currentOrderId,
-                        onRemove:   removeItem,
-                        onBezahlen: { showPaymentView = true }
+                    OrderTopBar(
+                        tableName: tableName,
+                        orderId:   currentOrderId,
+                        hasItems:  !(orderStore.selectedOrder?.items.isEmpty ?? true),
+                        onClose:   { dismiss() },
+                        onCancel:  { showCancelConfirm = true }
                     )
-                    .frame(width: 340)
+
+                    HStack(spacing: 0) {
+                        // Links: Produktkatalog
+                        ProductCatalog(onProductTap: handleProductTap)
+                            .frame(maxWidth: .infinity)
+
+                        Rectangle()
+                            .fill(DS.C.brdLight)
+                            .frame(width: 1)
+
+                        // Rechts: Warenkorb
+                        CartPanel(
+                            tableName:  tableName,
+                            orderId:    currentOrderId,
+                            onRemove:   removeItem,
+                            onBezahlen: { paymentOrder = orderStore.selectedOrder; showPaymentView = true }
+                        )
+                        .frame(width: 340)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
-        .task {
-            await productStore.loadProducts()
-            await findOrLoadExistingOrder()
-        }
-        // ModifierSheet — Pflichtauswahl vor Item-Hinzufügen
-        .sheet(isPresented: $showModifierSheet) {
-            if let product = pendingProduct {
+            .toolbar(.hidden, for: .navigationBar)
+            .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+            .task {
+                await productStore.loadProducts()
+                await findOrLoadExistingOrder()
+            }
+            // ModifierSheet — sheet(item:) garantiert dass product nie nil ist wenn Sheet erscheint
+            .sheet(item: $pendingProduct) { product in
                 ModifierSelectionSheet(product: product) { selectedOptionIds in
                     Task { await addProductWithModifiers(product, optionIds: selectedOptionIds) }
                 }
             }
-        }
-        // Storno-Bestätigung
-        .confirmationDialog(
-            "Bestellung stornieren?",
-            isPresented: $showCancelConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Stornieren", role: .destructive) {
-                Task { await performCancelOrder() }
+            // Storno-Bestätigung
+            .confirmationDialog(
+                "Bestellung stornieren?",
+                isPresented: $showCancelConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Stornieren", role: .destructive) {
+                    Task { await performCancelOrder() }
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Die gesamte Bestellung wird storniert. Diese Aktion kann nicht rückgängig gemacht werden.")
             }
-            Button("Abbrechen", role: .cancel) {}
-        } message: {
-            Text("Die gesamte Bestellung wird storniert. Diese Aktion kann nicht rückgängig gemacht werden.")
-        }
-        .alert("Fehler", isPresented: $showError) {
-            Button("OK") { error = nil }
-        } message: {
-            Text(error?.localizedDescription ?? "Unbekannter Fehler")
-        }
-        // PaymentView — öffnet nach "Bezahlen"
-        .fullScreenCover(isPresented: $showPaymentView, onDismiss: {
-            // Wenn Zahlung erfolgreich → selectedOrder wurde geleert → zurück zur Tischübersicht
-            if orderStore.selectedOrder == nil && currentOrderId != nil {
-                dismiss()
+            .alert("Fehler", isPresented: $showError) {
+                Button("OK") { error = nil }
+            } message: {
+                Text(error?.localizedDescription ?? "Unbekannter Fehler")
             }
-        }) {
-            if let order = orderStore.selectedOrder {
-                PaymentView(order: order, tableName: tableName)
-                    .environmentObject(orderStore)
-                    .environmentObject(networkMonitor)
+            // PaymentView — Navigation Push statt nested fullScreenCover
+            .navigationDestination(isPresented: $showPaymentView) {
+                if let order = paymentOrder {
+                    PaymentView(order: order, tableName: tableName)
+                        .environmentObject(orderStore)
+                        .environmentObject(networkMonitor)
+                        .toolbar(.hidden, for: .navigationBar)
+                }
+            }
+            .onChange(of: showPaymentView) { showing in
+                if !showing {
+                    paymentOrder = nil
+                    // Zahlung abgeschlossen → Order wurde entfernt → zurück zur Tischübersicht
+                    if orderStore.selectedOrder == nil && currentOrderId != nil {
+                        dismiss()
+                    }
+                }
             }
         }
     }
@@ -132,8 +140,7 @@ struct OrderView: View {
 
     private func handleProductTap(_ product: Product) {
         if product.hasRequiredModifiers {
-            pendingProduct = product
-            showModifierSheet = true
+            pendingProduct = product  // sheet(item:) öffnet automatisch
         } else {
             Task { await addProductDirect(product) }
         }

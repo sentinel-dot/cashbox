@@ -25,6 +25,14 @@ struct LoginView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
+                // Session-abgelaufen-Banner
+                if let reason = authStore.sessionExpiredReason {
+                    SessionExpiredBanner(message: reason) {
+                        authStore.sessionExpiredReason = nil
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 // 2-Spalten-Layout
                 HStack(spacing: 0) {
                     BrandPanel()
@@ -36,6 +44,7 @@ struct LoginView: View {
         }
         .preferredColorScheme(usesDarkMode ? .dark : .light)
         .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(.easeInOut(duration: 0.3), value: authStore.sessionExpiredReason != nil)
     }
 }
 
@@ -89,6 +98,36 @@ private struct BrandPanel: View {
         .padding(36)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(DS.C.brandPanel)
+    }
+}
+
+// MARK: - Session-Abgelaufen-Banner
+
+private struct SessionExpiredBanner: View {
+    let message:  String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.trianglebadge.exclamationmark.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+            Text(message)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(hex: "c0392b"))
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -266,7 +305,7 @@ private struct FormPanel: View {
                 Spacer().frame(height: 16)
 
                 // Versions-Footer
-                Text("v1.0.0 · Keine Schicht offen")
+                Text("v1.0.0 · Keine offene Kasse")
                     .font(.jakarta(DS.T.loginFooter, weight: .regular))
                     .foregroundColor(DS.C.text2)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -341,29 +380,32 @@ private struct LoginTextField: View {
     var textContentType: UITextContentType? = nil
     let colorScheme: ColorScheme
 
-    @FocusState private var isFocused: Bool
+    @State private var isFocused = false
 
     var body: some View {
-        TextField(placeholder, text: $text)
-            .font(.jakarta(14, weight: .regular))
-            .foregroundColor(DS.C.text)
-            .keyboardType(keyboardType)
-            .textContentType(textContentType)
-            .autocapitalization(.none)
-            .disableAutocorrection(true)
-            .focused($isFocused)
-            .padding(.horizontal, 12)
-            .frame(height: DS.S.inputHeight)
-            .background(DS.C.bg)
-            .cornerRadius(DS.R.input)
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(
-                        isFocused ? DS.C.acc : DS.C.brd(colorScheme),
-                        lineWidth: 1
-                    )
-            )
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
+        NoAssistantTextField(
+            placeholder:            placeholder,
+            text:                   $text,
+            keyboardType:           keyboardType,
+            uiFont:                 UIFont.systemFont(ofSize: 14),
+            uiTextColor:            UIColor(DS.C.text),
+            textContentType:        textContentType,
+            autocapitalizationType: .none,
+            autocorrectionType:     .no,
+            isFocused:              $isFocused
+        )
+        .padding(.horizontal, 12)
+        .frame(height: DS.S.inputHeight)
+        .background(DS.C.bg)
+        .cornerRadius(DS.R.input)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.R.input)
+                .strokeBorder(
+                    isFocused ? DS.C.acc : DS.C.brd(colorScheme),
+                    lineWidth: 1
+                )
+        )
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
 }
 
@@ -374,21 +416,19 @@ private struct LoginPasswordField: View {
     @Binding var showPassword: Bool
     let colorScheme: ColorScheme
 
-    @FocusState private var isFocused: Bool
+    @State private var isFocused = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Group {
-                if showPassword {
-                    TextField("Passwort", text: $password)
-                } else {
-                    SecureField("Passwort", text: $password)
-                }
-            }
-            .font(.jakarta(14, weight: .regular))
-            .foregroundColor(DS.C.text)
-            .textContentType(.password)
-            .focused($isFocused)
+            NoAssistantTextField(
+                placeholder:     "Passwort",
+                text:            $password,
+                uiFont:          UIFont.systemFont(ofSize: 14),
+                uiTextColor:     UIColor(DS.C.text),
+                isSecure:        !showPassword,
+                textContentType: .password,
+                isFocused:       $isFocused
+            )
 
             // Auge-Icon (14×14pt laut Spec)
             Button {

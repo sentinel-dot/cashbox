@@ -20,18 +20,6 @@ enum NavItem: String, Hashable, CaseIterable {
 
     var label: String { rawValue }
 
-    var icon: String {
-        switch self {
-        case .tische:        return "square.grid.2x2"
-        case .produkte:      return "tag"
-        case .kategorien:    return "folder"
-        case .kassensitzung: return "tray.full"
-        case .berichte:      return "chart.bar"
-        case .zbericht:      return "doc.text"
-        case .einstellungen: return "gearshape"
-        }
-    }
-
     var section: NavSection {
         switch self {
         case .tische, .produkte, .kategorien:          return .uebersicht
@@ -55,14 +43,28 @@ enum NavSection {
 // MARK: - Root Shell
 
 struct TableOverviewView: View {
-    @EnvironmentObject var authStore:    AuthStore
-    @EnvironmentObject var sessionStore: SessionStore
-    @EnvironmentObject var orderStore:   OrderStore
-    @EnvironmentObject var tableStore:   TableStore
+    @EnvironmentObject var authStore:      AuthStore
+    @EnvironmentObject var sessionStore:   SessionStore
+    @EnvironmentObject var orderStore:     OrderStore
+    @EnvironmentObject var tableStore:     TableStore
+    @EnvironmentObject var reportStore:    ReportStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
 
-    @State private var selectedNav:   NavItem = .tische
-    @State private var selectedTable: SelectedTable? = nil
+    @AppStorage("prefersDarkMode") private var prefersDarkMode = false
+
+    @State private var selectedNav:       NavItem = .tische
+    @State private var selectedTable:     SelectedTable? = nil
+    @State private var showSchnellkasse:  Bool = false
+    @State private var schnellkasseIntent = false
+
+    private func handleSchnellkasse() {
+        if sessionStore.hasOpenSession {
+            showSchnellkasse = true
+        } else {
+            schnellkasseIntent = true
+            withAnimation(.easeInOut(duration: 0.15)) { selectedNav = .kassensitzung }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -77,25 +79,40 @@ struct TableOverviewView: View {
                 }
 
                 HStack(spacing: 0) {
-                    AppSidebar(selectedNav: $selectedNav)
+                    AppSidebar(selectedNav: $selectedNav, onSchnellkasse: handleSchnellkasse)
                         .frame(width: DS.S.sidebarWidth)
 
                     Rectangle()
                         .fill(DS.C.brdLight)
                         .frame(width: 1)
 
-                    AppContent(selectedNav: selectedNav) { id, name in
+                    AppContent(selectedNav: selectedNav, onTableTap: { id, name in
                         selectedTable = SelectedTable(id: id, name: name)
-                    }
+                    }, onSchnellkasse: handleSchnellkasse)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .preferredColorScheme(prefersDarkMode ? .dark : .light)
         .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
-        .task { await tableStore.loadTables() }
+        .task {
+            async let t: () = tableStore.loadTables()
+            async let s: () = sessionStore.loadCurrent()
+            async let r: () = reportStore.loadDaily()
+            _ = await (t, s, r)
+        }
+        .onChange(of: sessionStore.hasOpenSession) { isOpen in
+            if isOpen && schnellkasseIntent {
+                schnellkasseIntent = false
+                showSchnellkasse   = true
+            }
+        }
         .fullScreenCover(item: $selectedTable) { table in
             OrderView(tableId: table.id, tableName: table.name)
+        }
+        .fullScreenCover(isPresented: $showSchnellkasse) {
+            OrderView(tableId: nil, tableName: nil)
         }
     }
 }
@@ -111,13 +128,14 @@ private struct AppTopBar: View {
     @EnvironmentObject var authStore:    AuthStore
     @EnvironmentObject var sessionStore: SessionStore
     @Binding var selectedNav: NavItem
+    @AppStorage("prefersDarkMode") private var prefersDarkMode = false
 
     var body: some View {
         HStack(spacing: 0) {
-            // Brand (linksbündig in Sidebar-Breite)
+            // Brand
             HStack(spacing: 8) {
                 AppBrandMark()
-                Text("cashbox")
+                Text("Kassensystem")
                     .font(.jakarta(DS.T.topbarAppName, weight: .semibold))
                     .foregroundColor(DS.C.text)
             }
@@ -130,27 +148,25 @@ private struct AppTopBar: View {
 
             Spacer()
 
-            // Session-Chip
+            // User name
+            if let user = authStore.currentUser {
+                Text(user.name)
+                    .font(.jakarta(DS.T.navItem, weight: .medium))
+                    .foregroundColor(DS.C.text)
+                Spacer().frame(width: 16)
+            }
+
+            // Session chip
             SessionChip(selectedNav: $selectedNav)
 
-            Spacer().frame(width: 20)
+            Spacer().frame(width: 16)
 
-            // User-Avatar
-            if let user = authStore.currentUser {
-                HStack(spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(user.role == .owner ? DS.C.accBg : DS.C.sur2)
-                            .frame(width: DS.S.avatarSize, height: DS.S.avatarSize)
-                        Text(String(user.name.prefix(1)).uppercased())
-                            .font(.jakarta(11, weight: .semibold))
-                            .foregroundColor(user.role == .owner ? DS.C.accT : DS.C.text2)
-                    }
-                    Text(user.name)
-                        .font(.jakarta(DS.T.navItem, weight: .medium))
-                        .foregroundColor(DS.C.text)
-                }
-            }
+            // Dark mode toggle
+            Toggle("", isOn: $prefersDarkMode)
+                .toggleStyle(.switch)
+                .tint(DS.C.text2)
+                .labelsHidden()
+                .scaleEffect(0.85)
 
             Spacer().frame(width: 16)
         }
@@ -168,10 +184,15 @@ private struct SessionChip: View {
     @Binding var selectedNav: NavItem
 
     var body: some View {
-        if sessionStore.hasOpenSession {
+        if !sessionStore.hasLoaded {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .scaleEffect(0.7)
+                .frame(width: 32, height: 22)
+        } else if let session = sessionStore.currentSession {
             HStack(spacing: 5) {
                 Circle().fill(Color.green).frame(width: 6, height: 6)
-                Text("Schicht offen")
+                Text("Schicht offen · \(formattedTime(session.openedAt))")
                     .font(.jakarta(DS.T.sessionChip, weight: .semibold))
                     .foregroundColor(DS.C.accT)
             }
@@ -185,7 +206,7 @@ private struct SessionChip: View {
             } label: {
                 HStack(spacing: 5) {
                     Circle().fill(Color.orange).frame(width: 6, height: 6)
-                    Text("Keine Schicht — tippen zum Öffnen")
+                    Text("Kasse geschlossen — tippen zum Öffnen")
                         .font(.jakarta(DS.T.sessionChip, weight: .semibold))
                         .foregroundColor(.orange)
                 }
@@ -197,6 +218,19 @@ private struct SessionChip: View {
             .buttonStyle(.plain)
         }
     }
+
+    private func formattedTime(_ isoString: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: isoString) ?? {
+            iso.formatOptions = [.withInternetDateTime]
+            return iso.date(from: isoString)
+        }()
+        guard let date else { return "--:--" }
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm"
+        return df.string(from: date)
+    }
 }
 
 // MARK: - Sidebar
@@ -206,6 +240,7 @@ private struct AppSidebar: View {
     @EnvironmentObject var sessionStore: SessionStore
     @EnvironmentObject var tableStore:   TableStore
     @Binding var selectedNav: NavItem
+    let onSchnellkasse: () -> Void
 
     private let sections: [(NavSection, [NavItem])] = [
         (.uebersicht,  [.tische, .produkte, .kategorien]),
@@ -215,24 +250,24 @@ private struct AppSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Nav-Items (scrollbar)
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(sections, id: \.0.title) { section, items in
-                        SidebarSection(title: section.title, items: items, selectedNav: $selectedNav)
+                        SidebarSection(
+                            title: section.title,
+                            items: items,
+                            selectedNav: $selectedNav,
+                            badgeFor: { item in
+                                item == .tische ? String(tableStore.tables.count) : nil
+                            }
+                        )
                     }
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 8)
             }
 
-            // Schnellkasse-Banner
-            SchnellkasseBanner()
-
-            // KPI-Block
             SidebarKPIs()
-
-            // Logout
             SidebarLogout()
         }
         .frame(maxHeight: .infinity)
@@ -244,6 +279,7 @@ private struct SidebarSection: View {
     let title: String
     let items: [NavItem]
     @Binding var selectedNav: NavItem
+    var badgeFor: (NavItem) -> String? = { _ in nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -256,7 +292,11 @@ private struct SidebarSection: View {
                 .padding(.bottom, 4)
 
             ForEach(items, id: \.self) { item in
-                SidebarNavRow(item: item, isSelected: selectedNav == item) {
+                SidebarNavRow(
+                    item: item,
+                    badge: badgeFor(item),
+                    isSelected: selectedNav == item
+                ) {
                     withAnimation(.easeInOut(duration: 0.15)) { selectedNav = item }
                 }
             }
@@ -266,20 +306,26 @@ private struct SidebarSection: View {
 
 private struct SidebarNavRow: View {
     let item:       NavItem
+    var badge:      String? = nil
     let isSelected: Bool
     let onTap:      () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 8) {
-                Image(systemName: item.icon)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                    .frame(width: 16)
-                    .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
+            HStack(spacing: 0) {
                 Text(item.label)
                     .font(.jakarta(DS.T.navItem, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                 Spacer()
+                if let badge {
+                    Text(badge)
+                        .font(.jakarta(DS.T.badge, weight: .semibold))
+                        .foregroundColor(DS.C.text2)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(DS.C.sur2)
+                        .cornerRadius(DS.R.badge)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 7)
@@ -291,56 +337,28 @@ private struct SidebarNavRow: View {
     }
 }
 
-private struct SchnellkasseBanner: View {
-    var body: some View {
-        Button {
-            // TODO: SchnellkasseView (Phase 1)
-        } label: {
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Schnellkasse")
-                        .font(.jakarta(DS.T.quickLabel, weight: .semibold))
-                        .foregroundColor(.white)
-                    Text("Ohne Tisch kassieren")
-                        .font(.jakarta(DS.T.quickSub, weight: .regular))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                Spacer()
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.18))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
-            .background(DS.C.acc)
-            .cornerRadius(DS.R.quickBanner)
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-    }
-}
-
 private struct SidebarKPIs: View {
     @EnvironmentObject var sessionStore: SessionStore
     @EnvironmentObject var tableStore:   TableStore
-    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject var reportStore:  ReportStore
+
+    @State private var shiftDuration = "–"
+    @State private var durationTimer: Timer?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             KPIBlock(
-                label: "TISCHE BESETZT",
+                label: "UMSATZ HEUTE",
+                value: reportStore.dailyReport.map { formatCents($0.totalGrossCents) } ?? "–",
+                accent: true
+            )
+            KPIBlock(
+                label: "OFFENE TISCHE",
                 value: "\(tableStore.occupiedCount) / \(tableStore.tables.count)"
             )
             KPIBlock(
-                label: "SCHICHT",
-                value: sessionStore.hasOpenSession ? "Offen" : "Keine",
-                accent: sessionStore.hasOpenSession
+                label: "SCHICHTDAUER",
+                value: sessionStore.hasOpenSession ? shiftDuration : "–"
             )
         }
         .padding(.horizontal, 16)
@@ -350,6 +368,38 @@ private struct SidebarKPIs: View {
             Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
             alignment: .top
         )
+        .onAppear {
+            updateDuration()
+            durationTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+                Task { @MainActor in updateDuration() }
+            }
+        }
+        .onDisappear {
+            durationTimer?.invalidate()
+            durationTimer = nil
+        }
+        .onChange(of: sessionStore.currentSession?.id) { _ in updateDuration() }
+    }
+
+    private func updateDuration() {
+        guard let openedAt = sessionStore.currentSession?.openedAt else {
+            shiftDuration = "–"; return
+        }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let start = iso.date(from: openedAt) ?? {
+            iso.formatOptions = [.withInternetDateTime]
+            return iso.date(from: openedAt)
+        }()
+        guard let start else { shiftDuration = "–"; return }
+        let elapsed = Int(Date().timeIntervalSince(start))
+        let h = elapsed / 3600
+        let m = (elapsed % 3600) / 60
+        shiftDuration = String(format: "%d:%02d h", h, m)
+    }
+
+    private func formatCents(_ cents: Int) -> String {
+        "\(cents / 100),\(String(format: "%02d", cents % 100)) €"
     }
 }
 
@@ -373,7 +423,6 @@ private struct KPIBlock: View {
 
 private struct SidebarLogout: View {
     @EnvironmentObject var authStore: AuthStore
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button {
@@ -401,14 +450,15 @@ private struct SidebarLogout: View {
 // MARK: - Content Area (Router)
 
 private struct AppContent: View {
-    let selectedNav: NavItem
-    let onTableTap: (Int, String) -> Void
+    let selectedNav:    NavItem
+    let onTableTap:     (Int, String) -> Void
+    let onSchnellkasse: () -> Void
 
     var body: some View {
         Group {
             switch selectedNav {
             case .tische:
-                TableGridContent(onTableTap: onTableTap)
+                TableGridContent(onTableTap: onTableTap, onSchnellkasse: onSchnellkasse)
             case .kassensitzung:
                 KassensitzungView()
             case .zbericht:
@@ -427,32 +477,13 @@ private struct AppContent: View {
     }
 }
 
-private struct ComingSoonContent: View {
-    let nav: NavItem
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "hammer.fill")
-                .font(.system(size: 28, weight: .light))
-                .foregroundColor(DS.C.text2)
-            Text(nav.label)
-                .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                .foregroundColor(DS.C.text)
-            Text("Wird in Kürze verfügbar sein.")
-                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                .foregroundColor(DS.C.text2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DS.C.bg)
-    }
-}
-
 // MARK: - Tischgitter
 
 private struct TableGridContent: View {
-    @EnvironmentObject var tableStore: TableStore
+    @EnvironmentObject var tableStore:   TableStore
     @EnvironmentObject var sessionStore: SessionStore
-    let onTableTap: (Int, String) -> Void
+    let onTableTap:     (Int, String) -> Void
+    let onSchnellkasse: () -> Void
 
     @State private var selectedZoneId: Int? = nil
 
@@ -496,22 +527,21 @@ private struct TableGridContent: View {
                 }
                 .refreshable { await tableStore.loadTables() }
             }
+
+            // Schnellkasse — fixiert am unteren Rand
+            SchnellkasseButton(onTap: onSchnellkasse)
         }
         .background(DS.C.bg)
     }
 }
 
 private struct NoSessionBanner: View {
-    @EnvironmentObject var sessionStore: SessionStore
-    // Referenz nach oben über Binding nicht möglich hier — Nutzer soll in
-    // Kassensitzung-Tab navigieren. Stattdessen: einfacher Hinweis.
-
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(.orange)
                 .font(.system(size: 13))
-            Text("Keine offene Kassensitzung — Bestellungen können erst nach Schichteröffnung erstellt werden.")
+            Text("Keine offene Kassensitzung — Bestellungen können erst nach Kasseneröffnung erstellt werden.")
                 .font(.jakarta(DS.T.loginBody, weight: .regular))
                 .foregroundColor(DS.C.text2)
             Spacer()
@@ -540,6 +570,48 @@ private struct EmptyTablesPlaceholder: View {
                 .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Schnellkasse Button
+
+private struct SchnellkasseButton: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Schnellkasse starten")
+                        .font(.jakarta(DS.T.quickLabel, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("Ohne Tisch — Theke oder Außer-Haus")
+                        .font(.jakarta(DS.T.quickSub, weight: .regular))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                Spacer()
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.18))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(DS.C.acc)
+            .cornerRadius(DS.R.quickBanner)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(DS.C.sur)
+        .overlay(
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            alignment: .top
+        )
     }
 }
 
@@ -608,19 +680,39 @@ private struct TableCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var isOccupied: Bool { table.openOrdersCount > 0 }
-
     private var bgColor: Color { isOccupied ? DS.C.busyBg : DS.C.sur }
+
+    private var minutesOpen: Int? {
+        guard let oldest = table.oldestOrderAt else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: oldest) ?? {
+            iso.formatOptions = [.withInternetDateTime]
+            return iso.date(from: oldest)
+        }()
+        guard let date else { return nil }
+        return max(0, Int(Date().timeIntervalSince(date)) / 60)
+    }
+
+    private var amountText: String {
+        "\(table.totalOpenCents / 100),\(String(format: "%02d", table.totalOpenCents % 100)) €"
+    }
+
+    private var metaText: String {
+        guard isOccupied else { return "verfügbar" }
+        let minPart = minutesOpen.map { "\($0) min · " } ?? ""
+        let itemText = table.totalOpenItems == 1 ? "1 Position" : "\(table.totalOpenItems) Positionen"
+        return "\(minPart)\(itemText)"
+    }
 
     var body: some View {
         Button(action: onTap) {
             ZStack(alignment: .leading) {
-                // Hintergrund
                 bgColor
 
-                // Inhalt
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 0) {
                     // Zeile 1: Tischname + Badge
-                    HStack(alignment: .center, spacing: 8) {
+                    HStack(alignment: .center) {
                         Text(table.name)
                             .font(.jakarta(DS.T.tableName, weight: .semibold))
                             .foregroundColor(DS.C.text)
@@ -628,35 +720,31 @@ private struct TableCard: View {
                         Spacer()
                         TableStatusBadge(isOccupied: isOccupied)
                     }
+                    .padding(.bottom, 10)
 
-                    // Zeile 2: Betrag / Status
-                    Text(isOccupied
-                         ? "\(table.openOrdersCount) Bestellung\(table.openOrdersCount == 1 ? "" : "en")"
-                         : "—")
-                        .font(.jakarta(isOccupied ? 16 : DS.T.tableAmount, weight: .semibold))
-                        .foregroundColor(isOccupied ? DS.C.busyText : DS.C.text2)
-                        .tracking(isOccupied ? 0 : -0.5)
-
-                    // Zeile 3: Meta (mit Trennlinie oben)
-                    VStack(spacing: 0) {
-                        Rectangle()
-                            .frame(height: 1)
-                            .foregroundColor(DS.C.brd(colorScheme))
-                        Spacer().frame(height: 8)
-                        HStack(spacing: 6) {
-                            if let zoneName = table.zone?.name {
-                                Text(zoneName)
-                                    .font(.jakarta(DS.T.tableMeta, weight: .regular))
-                                    .foregroundColor(DS.C.text2)
-                                Circle()
-                                    .fill(DS.C.brd(colorScheme))
-                                    .frame(width: 4, height: 4)
-                            }
-                            Text(isOccupied ? "Besetzt" : "Frei")
-                                .font(.jakarta(DS.T.tableMeta, weight: .regular))
-                                .foregroundColor(isOccupied ? DS.C.busyText : DS.C.freeText)
-                        }
+                    // Zeile 2: Betrag
+                    if isOccupied {
+                        Text(amountText)
+                            .font(.jakarta(DS.T.tableAmount, weight: .bold))
+                            .foregroundColor(DS.C.text)
+                    } else {
+                        Text("—")
+                            .font(.jakarta(DS.T.tableAmount, weight: .semibold))
+                            .foregroundColor(DS.C.text2)
                     }
+
+                    Spacer().frame(minHeight: 10)
+
+                    // Trennlinie
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(DS.C.brd(colorScheme))
+                        .padding(.bottom, 8)
+
+                    // Zeile 3: Meta
+                    Text(metaText)
+                        .font(.jakarta(DS.T.tableMeta, weight: .regular))
+                        .foregroundColor(DS.C.text2)
                 }
                 .padding(14)
 
@@ -674,7 +762,7 @@ private struct TableCard: View {
             RoundedRectangle(cornerRadius: DS.R.card)
                 .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
         )
-        .frame(minHeight: 120)
+        .frame(minHeight: 140)
     }
 }
 
@@ -728,6 +816,7 @@ private struct AppBrandMark: View {
         .environmentObject(SessionStore.preview)
         .environmentObject(OrderStore.preview)
         .environmentObject(TableStore.preview)
+        .environmentObject(ReportStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -737,6 +826,7 @@ private struct AppBrandMark: View {
         .environmentObject(SessionStore.previewNoSession)
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(TableStore.preview)
+        .environmentObject(ReportStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -746,6 +836,7 @@ private struct AppBrandMark: View {
         .environmentObject(SessionStore.preview)
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(TableStore.previewEmpty)
+        .environmentObject(ReportStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -755,6 +846,7 @@ private struct AppBrandMark: View {
         .environmentObject(SessionStore.preview)
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(TableStore.preview)
+        .environmentObject(ReportStore.preview)
         .environmentObject(NetworkMonitor.previewOffline)
 }
 
@@ -764,6 +856,7 @@ private struct AppBrandMark: View {
         .environmentObject(SessionStore.preview)
         .environmentObject(OrderStore.preview)
         .environmentObject(TableStore.preview)
+        .environmentObject(ReportStore.preview)
         .environmentObject(NetworkMonitor.preview)
         .preferredColorScheme(.dark)
 }

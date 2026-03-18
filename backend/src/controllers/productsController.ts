@@ -219,13 +219,19 @@ export async function listProducts(req: Request, res: Response): Promise<void> {
     price_cents:      p.price_cents,
     vat_rate_inhouse: p.vat_rate_inhouse,
     vat_rate_takeaway: p.vat_rate_takeaway,
-    is_active:        p.is_active,
+    is_active:        Boolean(p.is_active),   // MySQL TINYINT(1) → JS boolean
     created_at:       p.created_at,
     category: p.category_id ? { id: p.category_id, name: p.category_name, color: p.category_color } : null,
-    modifier_groups: groupsWithOptions.filter(g =>
-      g.product_id === p.id ||
-      (g.category_id !== null && g.category_id === p.category_id)
-    ),
+    modifier_groups: groupsWithOptions
+      .filter(g =>
+        g.product_id === p.id ||
+        (g.category_id !== null && g.category_id === p.category_id)
+      )
+      .map(g => ({
+        ...g,
+        is_required: Boolean(g.is_required),  // MySQL TINYINT(1) → JS boolean
+        is_active:   Boolean(g.is_active),
+      })),
   }));
 
   res.json(result);

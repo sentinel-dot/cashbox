@@ -15,6 +15,11 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: authStore.isAuthenticated)
+        .onReceive(NotificationCenter.default.publisher(for: .authSessionExpired)) { _ in
+            Task { @MainActor in
+                authStore.forceLogout(reason: "Deine Sitzung ist abgelaufen. Bitte erneut anmelden.")
+            }
+        }
     }
 }
 

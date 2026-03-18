@@ -32,9 +32,14 @@ class APIClient {
     }
 
     /// Einmaliges Device-Token — wird beim ersten Start generiert und nie mehr geändert.
+    /// In DEBUG-Builds wird der feste Seed-Token genutzt (passend zur V005-Migration).
     var deviceTokenOrCreate: String {
         if let existing = deviceToken { return existing }
+        #if DEBUG
+        let token = "shishabar-dev-ipad-token-2026"
+        #else
         let token = UUID().uuidString
+        #endif
         deviceToken = token
         return token
     }
@@ -68,7 +73,7 @@ class APIClient {
             throw AppError.networkError("Ungültige URL: \(path)")
         }
 
-        var req = URLRequest(url: url)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("1.0.0", forHTTPHeaderField: "X-App-Version")
@@ -105,17 +110,35 @@ class APIClient {
 
     private func mapStatusCode(_ code: Int, data: Data) throws {
         guard code >= 400 else { return }
-        let msg = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?.error
-            ?? HTTPURLResponse.localizedString(forStatusCode: code)
+        let serverMsg = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?.error ?? ""
         switch code {
-        case 401: throw AppError.unauthorized
-        case 402: throw AppError.serverError(402, "Abonnement abgelaufen oder Trial beendet")
-        case 409: throw AppError.conflict(msg)
-        case 422: throw AppError.serverError(422, msg)
-        case 426: throw AppError.serverError(426, "App-Version veraltet — bitte Update installieren")
-        default:  throw AppError.serverError(code, msg)
+        case 401:
+            // Wenn ein Token vorhanden war → Session abgelaufen → App-weite Abmeldung auslösen
+            if authToken != nil {
+                NotificationCenter.default.post(name: .authSessionExpired, object: nil)
+            }
+            throw AppError.authFailed(serverMsg.isEmpty ? "Anmeldung fehlgeschlagen. Bitte erneut versuchen." : serverMsg)
+        case 402:
+            throw AppError.serverError(402, "Abonnement abgelaufen oder Trial beendet.")
+        case 403:
+            throw AppError.unauthorized
+        case 409:
+            throw AppError.conflict(serverMsg.isEmpty ? "Aktion nicht möglich." : serverMsg)
+        case 422:
+            throw AppError.serverError(422, serverMsg.isEmpty ? "Ungültige Eingabe." : serverMsg)
+        case 426:
+            throw AppError.serverError(426, "App-Version veraltet — bitte Update installieren.")
+        default:
+            let fallback = "Unerwarteter Fehler (\(code))."
+            throw AppError.serverError(code, serverMsg.isEmpty ? fallback : serverMsg)
         }
     }
+}
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let authSessionExpired = Notification.Name("cashbox.authSessionExpired")
 }
 
 // MARK: - Hilftypen

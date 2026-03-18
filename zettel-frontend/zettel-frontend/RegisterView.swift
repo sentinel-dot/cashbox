@@ -472,9 +472,9 @@ private struct RegisterField: View {
     let colorScheme: ColorScheme
     var validator: ((String) -> ValidationState)? = nil
 
-    @FocusState private var focused: Bool
+    @State private var focused      = false
     @State private var showPassword = false
-    @State private var touched = false  // erst nach erstem Verlassen des Felds validieren
+    @State private var touched      = false  // erst nach erstem Verlassen des Felds validieren
 
     private var validation: ValidationState {
         guard touched, let validate = validator else { return .idle }
@@ -520,20 +520,18 @@ private struct RegisterField: View {
 
             // Input-Feld
             HStack {
-                Group {
-                    if isSecure && !showPassword {
-                        SecureField(placeholder, text: $text)
-                    } else {
-                        TextField(placeholder, text: $text)
-                    }
-                }
-                .font(.jakarta(14, weight: .regular))
-                .foregroundColor(DS.C.text)
-                .keyboardType(keyboardType)
-                .textContentType(textContentType)
-                .autocapitalization(keyboardType == .emailAddress ? .none : .words)
-                .disableAutocorrection(true)
-                .focused($focused)
+                NoAssistantTextField(
+                    placeholder:            placeholder,
+                    text:                   $text,
+                    keyboardType:           keyboardType,
+                    uiFont:                 UIFont.systemFont(ofSize: 14),
+                    uiTextColor:            UIColor(DS.C.text),
+                    isSecure:               isSecure && !showPassword,
+                    textContentType:        textContentType,
+                    autocapitalizationType: keyboardType == .emailAddress ? .none : .words,
+                    autocorrectionType:     .no,
+                    isFocused:              $focused
+                )
 
                 // Auge (Passwort) oder Validierungs-Icon rechts im Feld
                 if isSecure {

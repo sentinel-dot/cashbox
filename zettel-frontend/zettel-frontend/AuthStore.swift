@@ -8,8 +8,10 @@ class AuthStore: ObservableObject {
     @Published var currentUser: AuthUser?
     @Published var isAuthenticated = false
     @Published var availableUsers: [AuthUser] = []
+    @Published var sessionExpiredReason: String? = nil
 
-    private let usersKey = "cachedUsers"
+    private let usersKey       = "cachedUsers"
+    private let currentUserKey = "cachedCurrentUser"
     private let api = APIClient.shared
 
     init() {
@@ -17,6 +19,11 @@ class AuthStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: usersKey),
            let users = try? JSONDecoder.cashbox.decode([AuthUser].self, from: data) {
             availableUsers = users
+        }
+        // currentUser wiederherstellen — wird für Rollen-Checks in Views benötigt
+        if let data = UserDefaults.standard.data(forKey: currentUserKey),
+           let user = try? JSONDecoder.cashbox.decode(AuthUser.self, from: data) {
+            currentUser = user
         }
         // Token im Keychain vorhanden → als eingeloggt behandeln (Backend validiert bei erstem Request)
         if api.authToken != nil {
@@ -112,6 +119,19 @@ class AuthStore: ObservableObject {
         KeychainHelper.delete(key: "refreshToken")
         currentUser = nil
         isAuthenticated = false
+        sessionExpiredReason = nil
+        UserDefaults.standard.removeObject(forKey: currentUserKey)
+    }
+
+    /// Automatische Abmeldung bei ungültiger Session — zeigt Hinweis im LoginView.
+    @MainActor
+    func forceLogout(reason: String) {
+        api.authToken = nil
+        KeychainHelper.delete(key: "refreshToken")
+        currentUser = nil
+        sessionExpiredReason = reason
+        isAuthenticated = false
+        UserDefaults.standard.removeObject(forKey: currentUserKey)
     }
 
     // MARK: - Intern
@@ -123,6 +143,10 @@ class AuthStore: ObservableObject {
         currentUser = response.user
         isAuthenticated = true
         cacheUsers([response.user])
+        // currentUser persistieren damit Rollen-Checks nach App-Neustart funktionieren
+        if let data = try? JSONEncoder.cashbox.encode(response.user) {
+            UserDefaults.standard.set(data, forKey: currentUserKey)
+        }
     }
 
     private func cacheUsers(_ users: [AuthUser]) {

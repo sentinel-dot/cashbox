@@ -38,7 +38,7 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
   const tenantId = req.auth!.tenantId;
 
   const [rows] = await db.execute<any[]>(
-    `SELECT id, name, email, role, is_active, created_at,
+    `SELECT id, name, email, role, is_active,
             (pin_hash IS NOT NULL) AS has_pin
      FROM users
      WHERE tenant_id = ? AND is_active = TRUE
@@ -46,7 +46,15 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
     [tenantId]
   );
 
-  res.json(rows);
+  // MySQL gibt TINYINT (0/1) zurück — Swift JSONDecoder erwartet echte Booleans
+  res.json(rows.map(r => ({
+    id:        r.id,
+    name:      r.name,
+    email:     r.email,
+    role:      r.role,
+    is_active: Boolean(r.is_active),
+    has_pin:   Boolean(r.has_pin),
+  })));
 }
 
 export async function createUser(req: Request, res: Response): Promise<void> {

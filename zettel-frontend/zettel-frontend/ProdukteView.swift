@@ -130,7 +130,7 @@ private struct ProdukteTopBar: View {
     @Binding var searchText: String
     let onAdd: () -> Void
     @Environment(\.colorScheme) private var colorScheme
-    @FocusState private var searchFocused: Bool
+    @State private var searchFocused = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -143,10 +143,13 @@ private struct ProdukteTopBar: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
                     .foregroundColor(DS.C.text2)
-                TextField("Suchen…", text: $searchText)
-                    .font(.jakarta(13, weight: .regular))
-                    .foregroundColor(DS.C.text)
-                    .focused($searchFocused)
+                NoAssistantTextField(
+                    placeholder:  "Suchen…",
+                    text:         $searchText,
+                    uiFont:       UIFont.systemFont(ofSize: 13),
+                    uiTextColor:  UIColor(DS.C.text),
+                    isFocused:    $searchFocused
+                )
                 if !searchText.isEmpty {
                     Button { searchText = "" } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -375,8 +378,6 @@ private struct ProduktFormSheet: View {
     @State private var selectedCat:   Int?    = nil
     @State private var isActive       = true
 
-    @FocusState private var focused: PFormField?
-    enum PFormField { case name, price }
 
     var isEdit: Bool { product != nil }
     var priceCents: Int {
@@ -404,12 +405,11 @@ private struct ProduktFormSheet: View {
                         .padding(.top, 8)
 
                     // Name
-                    PFField(label: "Name", placeholder: "z.B. Cappuccino", text: $name, focused: $focused, field: .name)
+                    PFField(label: "Name", placeholder: "z.B. Cappuccino", text: $name)
 
                     // Preis — nur bei Neu (Änderung über Preishistorie)
                     if !isEdit {
-                        PFField(label: "Preis (€)", placeholder: "3,50", text: $priceText, focused: $focused, field: .price)
-                            .keyboardType(.decimalPad)
+                        PFField(label: "Preis (€)", placeholder: "3,50", text: $priceText, keyboardType: .decimalPad)
                     } else {
                         HStack(spacing: 6) {
                             Image(systemName: "info.circle").font(.system(size: 11))
@@ -514,34 +514,36 @@ private struct ProduktFormSheet: View {
     }
 }
 
-private struct PFField<Field: Hashable>: View {
+private struct PFField: View {
     let label:       String
     let placeholder: String
     @Binding var text: String
-    var focused:     FocusState<Field?>.Binding
-    let field:       Field
+    var keyboardType: UIKeyboardType = .default
     @Environment(\.colorScheme) private var colorScheme
-
-    var isFocused: Bool { focused.wrappedValue == field }
+    @State private var isFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.jakarta(DS.T.loginFooter, weight: .semibold))
                 .foregroundColor(DS.C.text2)
-            TextField(placeholder, text: $text)
-                .font(.jakarta(14, weight: .regular))
-                .foregroundColor(DS.C.text)
-                .focused(focused, equals: field)
-                .padding(.horizontal, 12)
-                .frame(height: DS.S.inputHeight)
-                .background(DS.C.bg)
-                .cornerRadius(DS.R.input)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.R.input)
-                        .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
-                )
-                .animation(.easeInOut(duration: 0.15), value: isFocused)
+            NoAssistantTextField(
+                placeholder:  placeholder,
+                text:         $text,
+                keyboardType: keyboardType,
+                uiFont:       UIFont.systemFont(ofSize: 14),
+                uiTextColor:  UIColor(DS.C.text),
+                isFocused:    $isFocused
+            )
+            .padding(.horizontal, 12)
+            .frame(height: DS.S.inputHeight)
+            .background(DS.C.bg)
+            .cornerRadius(DS.R.input)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+            )
+            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
     }
 }
@@ -579,10 +581,10 @@ private struct PreisAendernSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var priceText = ""
-    @State private var reason    = ""
-    @FocusState private var focused: PreisField?
-    enum PreisField { case price, reason }
+    @State private var priceText     = ""
+    @State private var reason        = ""
+    @State private var priceFocused  = false
+    @State private var reasonFocused = false
 
     var newPriceCents: Int {
         let c = priceText.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: "€", with: "").trimmingCharacters(in: .whitespaces)
@@ -619,31 +621,37 @@ private struct PreisAendernSheet: View {
                     Text("Neuer Preis (€)")
                         .font(.jakarta(DS.T.loginFooter, weight: .semibold))
                         .foregroundColor(DS.C.text2)
-                    TextField("0,00", text: $priceText)
-                        .font(.jakarta(14, weight: .regular))
-                        .foregroundColor(DS.C.text)
-                        .keyboardType(.decimalPad)
-                        .focused($focused, equals: .price)
-                        .padding(.horizontal, 12)
-                        .frame(height: DS.S.inputHeight)
-                        .background(DS.C.bg)
-                        .cornerRadius(DS.R.input)
-                        .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(focused == .price ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1))
+                    NoAssistantTextField(
+                        placeholder:  "0,00",
+                        text:         $priceText,
+                        keyboardType: .decimalPad,
+                        uiFont:       UIFont.systemFont(ofSize: 14),
+                        uiTextColor:  UIColor(DS.C.text),
+                        isFocused:    $priceFocused
+                    )
+                    .padding(.horizontal, 12)
+                    .frame(height: DS.S.inputHeight)
+                    .background(DS.C.bg)
+                    .cornerRadius(DS.R.input)
+                    .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(priceFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1))
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Grund (Pflicht für GoBD-Protokoll)")
                         .font(.jakarta(DS.T.loginFooter, weight: .semibold))
                         .foregroundColor(DS.C.text2)
-                    TextField("z.B. Lieferantenpreiserhöhung", text: $reason)
-                        .font(.jakarta(14, weight: .regular))
-                        .foregroundColor(DS.C.text)
-                        .focused($focused, equals: .reason)
-                        .padding(.horizontal, 12)
-                        .frame(height: DS.S.inputHeight)
-                        .background(DS.C.bg)
+                    NoAssistantTextField(
+                        placeholder: "z.B. Lieferantenpreiserhöhung",
+                        text:        $reason,
+                        uiFont:      UIFont.systemFont(ofSize: 14),
+                        uiTextColor: UIColor(DS.C.text),
+                        isFocused:   $reasonFocused
+                    )
+                    .padding(.horizontal, 12)
+                    .frame(height: DS.S.inputHeight)
+                    .background(DS.C.bg)
                         .cornerRadius(DS.R.input)
-                        .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(focused == .reason ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(reasonFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1))
                 }
 
                 HStack(spacing: 6) {

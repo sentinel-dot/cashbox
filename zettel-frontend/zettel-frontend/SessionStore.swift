@@ -9,7 +9,8 @@ final class SessionStore: ObservableObject {
     // ── Published State ────────────────────────────────────────────────────
     @Published private(set) var currentSession: CashRegisterSession?
     @Published private(set) var lastZReport:    CloseSessionResult?
-    @Published private(set) var isLoading = false
+    @Published private(set) var isLoading   = false
+    @Published private(set) var hasLoaded   = false   // bleibt false bis erster loadCurrent() abgeschlossen
     @Published private(set) var error: AppError?
 
     // ── Dependencies ───────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ final class SessionStore: ObservableObject {
     /// 404 = keine Session offen — kein Fehler, nur currentSession = nil.
     func loadCurrent() async {
         isLoading = true
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             currentSession = try await api.get("/sessions/current")
         } catch AppError.serverError(404, _) {

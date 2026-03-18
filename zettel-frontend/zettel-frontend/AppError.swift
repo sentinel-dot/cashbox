@@ -6,6 +6,7 @@ import Foundation
 enum AppError: LocalizedError {
     case invalidCredentials
     case unauthorized
+    case authFailed(String)   // 401 mit Server-Nachricht (z.B. "Gerät nicht registriert")
     case noActiveSession
     case wrongPin
     case conflict(String)
@@ -20,6 +21,8 @@ enum AppError: LocalizedError {
             return "E-Mail oder Passwort falsch."
         case .unauthorized:
             return "Keine Berechtigung für diese Aktion."
+        case .authFailed(let msg):
+            return msg
         case .noActiveSession:
             return "Keine offene Kassensitzung. Bitte Sitzung öffnen."
         case .wrongPin:

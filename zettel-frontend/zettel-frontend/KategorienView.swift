@@ -291,13 +291,13 @@ private struct KategorieFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var name:      String = ""
-    @State private var colorHex:  String = ""
-    @State private var sortOrder: String = ""
-    @State private var isLoading  = false
-    @FocusState private var focusedField: FormField?
-
-    private enum FormField { case name, color, sortOrder }
+    @State private var name:         String = ""
+    @State private var colorHex:     String = ""
+    @State private var sortOrder:    String = ""
+    @State private var isLoading     = false
+    @State private var nameFocused   = false
+    @State private var colorFocused  = false
+    @State private var sortFocused   = false
 
     private var isEditing: Bool {
         if case .edit = mode { return true }
@@ -330,21 +330,21 @@ private struct KategorieFormSheet: View {
 
                     // Name
                     FormSection("NAME") {
-                        TextField("z.B. Getränke", text: $name)
-                            .font(.jakarta(14, weight: .regular))
-                            .foregroundColor(DS.C.text)
-                            .focused($focusedField, equals: .name)
-                            .padding(.horizontal, 12)
-                            .frame(height: DS.S.inputHeight)
-                            .background(DS.C.bg)
-                            .cornerRadius(DS.R.input)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.R.input)
-                                    .strokeBorder(
-                                        focusedField == .name ? DS.C.acc : DS.C.brd(colorScheme),
-                                        lineWidth: 1
-                                    )
-                            )
+                        NoAssistantTextField(
+                            placeholder: "z.B. Getränke",
+                            text:        $name,
+                            uiFont:      UIFont.systemFont(ofSize: 14),
+                            uiTextColor: UIColor(DS.C.text),
+                            isFocused:   $nameFocused
+                        )
+                        .padding(.horizontal, 12)
+                        .frame(height: DS.S.inputHeight)
+                        .background(DS.C.bg)
+                        .cornerRadius(DS.R.input)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.R.input)
+                                .strokeBorder(nameFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                        )
                     }
 
                     // Farbe
@@ -358,7 +358,7 @@ private struct KategorieFormSheet: View {
                                         isSelected: colorHex.lowercased() == hex.lowercased()
                                     ) {
                                         colorHex = hex
-                                        focusedField = nil
+                                        colorFocused = false
                                     }
                                 }
                             }
@@ -372,26 +372,26 @@ private struct KategorieFormSheet: View {
                                         .frame(width: 24, height: 24)
                                         .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
                                 }
-                                TextField("#1a6fff", text: $colorHex)
-                                    .font(.jakarta(14, weight: .regular))
-                                    .foregroundColor(DS.C.text)
-                                    .autocorrectionDisabled()
-                                    .focused($focusedField, equals: .color)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: DS.S.inputHeight)
-                                    .background(DS.C.bg)
-                                    .cornerRadius(DS.R.input)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DS.R.input)
-                                            .strokeBorder(
-                                                focusedField == .color ? DS.C.acc : DS.C.brd(colorScheme),
-                                                lineWidth: 1
-                                            )
-                                    )
+                                NoAssistantTextField(
+                                    placeholder:        "#1a6fff",
+                                    text:               $colorHex,
+                                    uiFont:             UIFont.systemFont(ofSize: 14),
+                                    uiTextColor:        UIColor(DS.C.text),
+                                    autocorrectionType: .no,
+                                    isFocused:          $colorFocused
+                                )
+                                .padding(.horizontal, 12)
+                                .frame(height: DS.S.inputHeight)
+                                .background(DS.C.bg)
+                                .cornerRadius(DS.R.input)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.R.input)
+                                        .strokeBorder(colorFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                                )
                                 if !colorHex.isEmpty {
                                     Button {
                                         colorHex = ""
-                                        focusedField = nil
+                                        colorFocused = false
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundColor(DS.C.text2)
@@ -406,22 +406,22 @@ private struct KategorieFormSheet: View {
                     // Sort-Order (nur bei Neuanlage wirklich relevant)
                     FormSection("POSITION (SORT-ORDER)") {
                         VStack(alignment: .leading, spacing: 4) {
-                            TextField("z.B. 1", text: $sortOrder)
-                                .font(.jakarta(14, weight: .regular))
-                                .foregroundColor(DS.C.text)
-                                .keyboardType(.numberPad)
-                                .focused($focusedField, equals: .sortOrder)
-                                .padding(.horizontal, 12)
-                                .frame(height: DS.S.inputHeight)
-                                .background(DS.C.bg)
-                                .cornerRadius(DS.R.input)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.R.input)
-                                        .strokeBorder(
-                                            focusedField == .sortOrder ? DS.C.acc : DS.C.brd(colorScheme),
-                                            lineWidth: 1
-                                        )
-                                )
+                            NoAssistantTextField(
+                                placeholder:  "z.B. 1",
+                                text:         $sortOrder,
+                                keyboardType: .numberPad,
+                                uiFont:       UIFont.systemFont(ofSize: 14),
+                                uiTextColor:  UIColor(DS.C.text),
+                                isFocused:    $sortFocused
+                            )
+                            .padding(.horizontal, 12)
+                            .frame(height: DS.S.inputHeight)
+                            .background(DS.C.bg)
+                            .cornerRadius(DS.R.input)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.R.input)
+                                    .strokeBorder(sortFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                            )
                             Text("Leer lassen = ans Ende anfügen")
                                 .font(.jakarta(DS.T.loginFooter, weight: .regular))
                                 .foregroundColor(DS.C.text2)

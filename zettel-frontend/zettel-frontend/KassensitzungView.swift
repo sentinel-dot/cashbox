@@ -105,7 +105,7 @@ private struct NoSessionView: View {
     @State private var isLoading = false
     @State private var error: AppError?
     @State private var showError = false
-    @FocusState private var fieldFocused: Bool
+    @State private var fieldFocused = false
 
     private var openingCents: Int? {
         parseCents(openingCashText)
@@ -131,13 +131,13 @@ private struct NoSessionView: View {
 
                 Spacer().frame(height: 20)
 
-                Text("Schicht öffnen")
+                Text("Kasse öffnen")
                     .font(.jakarta(DS.T.loginTitle, weight: .semibold))
                     .foregroundColor(DS.C.text)
 
                 Spacer().frame(height: 4)
 
-                Text("Geben Sie den aktuellen Kassenbestand ein, um die Schicht zu beginnen.")
+                Text("Geben Sie den aktuellen Kassenbestand ein, um die Kasse zu öffnen.")
                     .font(.jakarta(DS.T.loginBody, weight: .regular))
                     .foregroundColor(DS.C.text2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -154,12 +154,15 @@ private struct NoSessionView: View {
 
                 // Betrag-Eingabe
                 HStack(spacing: 8) {
-                    TextField("0,00", text: $openingCashText)
-                        .font(.jakarta(22, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                        .keyboardType(.decimalPad)
-                        .focused($fieldFocused)
-                        .multilineTextAlignment(.trailing)
+                    NoAssistantTextField(
+                        placeholder:   "0,00",
+                        text:          $openingCashText,
+                        keyboardType:  .decimalPad,
+                        uiFont:        UIFont.systemFont(ofSize: 22, weight: .semibold),
+                        uiTextColor:   UIColor(DS.C.text),
+                        textAlignment: .right,
+                        isFocused:     $fieldFocused
+                    )
 
                     Text("€")
                         .font(.jakarta(18, weight: .regular))
@@ -199,7 +202,7 @@ private struct NoSessionView: View {
                                 .progressViewStyle(.circular)
                                 .tint(.white)
                         } else {
-                            Text("Schicht öffnen")
+                            Text("Kasse öffnen")
                                 .font(.jakarta(DS.T.loginButton, weight: .semibold))
                                 .foregroundColor(.white)
                         }
@@ -226,7 +229,14 @@ private struct NoSessionView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .onAppear { fieldFocused = true }
+        .onAppear {
+            // Verzögerung nötig: sofortiger Fokus auf dem Main Thread blockiert die
+            // Navigation-Animation (~1 Sek.) weil UIKit die Keyboard-Infrastruktur
+            // erstmalig synchron initialisiert.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                fieldFocused = true
+            }
+        }
     }
 
     private func performOpen() async {
@@ -290,7 +300,7 @@ private struct SessionHeaderBar: View {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 7, height: 7)
-                Text("Schicht offen")
+                Text("Kasse offen")
                     .font(.jakarta(DS.T.sessionChip, weight: .semibold))
                     .foregroundColor(DS.C.freeText)
             }
@@ -319,7 +329,7 @@ private struct SessionHeaderBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 13, weight: .semibold))
-                    Text("Schicht schließen")
+                    Text("Kasse schließen")
                         .font(.jakarta(DS.T.loginButton, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -554,7 +564,7 @@ private struct CloseSessionSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var closingCashText = ""
     @State private var isLoading = false
-    @FocusState private var focused: Bool
+    @State private var focused = false
 
     private var closingCents: Int? { parseCents(closingCashText) }
     private var canClose: Bool { closingCents != nil && !isLoading }
@@ -575,7 +585,7 @@ private struct CloseSessionSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)
 
-                    Text("Schicht schließen")
+                    Text("Kasse schließen")
                         .font(.jakarta(DS.T.loginTitle, weight: .semibold))
                         .foregroundColor(DS.C.text)
 
@@ -596,12 +606,15 @@ private struct CloseSessionSheet: View {
                     Spacer().frame(height: 6)
 
                     HStack(spacing: 8) {
-                        TextField("0,00", text: $closingCashText)
-                            .font(.jakarta(22, weight: .semibold))
-                            .foregroundColor(DS.C.text)
-                            .keyboardType(.decimalPad)
-                            .focused($focused)
-                            .multilineTextAlignment(.trailing)
+                        NoAssistantTextField(
+                            placeholder:   "0,00",
+                            text:          $closingCashText,
+                            keyboardType:  .decimalPad,
+                            uiFont:        UIFont.systemFont(ofSize: 22, weight: .semibold),
+                            uiTextColor:   UIColor(DS.C.text),
+                            textAlignment: .right,
+                            isFocused:     $focused
+                        )
                         Text("€")
                             .font(.jakarta(18, weight: .regular))
                             .foregroundColor(DS.C.text2)
@@ -644,7 +657,7 @@ private struct CloseSessionSheet: View {
                                 if isLoading {
                                     ProgressView().tint(.white)
                                 } else {
-                                    Text("Schicht schließen")
+                                    Text("Kasse schließen")
                                         .font(.jakarta(DS.T.loginButton, weight: .semibold))
                                         .foregroundColor(.white)
                                 }
@@ -680,7 +693,7 @@ private struct AddMovementSheet: View {
     @State private var amountText = ""
     @State private var reason = ""
     @State private var isLoading = false
-    @FocusState private var amountFocused: Bool
+    @State private var amountFocused = false
 
     private var amountCents: Int? { parseCents(amountText) }
     private var canAdd: Bool {
@@ -744,12 +757,15 @@ private struct AddMovementSheet: View {
                     Spacer().frame(height: 6)
 
                     HStack(spacing: 8) {
-                        TextField("0,00", text: $amountText)
-                            .font(.jakarta(22, weight: .semibold))
-                            .foregroundColor(DS.C.text)
-                            .keyboardType(.decimalPad)
-                            .focused($amountFocused)
-                            .multilineTextAlignment(.trailing)
+                        NoAssistantTextField(
+                            placeholder:   "0,00",
+                            text:          $amountText,
+                            keyboardType:  .decimalPad,
+                            uiFont:        UIFont.systemFont(ofSize: 22, weight: .semibold),
+                            uiTextColor:   UIColor(DS.C.text),
+                            textAlignment: .right,
+                            isFocused:     $amountFocused
+                        )
                         Text("€")
                             .font(.jakarta(18, weight: .regular))
                             .foregroundColor(DS.C.text2)
@@ -777,17 +793,20 @@ private struct AddMovementSheet: View {
 
                     Spacer().frame(height: 6)
 
-                    TextField("z.B. Wechselgeld nachgelegt", text: $reason)
-                        .font(.jakarta(14, weight: .regular))
-                        .foregroundColor(DS.C.text)
-                        .padding(.horizontal, 12)
-                        .frame(height: DS.S.inputHeight)
-                        .background(DS.C.bg)
-                        .cornerRadius(DS.R.input)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.R.input)
-                                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-                        )
+                    NoAssistantTextField(
+                        placeholder:   "z.B. Wechselgeld nachgelegt",
+                        text:          $reason,
+                        uiFont:        UIFont.systemFont(ofSize: 14),
+                        uiTextColor:   UIColor(DS.C.text)
+                    )
+                    .padding(.horizontal, 12)
+                    .frame(height: DS.S.inputHeight)
+                    .background(DS.C.bg)
+                    .cornerRadius(DS.R.input)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.R.input)
+                            .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+                    )
 
                     Spacer().frame(height: 28)
 
@@ -869,7 +888,7 @@ private struct ZReportSummarySheet: View {
                                 .foregroundColor(DS.C.freeText)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Schicht geschlossen")
+                            Text("Kasse geschlossen")
                                 .font(.jakarta(DS.T.loginTitle, weight: .semibold))
                                 .foregroundColor(DS.C.text)
                             Text("Z-Bericht #\(result.zReportId)")

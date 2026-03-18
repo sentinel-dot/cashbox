@@ -173,7 +173,7 @@ private func computeVat(_ items: [OrderItem]) -> VatBreakdownLocal {
     var v7n = 0, v7t = 0, v19n = 0, v19t = 0
     for item in items {
         let gross = item.subtotalCents
-        let is7   = item.vatRate < 10.0
+        let is7   = item.vatRate == "7"
         let net   = Int((Double(gross * 100) / Double(is7 ? 107 : 119)).rounded())
         let tax   = gross - net
         if is7 { v7n += net; v7t += tax } else { v19n += net; v19t += tax }
@@ -280,7 +280,7 @@ private struct SummaryItemRow: View {
                         .foregroundColor(DS.C.text2)
                         .lineLimit(1)
                 }
-                Text(String(format: "%.0f %% MwSt", item.vatRate))
+                Text("\(item.vatRate) % MwSt")
                     .font(.jakarta(DS.T.loginFooter, weight: .regular))
                     .foregroundColor(DS.C.text2)
             }
@@ -329,7 +329,7 @@ private struct PaymentPanel: View {
     let onPay:      () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    @FocusState private var cashFocused: Bool
+    @State private var cashFocused = false
 
     private var cashCents:     Int  { parseCents(cashInput) }
     private var cardCents:     Int  { max(0, totalCents - cashCents) }
@@ -391,24 +391,27 @@ private struct PaymentPanel: View {
                                 Text("Barbetrag")
                                     .font(.jakarta(DS.T.loginFooter, weight: .semibold))
                                     .foregroundColor(DS.C.text2)
-                                TextField("0,00 €", text: $cashInput)
-                                    .font(.jakarta(14, weight: .regular))
-                                    .foregroundColor(DS.C.text)
-                                    .keyboardType(.decimalPad)
-                                    .focused($cashFocused)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: DS.S.inputHeight)
-                                    .background(DS.C.bg)
-                                    .cornerRadius(DS.R.input)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DS.R.input)
-                                            .strokeBorder(
-                                                cashOverflow  ? Color(hex: "e74c3c") :
-                                                cashFocused   ? DS.C.acc : DS.C.brd(colorScheme),
-                                                lineWidth: 1
-                                            )
-                                    )
-                                    .animation(.easeInOut(duration: 0.15), value: cashFocused)
+                                NoAssistantTextField(
+                                    placeholder:  "0,00 €",
+                                    text:         $cashInput,
+                                    keyboardType: .decimalPad,
+                                    uiFont:       UIFont.systemFont(ofSize: 14),
+                                    uiTextColor:  UIColor(DS.C.text),
+                                    isFocused:    $cashFocused
+                                )
+                                .padding(.horizontal, 12)
+                                .frame(height: DS.S.inputHeight)
+                                .background(DS.C.bg)
+                                .cornerRadius(DS.R.input)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.R.input)
+                                        .strokeBorder(
+                                            cashOverflow  ? Color(hex: "e74c3c") :
+                                            cashFocused   ? DS.C.acc : DS.C.brd(colorScheme),
+                                            lineWidth: 1
+                                        )
+                                )
+                                .animation(.easeInOut(duration: 0.15), value: cashFocused)
                             }
 
                             // Kartenbetrag — auto-berechnet
@@ -748,7 +751,7 @@ private extension OrderDetail {
             items: [
                 OrderItem(
                     id: 1, productId: 1, productName: "Cappuccino",
-                    productPriceCents: 350, vatRate: 19.0, quantity: 2,
+                    productPriceCents: 350, vatRate: "19", quantity: 2,
                     subtotalCents: 700, discountCents: 0, discountReason: nil,
                     createdAt: "", modifiers: [
                         OrderItemModifier(modifierOptionId: 2, name: "Hafermilch", priceDeltaCents: 50)
@@ -756,7 +759,7 @@ private extension OrderDetail {
                 ),
                 OrderItem(
                     id: 2, productId: 6, productName: "Shisha Miete",
-                    productPriceCents: 1500, vatRate: 19.0, quantity: 1,
+                    productPriceCents: 1500, vatRate: "19", quantity: 1,
                     subtotalCents: 1500, discountCents: 0, discountReason: nil,
                     createdAt: "", modifiers: [
                         OrderItemModifier(modifierOptionId: 4, name: "Double Apple", priceDeltaCents: 0)
@@ -764,7 +767,7 @@ private extension OrderDetail {
                 ),
                 OrderItem(
                     id: 3, productId: 8, productName: "Chips",
-                    productPriceCents: 200, vatRate: 7.0, quantity: 1,
+                    productPriceCents: 200, vatRate: "7", quantity: 1,
                     subtotalCents: 200, discountCents: 0, discountReason: nil,
                     createdAt: "", modifiers: []
                 ),

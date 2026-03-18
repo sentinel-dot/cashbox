@@ -103,7 +103,7 @@ export async function updateZone(req: Request, res: Response): Promise<void> {
 export async function listTables(req: Request, res: Response): Promise<void> {
   const tenantId = req.auth!.tenantId;
 
-  // Tische inkl. Zone + offene Order (falls vorhanden)
+  // Tische inkl. Zone + offene Order-Daten (Anzahl, Betrag, Positionen, Startzeit)
   const [rows] = await db.execute<any[]>(
     `SELECT
        t.id, t.name, t.is_active,
@@ -113,19 +113,40 @@ export async function listTables(req: Request, res: Response): Promise<void> {
        (SELECT COUNT(*) FROM orders o
         WHERE o.table_id = t.id
           AND o.tenant_id = ?
-          AND o.status = 'open') AS open_orders_count
+          AND o.status = 'open') AS open_orders_count,
+       (SELECT COALESCE(SUM(oi.subtotal_cents - oi.discount_cents), 0)
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.table_id = t.id AND o.tenant_id = ? AND o.status = 'open'
+          AND NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)
+       ) AS total_open_cents,
+       (SELECT COALESCE(SUM(oi.quantity), 0)
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.table_id = t.id AND o.tenant_id = ? AND o.status = 'open'
+          AND NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)
+       ) AS total_open_items,
+       (SELECT MIN(o.created_at)
+        FROM orders o
+        WHERE o.table_id = t.id AND o.tenant_id = ? AND o.status = 'open'
+       ) AS oldest_order_at
      FROM tables t
      LEFT JOIN zones z ON z.id = t.zone_id AND z.tenant_id = ?
      WHERE t.tenant_id = ? AND t.is_active = TRUE
      ORDER BY z.sort_order ASC, z.name ASC, t.name ASC`,
-    [tenantId, tenantId, tenantId]
+    [tenantId, tenantId, tenantId, tenantId, tenantId, tenantId]
   );
 
   const result = rows.map(r => ({
     id:         r.id,
     name:       r.name,
-    is_active:  r.is_active,
+    is_active:  Boolean(r.is_active),
     open_orders_count: Number(r.open_orders_count),
+    total_open_cents:  Number(r.total_open_cents),
+    total_open_items:  Number(r.total_open_items),
+    oldest_order_at:   r.oldest_order_at instanceof Date
+      ? r.oldest_order_at.toISOString()
+      : (r.oldest_order_at ?? null),
     zone: r.zone_id ? { id: r.zone_id, name: r.zone_name, sort_order: r.zone_sort_order } : null,
   }));
 

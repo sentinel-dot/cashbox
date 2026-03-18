@@ -252,7 +252,8 @@ npm run test:coverage        # Coverage-Report
 | `BerichteView.swift` | Täglich/Zeitraum-Tab, Datumsnavigation, KPI-Kacheln, Sessionsliste, MwSt-Aufschlüsselung, Quick-Buttons (7/30 Tage) | ✅ |
 | `ProdukteView.swift` | 4-Spalten Produktverwaltung, Suche, Kategorie-Filter, ProduktFormSheet, PreisAendernSheet (GoBD-konform), Aktiv/Inaktiv-Badge | ✅ |
 | `KategorienView.swift` | Kategorienliste mit Farbchips, KategorieFormSheet (Name + Farb-Preset + HEX-Input + Sort-Order), Delete-Confirmation | ✅ |
-| `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
+| `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Tischverwaltung (Tab "Tische"), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
+| `TischverwaltungView.swift` | Tische & Zonen verwalten: Liste, ZoneFormSheet, TischFormSheet (Zone-Picker), Deaktivieren-Confirm, CRUD via TableStore | ✅ |
 
 ### Noch nicht implementiert ❌ (SwiftUI)
 | Screen | Abhängigkeiten | Phase |
@@ -331,7 +332,8 @@ src/
 │   └── sequences.ts    -- receipt_sequences FOR UPDATE
 ├── db/
 │   ├── migrations/     -- V001__initial_schema, V002__order_items_soft_delete,
-│   │                      V003__onboarding_trial_stripe, V004__tenants_subscription_period_end
+│   │                      V003__onboarding_trial_stripe, V004__tenants_subscription_period_end,
+│   │                      V005__shishabar_seed (Pilot-Testdaten: Tenant, Users, Produkte, Tische)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/

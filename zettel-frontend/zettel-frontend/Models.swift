@@ -145,7 +145,7 @@ struct OrderItem: Identifiable, Codable {
     let productId: Int
     let productName: String
     let productPriceCents: Int
-    let vatRate: Double
+    let vatRate: String   // ENUM "7" oder "19"
     let quantity: Int
     let subtotalCents: Int
     let discountCents: Int
@@ -383,5 +383,8 @@ struct TableItem: Identifiable, Codable {
     let name: String
     let isActive: Bool
     let openOrdersCount: Int
+    let totalOpenCents: Int
+    let totalOpenItems: Int
+    let oldestOrderAt: String?
     let zone: TableZone?
 }
