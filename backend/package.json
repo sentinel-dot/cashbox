@@ -15,7 +15,9 @@
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:test": "DOTENV_CONFIG_PATH=.env.test ts-node -r dotenv/config src/db/migrate.ts",
     "db:setup": "ts-node scripts/setup-db.ts",
-    "db:setup:test": "DOTENV_CONFIG_PATH=.env.test ts-node scripts/setup-db.ts"
+    "db:setup:test": "DOTENV_CONFIG_PATH=.env.test ts-node scripts/setup-db.ts",
+    "seed:reset": "ts-node scripts/reset-seed.ts",
+    "seed:reset:test": "DOTENV_CONFIG_PATH=.env.test ts-node scripts/reset-seed.ts"
   },
   "keywords": [],
   "author": "",

@@ -115,7 +115,9 @@ class APIClient {
         case 401:
             // Wenn ein Token vorhanden war → Session abgelaufen → App-weite Abmeldung auslösen
             if authToken != nil {
-                NotificationCenter.default.post(name: .authSessionExpired, object: nil)
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .authSessionExpired, object: nil)
+                }
             }
             throw AppError.authFailed(serverMsg.isEmpty ? "Anmeldung fehlgeschlagen. Bitte erneut versuchen." : serverMsg)
         case 402:

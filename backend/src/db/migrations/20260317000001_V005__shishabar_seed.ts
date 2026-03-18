@@ -192,21 +192,21 @@ export async function up(db: Connection): Promise<void> {
   for (let i = 1; i <= 6; i++) {
     await db.execute(
       `INSERT INTO tables (tenant_id, zone_id, name, is_active) VALUES (?, ?, ?, TRUE)`,
-      [tenantId, zoneInnenId, `T${i}`]
+      [tenantId, zoneInnenId, `Tisch ${i}`]
     );
   }
   // Lounge: L1–L4
   for (let i = 1; i <= 4; i++) {
     await db.execute(
       `INSERT INTO tables (tenant_id, zone_id, name, is_active) VALUES (?, ?, ?, TRUE)`,
-      [tenantId, zoneLoungeId, `L${i}`]
+      [tenantId, zoneLoungeId, `Lounge ${i}`]
     );
   }
   // Außen: A1–A3
   for (let i = 1; i <= 3; i++) {
     await db.execute(
       `INSERT INTO tables (tenant_id, zone_id, name, is_active) VALUES (?, ?, ?, TRUE)`,
-      [tenantId, zoneAussenId, `A${i}`]
+      [tenantId, zoneAussenId, `Außen ${i}`]
     );
   }
 

@@ -103,5 +103,6 @@ private func isoDate(_ date: Date) -> String {
     let fmt = DateFormatter()
     fmt.dateFormat = "yyyy-MM-dd"
     fmt.locale = Locale(identifier: "en_US_POSIX")
+    fmt.timeZone = TimeZone(identifier: "UTC")
     return fmt.string(from: date)
 }

@@ -3,6 +3,7 @@
 // Alle Farben, Schriftgrößen, Abstände zentral definiert.
 
 import SwiftUI
+import UIKit
 
 // MARK: - Hex Color Initializer
 
@@ -73,19 +74,19 @@ enum DS {
 
     // MARK: Typography
     enum T {
-        static let topbarAppName: CGFloat  = 14
-        static let navItem: CGFloat        = 12
-        static let kpiValue: CGFloat       = 18
-        static let kpiLabel: CGFloat       = 9
-        static let tableName: CGFloat      = 14
-        static let tableAmount: CGFloat    = 22
-        static let tableMeta: CGFloat      = 11
-        static let badge: CGFloat          = 10
-        static let zonePill: CGFloat       = 11
-        static let sessionChip: CGFloat    = 11
-        static let quickLabel: CGFloat     = 13
-        static let quickSub: CGFloat       = 10
-        static let sectionHeader: CGFloat  = 9
+        static let topbarAppName: CGFloat  = 20
+        static let navItem: CGFloat        = 19
+        static let kpiValue: CGFloat       = 28
+        static let kpiLabel: CGFloat       = 14
+        static let tableName: CGFloat      = 21
+        static let tableAmount: CGFloat    = 36
+        static let tableMeta: CGFloat      = 15
+        static let badge: CGFloat          = 13
+        static let zonePill: CGFloat       = 15
+        static let sessionChip: CGFloat    = 15
+        static let quickLabel: CGFloat     = 18
+        static let quickSub: CGFloat       = 14
+        static let sectionHeader: CGFloat  = 13
 
         // Login-spezifisch
         static let loginHeadline: CGFloat  = 26
@@ -111,10 +112,10 @@ enum DS {
 
     // MARK: Sizes & Spacing
     enum S {
-        static let topbarHeight: CGFloat     = 52
-        static let sidebarWidth: CGFloat     = 200
+        static let topbarHeight: CGFloat     = 58
+        static let sidebarWidth: CGFloat     = 280
         static let formPanelWidth: CGFloat   = 400
-        static let brandMarkSize: CGFloat    = 26
+        static let brandMarkSize: CGFloat    = 30
         static let inputHeight: CGFloat      = 40
         static let buttonHeight: CGFloat     = 42
         static let avatarSize: CGFloat       = 30
@@ -124,12 +125,17 @@ enum DS {
 }
 
 // MARK: - Font Helper (Plus Jakarta Sans)
-// TODO: Plus Jakarta Sans .ttf-Dateien ins Bundle legen + Info.plist UIAppFonts eintragen.
-// Font-Namen: "PlusJakartaSans-Regular", "PlusJakartaSans-Medium", "PlusJakartaSans-SemiBold"
-// Danach: Font.custom("PlusJakartaSans-SemiBold", size: size) verwenden.
 
 extension Font {
     static func jakarta(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .default)
+        let name: String
+        switch weight {
+        case .medium:     name = "PlusJakartaSans-Medium"
+        case .semibold:   name = "PlusJakartaSans-SemiBold"
+        case .bold:       name = "PlusJakartaSans-Bold"
+        case .heavy:      name = "PlusJakartaSans-ExtraBold"
+        default:          name = "PlusJakartaSans-Regular"
+        }
+        return .custom(name, size: size)
     }
 }

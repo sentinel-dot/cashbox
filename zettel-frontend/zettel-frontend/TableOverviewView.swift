@@ -102,8 +102,8 @@ struct TableOverviewView: View {
             async let r: () = reportStore.loadDaily()
             _ = await (t, s, r)
         }
-        .onChange(of: sessionStore.hasOpenSession) { isOpen in
-            if isOpen && schnellkasseIntent {
+        .onChange(of: sessionStore.hasOpenSession) {
+            if sessionStore.hasOpenSession && schnellkasseIntent {
                 schnellkasseIntent = false
                 showSchnellkasse   = true
             }
@@ -114,10 +114,28 @@ struct TableOverviewView: View {
         .fullScreenCover(isPresented: $showSchnellkasse) {
             OrderView(tableId: nil, tableName: nil)
         }
+        .onChange(of: selectedTable) {
+            if selectedTable == nil {
+                Task {
+                    async let t: () = tableStore.loadTables()
+                    async let r: () = reportStore.loadDaily()
+                    _ = await (t, r)
+                }
+            }
+        }
+        .onChange(of: showSchnellkasse) {
+            if !showSchnellkasse {
+                Task {
+                    async let t: () = tableStore.loadTables()
+                    async let r: () = reportStore.loadDaily()
+                    _ = await (t, r)
+                }
+            }
+        }
     }
 }
 
-private struct SelectedTable: Identifiable {
+private struct SelectedTable: Identifiable, Equatable {
     let id:   Int
     let name: String
 }
@@ -252,7 +270,15 @@ private struct AppSidebar: View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(sections, id: \.0.title) { section, items in
+                    ForEach(Array(sections.enumerated()), id: \.element.0.title) { index, pair in
+                        let (section, items) = pair
+                        if index > 0 {
+                            Rectangle()
+                                .fill(DS.C.brdLight)
+                                .frame(height: 1)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                        }
                         SidebarSection(
                             title: section.title,
                             items: items,
@@ -287,9 +313,9 @@ private struct SidebarSection: View {
                 .font(.jakarta(DS.T.sectionHeader, weight: .regular))
                 .foregroundColor(DS.C.text2)
                 .tracking(0.8)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 6)
 
             ForEach(items, id: \.self) { item in
                 SidebarNavRow(
@@ -321,14 +347,14 @@ private struct SidebarNavRow: View {
                     Text(badge)
                         .font(.jakarta(DS.T.badge, weight: .semibold))
                         .foregroundColor(DS.C.text2)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
                         .background(DS.C.sur2)
                         .cornerRadius(DS.R.badge)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
             .background(isSelected ? DS.C.accBg : Color.clear)
         }
@@ -346,10 +372,10 @@ private struct SidebarKPIs: View {
     @State private var durationTimer: Timer?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             KPIBlock(
                 label: "UMSATZ HEUTE",
-                value: reportStore.dailyReport.map { formatCents($0.totalGrossCents) } ?? "–",
+                value: reportStore.isLoading ? "…" : formatCents(reportStore.dailyReport?.totalGrossCents ?? 0),
                 accent: true
             )
             KPIBlock(
@@ -361,8 +387,8 @@ private struct SidebarKPIs: View {
                 value: sessionStore.hasOpenSession ? shiftDuration : "–"
             )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
             Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
@@ -378,7 +404,7 @@ private struct SidebarKPIs: View {
             durationTimer?.invalidate()
             durationTimer = nil
         }
-        .onChange(of: sessionStore.currentSession?.id) { _ in updateDuration() }
+        .onChange(of: sessionStore.currentSession?.id) { updateDuration() }
     }
 
     private func updateDuration() {
@@ -430,13 +456,13 @@ private struct SidebarLogout: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 11, weight: .regular))
+                    .font(.system(size: 13, weight: .regular))
                 Text("Abmelden")
                     .font(.jakarta(DS.T.navItem, weight: .regular))
             }
             .foregroundColor(DS.C.text2)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 13)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
@@ -486,6 +512,8 @@ private struct TableGridContent: View {
     let onSchnellkasse: () -> Void
 
     @State private var selectedZoneId: Int? = nil
+    @State private var now = Date()
+    @State private var minuteTimer: Timer?
 
     private var filteredTables: [TableItem] {
         guard let zoneId = selectedZoneId else { return tableStore.tables }
@@ -514,8 +542,8 @@ private struct TableGridContent: View {
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: 3),
+                        spacing: 20
                     ) {
                         ForEach(filteredTables) { table in
                             let status: TableCardStatus = {
@@ -523,18 +551,28 @@ private struct TableGridContent: View {
                                 if tableStore.payingTableIds.contains(table.id) { return .zahlung }
                                 return .besetzt
                             }()
-                            TableCard(table: table, status: status) {
+                            TableCard(table: table, status: status, now: now) {
                                 onTableTap(table.id, table.name)
                             }
                         }
                     }
-                    .padding(16)
+                    .padding(20)
                 }
                 .refreshable { await tableStore.loadTables() }
             }
 
             // Schnellkasse — fixiert am unteren Rand
             SchnellkasseButton(onTap: onSchnellkasse)
+        }
+        .onAppear {
+            now = Date()
+            minuteTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+                Task { @MainActor in now = Date() }
+            }
+        }
+        .onDisappear {
+            minuteTimer?.invalidate()
+            minuteTimer = nil
         }
         .background(DS.C.bg)
     }
@@ -682,6 +720,7 @@ private struct ZonePill: View {
 private struct TableCard: View {
     let table:  TableItem
     let status: TableCardStatus
+    let now:    Date
     let onTap:  () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
@@ -701,6 +740,7 @@ private struct TableCard: View {
         }
     }
 
+
     private var minutesOpen: Int? {
         guard let oldest = table.oldestOrderAt else { return nil }
         let iso = ISO8601DateFormatter()
@@ -710,7 +750,7 @@ private struct TableCard: View {
             return iso.date(from: oldest)
         }()
         guard let date else { return nil }
-        return max(0, Int(Date().timeIntervalSince(date)) / 60)
+        return max(0, Int(now.timeIntervalSince(date)) / 60)
     }
 
     private var amountText: String {
@@ -726,13 +766,13 @@ private struct TableCard: View {
                     // Zeile 1: Tischname + Badge
                     HStack(alignment: .center) {
                         Text(table.name)
-                            .font(.jakarta(DS.T.tableName, weight: .semibold))
+                            .font(.jakarta(DS.T.tableName, weight: .bold))
                             .foregroundColor(DS.C.text)
                             .lineLimit(1)
                         Spacer()
                         TableStatusBadge(status: status)
                     }
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 14)
 
                     // Zeile 2: Betrag
                     if status != .frei {
@@ -745,46 +785,38 @@ private struct TableCard: View {
                             .foregroundColor(DS.C.text2)
                     }
 
-                    Spacer().frame(minHeight: 10)
+                    Spacer().frame(minHeight: 14)
 
                     // Trennlinie
                     Rectangle()
                         .frame(height: 1)
                         .foregroundColor(DS.C.brd(colorScheme))
-                        .padding(.bottom, 8)
+                        .padding(.bottom, 10)
 
-                    // Zeile 3: Meta mit Dot-Separator
+                    // Zeile 3: Zeit links, Positionen rechts
                     if status == .frei {
                         Text("verfügbar")
                             .font(.jakarta(DS.T.tableMeta, weight: .regular))
                             .foregroundColor(DS.C.text2)
                     } else {
-                        HStack(spacing: 5) {
+                        HStack {
                             if let min = minutesOpen {
                                 Text("\(min) min")
                                     .font(.jakarta(DS.T.tableMeta, weight: .regular))
                                     .foregroundColor(DS.C.text2)
-                                Circle()
-                                    .fill(DS.C.brd(colorScheme))
-                                    .frame(width: 3, height: 3)
                             }
+                            Spacer()
                             let itemText = table.totalOpenItems == 1
-                                ? "1 Position"
-                                : "\(table.totalOpenItems) Positionen"
+                                ? "1 Pos."
+                                : "\(table.totalOpenItems) Pos."
                             Text(itemText)
-                                .font(.jakarta(DS.T.tableMeta, weight: .regular))
+                                .font(.jakarta(DS.T.tableMeta, weight: .semibold))
                                 .foregroundColor(DS.C.text2)
                         }
                     }
                 }
-                .padding(14)
+                .padding(20)
 
-                // Linker Akzent-Streifen
-                if let stripe = stripeColor {
-                    Rectangle()
-                        .fill(stripe)
-                        .frame(width: 3)
-                }
             }
         }
         .buttonStyle(.plain)
@@ -793,7 +825,13 @@ private struct TableCard: View {
             RoundedRectangle(cornerRadius: DS.R.card)
                 .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
         )
-        .frame(minHeight: 140)
+        .overlay(alignment: .leading) {
+            if let stripe = stripeColor {
+                LeftBorder(cornerRadius: 8)
+                    .stroke(stripe, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
+            }
+        }
+        .frame(minHeight: 195)
     }
 }
 
@@ -825,16 +863,16 @@ private struct TableStatusBadge: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(dotColor)
-                .frame(width: 5, height: 5)
+                .frame(width: 8, height: 8)
             Text(label)
-                .font(.jakarta(DS.T.badge, weight: .semibold))
+                .font(.jakarta(15, weight: .semibold))
                 .foregroundColor(dotColor)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
         .background(bg)
         .cornerRadius(DS.R.badge)
         .fixedSize()
@@ -846,6 +884,24 @@ enum TableCardStatus {
     case frei, besetzt, zahlung
 }
 
+// Linke Border der Tischkachel — offener Pfad: Oben-links-Bogen → linke Kante → Unten-links-Bogen
+private struct LeftBorder: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = cornerRadius
+        var path = Path()
+        path.move(to: CGPoint(x: r, y: 0))
+        path.addArc(center: CGPoint(x: r, y: r), radius: r,
+                    startAngle: .degrees(270), endAngle: .degrees(180), clockwise: true)
+        path.addLine(to: CGPoint(x: 0, y: rect.height - r))
+        path.addArc(center: CGPoint(x: r, y: rect.height - r), radius: r,
+                    startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+        return path
+    }
+}
+
+
 // MARK: - Brand Mark (lokal — LoginView hat eigene private Version)
 
 private struct AppBrandMark: View {
@@ -854,14 +910,14 @@ private struct AppBrandMark: View {
             RoundedRectangle(cornerRadius: DS.R.brandMark)
                 .fill(DS.C.acc)
                 .frame(width: DS.S.brandMarkSize, height: DS.S.brandMarkSize)
-            VStack(spacing: 2) {
-                HStack(spacing: 2) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
+            VStack(spacing: 3) {
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
                 }
-                HStack(spacing: 2) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
                 }
             }
         }

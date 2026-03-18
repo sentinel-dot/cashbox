@@ -10,8 +10,9 @@ struct OrderView: View {
     let tableId:   Int?
     let tableName: String?
 
-    @EnvironmentObject var orderStore:   OrderStore
-    @EnvironmentObject var productStore: ProductStore
+    @EnvironmentObject var orderStore:    OrderStore
+    @EnvironmentObject var productStore:  ProductStore
+    @EnvironmentObject var tableStore:    TableStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -68,7 +69,11 @@ struct OrderView: View {
                             tableName:  tableName,
                             orderId:    currentOrderId,
                             onRemove:   removeItem,
-                            onBezahlen: { paymentOrder = orderStore.selectedOrder; showPaymentView = true }
+                            onBezahlen: {
+                                paymentOrder = orderStore.selectedOrder
+                                if let id = tableId { tableStore.payingTableIds.insert(id) }
+                                showPaymentView = true
+                            }
                         )
                         .frame(width: 340)
                     }
@@ -114,11 +119,13 @@ struct OrderView: View {
                         .toolbar(.hidden, for: .navigationBar)
                 }
             }
-            .onChange(of: showPaymentView) { showing in
-                if !showing {
+            .onChange(of: showPaymentView) {
+                if !showPaymentView {
+                    if let id = tableId { tableStore.payingTableIds.remove(id) }
                     paymentOrder = nil
-                    // Zahlung abgeschlossen → Order wurde entfernt → zurück zur Tischübersicht
+                    // Zahlung abgeschlossen → Order entfernt → Tische aktualisieren + zurück
                     if orderStore.selectedOrder == nil && currentOrderId != nil {
+                        Task { await tableStore.loadTables() }
                         dismiss()
                     }
                 }
@@ -129,6 +136,9 @@ struct OrderView: View {
     // ── Actions ────────────────────────────────────────────────────────────
 
     private func findOrLoadExistingOrder() async {
+        // Stale selectedOrder aus vorheriger View clearen — verhindert dass z.B.
+        // Schnellkasse die Items von Tisch 1 anzeigt.
+        orderStore.clearSelection()
         await orderStore.loadOrders()
         if let existing = orderStore.orders.first(where: { $0.table?.id == tableId }) {
             currentOrderId = existing.id
@@ -174,6 +184,7 @@ struct OrderView: View {
         do {
             try await orderStore.cancelOrder(orderId, reason: "Manuell storniert")
             currentOrderId = nil
+            await tableStore.loadTables()
             dismiss()
         } catch let e as AppError { error = e; showError = true }
         catch { self.error = .unknown(error.localizedDescription); showError = true }
@@ -835,6 +846,7 @@ private func formatCents(_ cents: Int) -> String {
     OrderView(tableId: 3, tableName: "Tisch 3")
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(ProductStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -842,6 +854,7 @@ private func formatCents(_ cents: Int) -> String {
     OrderView(tableId: 1, tableName: "Tisch 1")
         .environmentObject(OrderStore.preview)
         .environmentObject(ProductStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.preview)
 }
 
@@ -849,6 +862,7 @@ private func formatCents(_ cents: Int) -> String {
     OrderView(tableId: 1, tableName: "Tisch 1")
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(ProductStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.previewOffline)
 }
 
@@ -856,6 +870,7 @@ private func formatCents(_ cents: Int) -> String {
     OrderView(tableId: 1, tableName: "Tisch 1")
         .environmentObject(OrderStore.preview)
         .environmentObject(ProductStore.preview)
+        .environmentObject(TableStore.preview)
         .environmentObject(NetworkMonitor.preview)
         .preferredColorScheme(.dark)
 }
