@@ -20,6 +20,18 @@ enum NavItem: String, Hashable, CaseIterable {
 
     var label: String { rawValue }
 
+    var icon: String {
+        switch self {
+        case .tische:        return "square.grid.2x2"
+        case .produkte:      return "tag"
+        case .kategorien:    return "folder"
+        case .kassensitzung: return "building.columns"
+        case .berichte:      return "chart.bar"
+        case .zbericht:      return "doc.text"
+        case .einstellungen: return "gearshape"
+        }
+    }
+
     var section: NavSection {
         switch self {
         case .tische, .produkte, .kategorien:          return .uebersicht
@@ -310,11 +322,11 @@ private struct SidebarSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.jakarta(DS.T.sectionHeader, weight: .regular))
+                .font(.jakarta(13, weight: .medium))
                 .foregroundColor(DS.C.text2)
                 .tracking(0.8)
                 .padding(.horizontal, 20)
-                .padding(.top, 18)
+                .padding(.top, 20)
                 .padding(.bottom, 6)
 
             ForEach(items, id: \.self) { item in
@@ -338,14 +350,18 @@ private struct SidebarNavRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 17, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? DS.C.acc : DS.C.text2)
+                    .frame(width: 22)
                 Text(item.label)
-                    .font(.jakarta(DS.T.navItem, weight: isSelected ? .semibold : .medium))
+                    .font(.jakarta(17, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(.jakarta(DS.T.badge, weight: .semibold))
+                        .font(.jakarta(13, weight: .semibold))
                         .foregroundColor(DS.C.text2)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -353,10 +369,18 @@ private struct SidebarNavRow: View {
                         .cornerRadius(DS.R.badge)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
             .frame(maxWidth: .infinity)
             .background(isSelected ? DS.C.accBg : Color.clear)
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Rectangle()
+                        .fill(DS.C.acc)
+                        .frame(width: 3)
+                        .cornerRadius(1.5)
+                }
+            }
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
@@ -435,14 +459,15 @@ private struct KPIBlock: View {
     var accent: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(.jakarta(DS.T.kpiLabel, weight: .regular))
+                .font(.jakarta(13, weight: .medium))
                 .foregroundColor(DS.C.text2)
-                .tracking(0.6)
+                .tracking(0.8)
             Text(value)
-                .font(.jakarta(DS.T.kpiValue, weight: .semibold))
+                .font(.jakarta(38, weight: .bold))
                 .foregroundColor(accent ? DS.C.acc : DS.C.text)
+                .tracking(-0.8)
         }
     }
 }
@@ -454,15 +479,16 @@ private struct SidebarLogout: View {
         Button {
             Task { authStore.logout() }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 12) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 17, weight: .regular))
+                    .frame(width: 22)
                 Text("Abmelden")
-                    .font(.jakarta(DS.T.navItem, weight: .regular))
+                    .font(.jakarta(17, weight: .regular))
             }
             .foregroundColor(DS.C.text2)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
@@ -623,32 +649,41 @@ private struct SchnellkasseButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Schnellkasse starten")
-                        .font(.jakarta(DS.T.quickLabel, weight: .semibold))
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 46, height: 46)
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("Ohne Tisch — Theke oder Außer-Haus")
-                        .font(.jakarta(DS.T.quickSub, weight: .regular))
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Schnellkasse")
+                        .font(.jakarta(19, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Ohne Tisch — Direktverkauf")
+                        .font(.jakarta(15, weight: .regular))
                         .foregroundColor(.white.opacity(0.7))
                 }
                 Spacer()
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.18))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(DS.C.acc)
+            .padding(.vertical, 18)
+            .background(
+                LinearGradient(
+                    colors: [DS.C.acc, DS.C.acc.opacity(0.85)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
             .cornerRadius(DS.R.quickBanner)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(DS.C.sur)
         .overlay(
@@ -724,14 +759,6 @@ private struct TableCard: View {
     let onTap:  () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
-    private var bgColor: Color {
-        switch status {
-        case .frei:    return DS.C.sur
-        case .besetzt: return DS.C.busyBg
-        case .zahlung: return DS.C.billBg
-        }
-    }
-
     private var stripeColor: Color? {
         switch status {
         case .frei:    return nil
@@ -739,7 +766,6 @@ private struct TableCard: View {
         case .zahlung: return DS.C.stripeBill
         }
     }
-
 
     private var minutesOpen: Int? {
         guard let oldest = table.oldestOrderAt else { return nil }
@@ -759,79 +785,75 @@ private struct TableCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            ZStack(alignment: .leading) {
-                bgColor
+            HStack(spacing: 0) {
+                // Left status stripe
+                if let stripe = stripeColor {
+                    Rectangle()
+                        .fill(stripe)
+                        .frame(width: 8)
+                }
 
+                // Card content
                 VStack(alignment: .leading, spacing: 0) {
-                    // Zeile 1: Tischname + Badge
+                    // Row 1: Table name + status badge
                     HStack(alignment: .center) {
                         Text(table.name)
-                            .font(.jakarta(DS.T.tableName, weight: .bold))
+                            .font(.jakarta(22, weight: .bold))
                             .foregroundColor(DS.C.text)
                             .lineLimit(1)
                         Spacer()
                         TableStatusBadge(status: status)
                     }
-                    .padding(.bottom, 14)
 
-                    // Zeile 2: Betrag
+                    // Row 2: Amount (dominant)
                     if status != .frei {
                         Text(amountText)
-                            .font(.jakarta(DS.T.tableAmount, weight: .bold))
+                            .font(.jakarta(52, weight: .bold))
                             .foregroundColor(DS.C.text)
+                            .tracking(-1.5)
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                            .padding(.top, 12)
                     } else {
-                        Text("—")
-                            .font(.jakarta(DS.T.tableAmount, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
+                        Spacer().frame(height: 12)
                     }
 
-                    Spacer().frame(minHeight: 14)
+                    Spacer(minLength: 20)
 
-                    // Trennlinie
+                    // Divider
                     Rectangle()
+                        .fill(DS.C.brdLight)
                         .frame(height: 1)
-                        .foregroundColor(DS.C.brd(colorScheme))
-                        .padding(.bottom, 10)
 
-                    // Zeile 3: Zeit links, Positionen rechts
-                    if status == .frei {
-                        Text("verfügbar")
-                            .font(.jakarta(DS.T.tableMeta, weight: .regular))
-                            .foregroundColor(DS.C.text2)
-                    } else {
-                        HStack {
-                            if let min = minutesOpen {
-                                Text("\(min) min")
-                                    .font(.jakarta(DS.T.tableMeta, weight: .regular))
-                                    .foregroundColor(DS.C.text2)
-                            }
+                    // Row 3: Footer — time left, positions right
+                    HStack {
+                        if status == .frei {
+                            Text("Verfügbar")
+                                .foregroundColor(DS.C.freeText)
                             Spacer()
-                            let itemText = table.totalOpenItems == 1
-                                ? "1 Pos."
-                                : "\(table.totalOpenItems) Pos."
-                            Text(itemText)
-                                .font(.jakarta(DS.T.tableMeta, weight: .semibold))
+                        } else {
+                            Text(minutesOpen.map { "\($0) min" } ?? "—")
+                                .foregroundColor(DS.C.text2)
+                            Spacer()
+                            let posText = table.totalOpenItems == 1 ? "1 Position" : "\(table.totalOpenItems) Positionen"
+                            Text(posText)
                                 .foregroundColor(DS.C.text2)
                         }
                     }
+                    .font(.jakarta(17, weight: .medium))
+                    .padding(.top, 12)
                 }
-                .padding(20)
-
+                .padding(22)
             }
         }
         .buttonStyle(.plain)
+        .background(DS.C.sur)
         .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
         .overlay(
             RoundedRectangle(cornerRadius: DS.R.card)
                 .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
         )
-        .overlay(alignment: .leading) {
-            if let stripe = stripeColor {
-                LeftBorder(cornerRadius: 8)
-                    .stroke(stripe, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
-            }
-        }
-        .frame(minHeight: 195)
+        .frame(minHeight: 210)
     }
 }
 
@@ -871,8 +893,8 @@ private struct TableStatusBadge: View {
                 .font(.jakarta(15, weight: .semibold))
                 .foregroundColor(dotColor)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
         .background(bg)
         .cornerRadius(DS.R.badge)
         .fixedSize()
@@ -910,16 +932,10 @@ private struct AppBrandMark: View {
             RoundedRectangle(cornerRadius: DS.R.brandMark)
                 .fill(DS.C.acc)
                 .frame(width: DS.S.brandMarkSize, height: DS.S.brandMarkSize)
-            VStack(spacing: 3) {
-                HStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
-                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
-                }
-                HStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
-                    RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 6, height: 6)
-                }
-            }
+            Text("cb")
+                .font(.jakarta(13, weight: .bold))
+                .foregroundColor(.white)
+                .tracking(-0.5)
         }
     }
 }

@@ -75,7 +75,7 @@ struct OrderView: View {
                                 showPaymentView = true
                             }
                         )
-                        .frame(width: 340)
+                        .frame(width: 360)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -310,14 +310,14 @@ private struct ProductCatalog: View {
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-                        spacing: 10
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                        spacing: 12
                     ) {
                         ForEach(filteredProducts) { product in
                             ProductCard(product: product) { onProductTap(product) }
                         }
                     }
-                    .padding(14)
+                    .padding(16)
                 }
             }
         }
@@ -401,39 +401,41 @@ private struct ProductCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
-                // Kategorie-Farbbalken (optional)
+            VStack(alignment: .leading, spacing: 0) {
+                // Kategorie-Farbstreifen — full-width oben (wird durch card cornerRadius geclipt)
                 if let hex = product.category?.color {
-                    RoundedRectangle(cornerRadius: 2)
+                    Rectangle()
                         .fill(Color(hex: hex))
-                        .frame(height: 3)
+                        .frame(height: 4)
                 }
 
-                Spacer().frame(height: 2)
+                VStack(alignment: .leading, spacing: 6) {
+                    Spacer().frame(height: 2)
 
-                Text(product.name)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(product.name)
+                        .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
-
-                HStack {
-                    Text(formatCents(product.priceCents))
-                        .font(.jakarta(14, weight: .semibold))
-                        .foregroundColor(DS.C.acc)
                     Spacer()
-                    // Modifier-Indikator
-                    if product.hasRequiredModifiers {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
+
+                    HStack {
+                        Text(formatCents(product.priceCents))
+                            .font(.jakarta(14, weight: .semibold))
+                            .foregroundColor(DS.C.acc)
+                        Spacer()
+                        // Modifier-Indikator
+                        if product.hasRequiredModifiers {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(DS.C.text2)
+                        }
                     }
                 }
+                .padding(12)
             }
-            .padding(12)
-            .frame(minHeight: 88)
+            .frame(minHeight: 100)
             .background(DS.C.sur)
             .cornerRadius(DS.R.card)
             .overlay(
@@ -579,7 +581,7 @@ private struct CartItemRow: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(10)
+        .padding(12)
         .background(DS.C.sur)
         .cornerRadius(DS.R.pinRow)
         .overlay(
@@ -612,16 +614,22 @@ private struct CartFooter: View {
 
                 Button(action: onBezahlen) {
                     HStack(spacing: 8) {
-                        Image(systemName: "creditcard.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Bezahlen")
-                            .font(.jakarta(DS.T.loginButton, weight: .semibold))
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Jetzt bezahlen")
+                            .font(.jakarta(DS.T.loginButton, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: DS.S.buttonHeight)
                 }
-                .background(DS.C.acc)
+                .background(
+                    LinearGradient(
+                        colors: [DS.C.acc, DS.C.acc.opacity(0.85)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
                 .cornerRadius(DS.R.button)
                 .buttonStyle(.plain)
             }

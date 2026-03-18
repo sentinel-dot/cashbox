@@ -64,11 +64,11 @@ private struct BrandPanel: View {
             Spacer()
 
             // Headline
-            Text("Ihr digitales\nKassensystem")
-                .font(.jakarta(DS.T.loginHeadline, weight: .semibold))
+            Text("Ihr digitales\nKassensystem.")
+                .font(.jakarta(DS.T.loginHeadline, weight: .bold))
                 .foregroundColor(.white)
-                .lineSpacing(2)
-                .tracking(-0.5)
+                .lineSpacing(4)
+                .tracking(-1.0)
 
             Spacer().frame(height: 12)
 
@@ -139,17 +139,10 @@ private struct BrandMarkView: View {
             RoundedRectangle(cornerRadius: DS.R.brandMark)
                 .fill(Color.white.opacity(0.2))
                 .frame(width: DS.S.brandMarkSize, height: DS.S.brandMarkSize)
-
-            VStack(spacing: 2) {
-                HStack(spacing: 2) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
-                }
-                HStack(spacing: 2) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 5, height: 5)
-                }
-            }
+            Text("cb")
+                .font(.jakarta(13, weight: .bold))
+                .foregroundColor(.white)
+                .tracking(-0.5)
         }
     }
 }

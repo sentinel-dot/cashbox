@@ -451,17 +451,23 @@ private struct PaymentPanel: View {
 
                     // Zu-zahlen-Chip
                     HStack {
-                        Text("Zu zahlen")
-                            .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                            .foregroundColor(DS.C.accT)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("ZU ZAHLEN")
+                                .font(.jakarta(DS.T.sectionHeader, weight: .semibold))
+                                .foregroundColor(DS.C.accT)
+                                .tracking(0.8)
+                            Text(formatCents(totalCents))
+                                .font(.jakarta(28, weight: .bold))
+                                .foregroundColor(DS.C.acc)
+                                .tracking(-0.8)
+                        }
                         Spacer()
-                        Text(formatCents(totalCents))
-                            .font(.jakarta(18, weight: .semibold))
-                            .foregroundColor(DS.C.accT)
-                            .tracking(-0.3)
+                        Image(systemName: "eurosign.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(DS.C.acc.opacity(0.3))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
                     .background(DS.C.accBg)
                     .cornerRadius(DS.R.card)
                 }
@@ -480,9 +486,9 @@ private struct PaymentPanel: View {
                         } else {
                             HStack(spacing: 8) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 16, weight: .semibold))
                                 Text(payLabel)
-                                    .font(.jakarta(DS.T.loginButton, weight: .semibold))
+                                    .font(.jakarta(DS.T.loginButton, weight: .bold))
                             }
                             .foregroundColor(.white)
                         }
@@ -490,7 +496,11 @@ private struct PaymentPanel: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: DS.S.buttonHeight)
                 }
-                .background(canPay ? DS.C.acc : DS.C.acc.opacity(0.4))
+                .background(
+                    canPay
+                        ? LinearGradient(colors: [DS.C.acc, DS.C.acc.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
+                        : LinearGradient(colors: [DS.C.acc.opacity(0.4), DS.C.acc.opacity(0.4)], startPoint: .leading, endPoint: .trailing)
+                )
                 .cornerRadius(DS.R.button)
                 .disabled(!canPay || isLoading)
                 .opacity(isLoading ? 0.6 : 1.0)
@@ -521,30 +531,34 @@ private struct PayModeButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(isActive ? .white : DS.C.text)
-                    .frame(width: 20)
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isActive ? Color.white.opacity(0.2) : DS.C.sur2)
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(isActive ? .white : DS.C.text2)
+                }
                 Text(label)
                     .font(.jakarta(DS.T.loginButton, weight: .semibold))
                     .foregroundColor(isActive ? .white : DS.C.text)
                 Spacer()
                 if isActive {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
             .padding(.horizontal, 14)
-            .frame(height: DS.S.buttonHeight)
+            .padding(.vertical, 10)
             .background(isActive ? DS.C.acc : DS.C.sur)
-            .cornerRadius(DS.R.button)
+            .cornerRadius(DS.R.card)
             .overlay(
-                RoundedRectangle(cornerRadius: DS.R.button)
+                RoundedRectangle(cornerRadius: DS.R.card)
                     .strokeBorder(
                         isActive ? DS.C.acc : DS.C.brd(colorScheme),
-                        lineWidth: 1
+                        lineWidth: isActive ? 0 : 1
                     )
             )
         }

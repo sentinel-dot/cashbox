@@ -55,8 +55,8 @@ struct ProdukteView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
-                            spacing: 10
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                            spacing: 12
                         ) {
                             ForEach(filtered) { product in
                                 ProdukteCard(
@@ -66,7 +66,7 @@ struct ProdukteView: View {
                                 )
                             }
                         }
-                        .padding(14)
+                        .padding(16)
                     }
                 }
             }
@@ -173,15 +173,15 @@ private struct ProdukteTopBar: View {
             Spacer()
 
             Button(action: onAdd) {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .bold))
-                    Text("Produkt")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("Produkt anlegen")
                         .font(.jakarta(DS.T.loginButton, weight: .semibold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 34)
+                .padding(.horizontal, 16)
+                .frame(height: 38)
             }
             .background(DS.C.acc)
             .cornerRadius(DS.R.button)
@@ -258,77 +258,48 @@ private struct ProdukteCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Kategorie-Streifen
-            if let hex = product.category?.color {
-                RoundedRectangle(cornerRadius: 2).fill(Color(hex: hex)).frame(height: 3)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(product.name)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                    .foregroundColor(product.isActive ? DS.C.text : DS.C.text2)
-                    .lineLimit(2)
-
-                if let cat = product.category {
-                    Text(cat.name)
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                        .foregroundColor(DS.C.text2)
+        Button(action: onEdit) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Kategorie-Farbbalken — volle Breite, durch cornerRadius geclipt
+                if let hex = product.category?.color {
+                    Rectangle()
+                        .fill(Color(hex: hex))
+                        .frame(height: 4)
                 }
 
-                Spacer()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(product.name)
+                        .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                        .foregroundColor(product.isActive ? DS.C.text : DS.C.text2)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                HStack {
-                    Text(formatCents(product.priceCents))
-                        .font(.jakarta(14, weight: .semibold))
-                        .foregroundColor(DS.C.acc)
                     Spacer()
-                    Text("\(product.vatRateInhouse) %")
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                }
 
-                // Aktionen
-                HStack(spacing: 6) {
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 11))
-                            .foregroundColor(DS.C.text2)
-                            .frame(maxWidth: .infinity).frame(height: 26)
-                            .background(DS.C.sur2)
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: onPrice) {
-                        Image(systemName: "eurosign")
-                            .font(.system(size: 11))
-                            .foregroundColor(DS.C.acc)
-                            .frame(maxWidth: .infinity).frame(height: 26)
-                            .background(DS.C.accBg)
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
+                    Text(formatCents(product.priceCents))
+                        .font(.jakarta(17, weight: .bold))
+                        .foregroundColor(DS.C.acc)
+                        .tracking(-0.3)
                 }
-            }
-            .padding(10)
-
-            if !product.isActive {
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.slash").font(.system(size: 9))
-                    Text("Inaktiv")
-                        .font(.jakarta(8, weight: .semibold))
-                }
-                .foregroundColor(DS.C.text2)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                .background(DS.C.sur2)
+                .padding(12)
+                .frame(minHeight: 88)
             }
         }
+        .buttonStyle(.plain)
         .background(DS.C.sur)
         .cornerRadius(DS.R.card)
-        .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brd(colorScheme), lineWidth: product.isActive ? 1 : 0.5))
-        .opacity(product.isActive ? 1 : 0.65)
+        .overlay(RoundedRectangle(cornerRadius: DS.R.card)
+            .strokeBorder(DS.C.brd(colorScheme), lineWidth: product.isActive ? 1 : 0.5))
+        .opacity(product.isActive ? 1 : 0.55)
+        .contextMenu {
+            Button { onEdit() } label: {
+                Label("Bearbeiten", systemImage: "pencil")
+            }
+            Divider()
+            Button { onPrice() } label: {
+                Label("Preis ändern", systemImage: "eurosign")
+            }
+        }
     }
 }
 

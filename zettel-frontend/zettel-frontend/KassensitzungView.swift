@@ -121,11 +121,11 @@ private struct NoSessionView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Icon
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(DS.C.accBg)
-                        .frame(width: 48, height: 48)
-                    Image(systemName: "tray.full.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .frame(width: 56, height: 56)
+                    Image(systemName: "building.columns.fill")
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(DS.C.acc)
                 }
 
@@ -202,15 +202,23 @@ private struct NoSessionView: View {
                                 .progressViewStyle(.circular)
                                 .tint(.white)
                         } else {
-                            Text("Kasse öffnen")
-                                .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                                .foregroundColor(.white)
+                            HStack(spacing: 8) {
+                                Image(systemName: "lock.open.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                Text("Kasse öffnen")
+                                    .font(.jakarta(DS.T.loginButton, weight: .bold))
+                            }
+                            .foregroundColor(.white)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: DS.S.buttonHeight)
                 }
-                .background(canOpen ? DS.C.acc : DS.C.acc.opacity(0.4))
+                .background(
+                    canOpen
+                        ? LinearGradient(colors: [DS.C.acc, DS.C.acc.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
+                        : LinearGradient(colors: [DS.C.acc.opacity(0.4), DS.C.acc.opacity(0.4)], startPoint: .leading, endPoint: .trailing)
+                )
                 .cornerRadius(DS.R.button)
                 .disabled(!canOpen)
                 .animation(.easeInOut(duration: 0.15), value: canOpen)
