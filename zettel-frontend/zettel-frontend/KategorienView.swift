@@ -212,51 +212,46 @@ private struct KategorieRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            // Farb-Chip
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(accentColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(accentColor)
-                    .frame(width: 14, height: 14)
-            }
+        HStack(spacing: 0) {
+            // Left category color stripe
+            Rectangle()
+                .fill(accentColor)
+                .frame(width: 8)
 
-            // Name + Sort-Order
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.name)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                Text("Position \(sortOrder)")
-                    .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                    .foregroundColor(DS.C.text2)
-            }
+            // Content
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(category.name)
+                        .font(.jakarta(18, weight: .bold))
+                        .foregroundColor(DS.C.text)
+                    Text("Position \(sortOrder)")
+                        .font(.jakarta(14, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                }
 
-            Spacer()
+                Spacer()
 
-            // Hex-Farbe anzeigen
-            if let hex = category.color {
-                Text(hex.uppercased())
-                    .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                    .foregroundColor(DS.C.text2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(DS.C.bg)
-                    .cornerRadius(5)
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
-            }
+                if let hex = category.color {
+                    Text(hex.uppercased())
+                        .font(.jakarta(13, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(DS.C.bg)
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+                }
 
-            // Aktionen
-            HStack(spacing: 4) {
-                IconButton(icon: "pencil",    color: DS.C.text2, action: onEdit)
-                IconButton(icon: "trash",     color: Color(hex: "e74c3c"), action: onDelete)
+                HStack(spacing: 4) {
+                    IconButton(icon: "pencil", color: DS.C.text2, action: onEdit)
+                    IconButton(icon: "trash",  color: Color(hex: "e74c3c"), action: onDelete)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
         .background(DS.C.sur)
-        .cornerRadius(DS.R.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
         .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
     }
 }

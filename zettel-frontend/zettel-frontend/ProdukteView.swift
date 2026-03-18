@@ -259,46 +259,66 @@ private struct ProdukteCard: View {
 
     var body: some View {
         Button(action: onEdit) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Kategorie-Farbbalken — volle Breite, durch cornerRadius geclipt
+            HStack(spacing: 0) {
+                // Left category color stripe
                 if let hex = product.category?.color {
                     Rectangle()
                         .fill(Color(hex: hex))
-                        .frame(height: 4)
+                        .frame(width: 8)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
+                // Card content
+                VStack(alignment: .leading, spacing: 0) {
+                    // Product name
                     Text(product.name)
-                        .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                        .font(.jakarta(18, weight: .bold))
                         .foregroundColor(product.isActive ? DS.C.text : DS.C.text2)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Spacer()
-
+                    // Price (dominant)
                     Text(formatCents(product.priceCents))
-                        .font(.jakarta(17, weight: .bold))
-                        .foregroundColor(DS.C.acc)
-                        .tracking(-0.3)
+                        .font(.jakarta(34, weight: .bold))
+                        .foregroundColor(DS.C.text)
+                        .tracking(-0.5)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                        .padding(.top, 10)
+
+                    Spacer(minLength: 12)
+
+                    // Divider
+                    Rectangle()
+                        .fill(DS.C.brdLight)
+                        .frame(height: 1)
+
+                    // Footer
+                    HStack {
+                        Text(product.category?.name ?? "Ohne Kategorie")
+                            .foregroundColor(product.category != nil ? DS.C.text2 : DS.C.text2.opacity(0.5))
+                        Spacer()
+                        if !product.isActive {
+                            Text("Inaktiv")
+                                .foregroundColor(DS.C.dangerText)
+                        }
+                    }
+                    .font(.jakarta(14, weight: .regular))
+                    .padding(.top, 10)
                 }
-                .padding(12)
-                .frame(minHeight: 88)
+                .padding(16)
             }
         }
         .buttonStyle(.plain)
         .background(DS.C.sur)
-        .cornerRadius(DS.R.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
         .overlay(RoundedRectangle(cornerRadius: DS.R.card)
-            .strokeBorder(DS.C.brd(colorScheme), lineWidth: product.isActive ? 1 : 0.5))
-        .opacity(product.isActive ? 1 : 0.55)
+            .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+        .opacity(product.isActive ? 1 : 0.65)
+        .frame(minHeight: 160)
         .contextMenu {
-            Button { onEdit() } label: {
-                Label("Bearbeiten", systemImage: "pencil")
-            }
+            Button { onEdit() } label: { Label("Bearbeiten", systemImage: "pencil") }
             Divider()
-            Button { onPrice() } label: {
-                Label("Preis ändern", systemImage: "eurosign")
-            }
+            Button { onPrice() } label: { Label("Preis ändern", systemImage: "eurosign") }
         }
     }
 }
