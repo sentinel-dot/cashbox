@@ -17,26 +17,15 @@ struct OrderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    // Aktuelle Order-ID — nil solange noch keine Order erstellt
     @State private var currentOrderId: Int? = nil
-
-    // Produkt für ModifierSheet — sheet(item:) verhindert Timing-Probleme mit nil-State
     @State private var pendingProduct: Product? = nil
-
-    // Error
     @State private var error: AppError?
     @State private var showError = false
-
-    // Storno-Bestätigung
     @State private var showCancelConfirm = false
-
-    // Bezahlung — paymentOrder cacht die Order beim Öffnen, damit selectedOrder=nil nach pay() den Screen nicht leert
     @State private var showPaymentView = false
     @State private var paymentOrder: OrderDetail? = nil
 
     var body: some View {
-        // NavigationStack verhindert den nested-fullScreenCover-Bug (weißer Screen bei erstem Bezahlen).
-        // PaymentView wird per navigationDestination gepusht — kein verschachteltes Modal.
         NavigationStack {
             ZStack(alignment: .top) {
                 DS.C.bg.ignoresSafeArea()
@@ -47,35 +36,32 @@ struct OrderView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
-                    OrderTopBar(
+                    OTopBar(
                         tableName: tableName,
                         orderId:   currentOrderId,
-                        hasItems:  !(orderStore.selectedOrder?.items.isEmpty ?? true),
-                        onClose:   { dismiss() },
-                        onCancel:  { showCancelConfirm = true }
+                        onClose:   { dismiss() }
                     )
 
                     HStack(spacing: 0) {
-                        // Links: Produktkatalog
-                        ProductCatalog(onProductTap: handleProductTap)
+                        OProductCatalog(onProductTap: handleProductTap)
                             .frame(maxWidth: .infinity)
 
                         Rectangle()
                             .fill(DS.C.brdLight)
                             .frame(width: 1)
 
-                        // Rechts: Warenkorb
-                        CartPanel(
-                            tableName:  tableName,
+                        OCartPanel(
                             orderId:    currentOrderId,
                             onRemove:   removeItem,
+                            onAdd:      addItemById,
+                            onClear:    { showCancelConfirm = true },
                             onBezahlen: {
                                 paymentOrder = orderStore.selectedOrder
                                 if let id = tableId { tableStore.payingTableIds.insert(id) }
                                 showPaymentView = true
                             }
                         )
-                        .frame(width: 360)
+                        .frame(width: 300)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -86,13 +72,11 @@ struct OrderView: View {
                 await productStore.loadProducts()
                 await findOrLoadExistingOrder()
             }
-            // ModifierSheet — sheet(item:) garantiert dass product nie nil ist wenn Sheet erscheint
             .sheet(item: $pendingProduct) { product in
                 ModifierSelectionSheet(product: product) { selectedOptionIds in
                     Task { await addProductWithModifiers(product, optionIds: selectedOptionIds) }
                 }
             }
-            // Storno-Bestätigung
             .confirmationDialog(
                 "Bestellung stornieren?",
                 isPresented: $showCancelConfirm,
@@ -110,7 +94,6 @@ struct OrderView: View {
             } message: {
                 Text(error?.localizedDescription ?? "Unbekannter Fehler")
             }
-            // PaymentView — Navigation Push statt nested fullScreenCover
             .navigationDestination(isPresented: $showPaymentView) {
                 if let order = paymentOrder {
                     PaymentView(order: order, tableName: tableName)
@@ -123,7 +106,6 @@ struct OrderView: View {
                 if !showPaymentView {
                     if let id = tableId { tableStore.payingTableIds.remove(id) }
                     paymentOrder = nil
-                    // Zahlung abgeschlossen → Order entfernt → Tische aktualisieren + zurück
                     if orderStore.selectedOrder == nil && currentOrderId != nil {
                         Task { await tableStore.loadTables() }
                         dismiss()
@@ -136,8 +118,6 @@ struct OrderView: View {
     // ── Actions ────────────────────────────────────────────────────────────
 
     private func findOrLoadExistingOrder() async {
-        // Stale selectedOrder aus vorheriger View clearen — verhindert dass z.B.
-        // Schnellkasse die Items von Tisch 1 anzeigt.
         orderStore.clearSelection()
         await orderStore.loadOrders()
         if let existing = orderStore.orders.first(where: { $0.table?.id == tableId }) {
@@ -150,7 +130,7 @@ struct OrderView: View {
 
     private func handleProductTap(_ product: Product) {
         if product.hasRequiredModifiers {
-            pendingProduct = product  // sheet(item:) öffnet automatisch
+            pendingProduct = product
         } else {
             Task { await addProductDirect(product) }
         }
@@ -168,6 +148,14 @@ struct OrderView: View {
         do {
             let orderId = try await ensureOrder()
             try await orderStore.addItem(orderId: orderId, productId: product.id, modifierOptionIds: optionIds)
+        } catch let e as AppError { error = e; showError = true }
+        catch { self.error = .unknown(error.localizedDescription); showError = true }
+    }
+
+    private func addItemById(productId: Int) async {
+        do {
+            let orderId = try await ensureOrder()
+            try await orderStore.addItem(orderId: orderId, productId: productId)
         } catch let e as AppError { error = e; showError = true }
         catch { self.error = .unknown(error.localizedDescription); showError = true }
     }
@@ -190,7 +178,6 @@ struct OrderView: View {
         catch { self.error = .unknown(error.localizedDescription); showError = true }
     }
 
-    /// Gibt die aktuelle Order-ID zurück — erstellt bei Bedarf eine neue.
     private func ensureOrder() async throws -> Int {
         if let id = currentOrderId { return id }
         let newOrder = try await orderStore.createOrder(tableId: tableId)
@@ -201,63 +188,67 @@ struct OrderView: View {
 
 // MARK: - Top Bar
 
-private struct OrderTopBar: View {
+private struct OTopBar: View {
     let tableName: String?
     let orderId:   Int?
-    let hasItems:  Bool
     let onClose:   () -> Void
-    let onCancel:  () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Schließen
+        HStack(spacing: 0) {
+            // Links: Brand + Zurück
             Button(action: onClose) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("Zurück")
-                        .font(.jakarta(DS.T.loginButton, weight: .medium))
+                HStack(spacing: 8) {
+                    HStack(spacing: 0) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(DS.C.acc)
+                    }
+                    HStack(spacing: 7) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(DS.C.acc)
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Image(systemName: "squareshape.split.2x2")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.white)
+                            )
+                        Text("Kassensystem")
+                            .font(.jakarta(13, weight: .semibold))
+                            .foregroundColor(DS.C.text)
+                    }
                 }
-                .foregroundColor(DS.C.acc)
             }
             .buttonStyle(.plain)
-
-            Rectangle().fill(DS.C.brdLight).frame(width: 1, height: 20)
-
-            // Tisch + Order-ID
-            VStack(alignment: .leading, spacing: 1) {
-                Text(tableName ?? "Schnellkasse")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                if let id = orderId {
-                    Text("Bestellung #\(id)")
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                }
-            }
+            .padding(.leading, 20)
 
             Spacer()
 
-            // Storno (nur wenn Order + Items vorhanden)
-            if orderId != nil && hasItems {
-                Button(action: onCancel) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Stornieren")
-                            .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                    }
-                    .foregroundColor(Color(hex: "c0392b"))
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(Color(hex: "c0392b").opacity(0.1))
-                    .cornerRadius(DS.R.button)
+            // Mitte: Tisch-Badge
+            Text(tableName.map { "\($0)" } ?? "Schnellkasse")
+                .font(.jakarta(13, weight: .semibold))
+                .foregroundColor(DS.C.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background(DS.C.sur2)
+                .cornerRadius(20)
+
+            Spacer()
+
+            // Rechts: Order-Nr + Loading
+            HStack(spacing: 8) {
+                if let id = orderId {
+                    Text("Bestellung #\(id)")
+                        .font(.jakarta(11, weight: .semibold))
+                        .foregroundColor(DS.C.accT)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(DS.C.accBg)
+                        .cornerRadius(20)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(.trailing, 20)
         }
-        .padding(.horizontal, 20)
         .frame(height: DS.S.topbarHeight)
         .background(DS.C.sur)
         .overlay(
@@ -269,12 +260,11 @@ private struct OrderTopBar: View {
 
 // MARK: - Produktkatalog (links)
 
-private struct ProductCatalog: View {
+private struct OProductCatalog: View {
     @EnvironmentObject var productStore: ProductStore
     let onProductTap: (Product) -> Void
 
     @State private var selectedCategoryId: Int? = nil
-    @Environment(\.colorScheme) private var colorScheme
 
     private var filteredProducts: [Product] {
         productStore.products(for: selectedCategoryId)
@@ -282,13 +272,10 @@ private struct ProductCatalog: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Kategorie-Filterleiste
-            if !productStore.categories.isEmpty {
-                CategoryFilterBar(
-                    categories:         productStore.categories,
-                    selectedCategoryId: $selectedCategoryId
-                )
-            }
+            OCategoryTabBar(
+                categories:         productStore.categories,
+                selectedCategoryId: $selectedCategoryId
+            )
 
             if productStore.isLoading {
                 Spacer()
@@ -297,24 +284,25 @@ private struct ProductCatalog: View {
             } else if filteredProducts.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "tag.slash")
-                        .font(.system(size: 28, weight: .light))
+                        .font(.system(size: 24, weight: .light))
                         .foregroundColor(DS.C.text2)
                     Text("Keine Produkte")
-                        .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                        .font(.jakarta(13, weight: .semibold))
                         .foregroundColor(DS.C.text)
                     Text("Produkte können in den Einstellungen angelegt werden.")
-                        .font(.jakarta(DS.T.loginBody, weight: .regular))
+                        .font(.jakarta(11, weight: .regular))
                         .foregroundColor(DS.C.text2)
+                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
+                ScrollView(showsIndicators: false) {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
+                        spacing: 10
                     ) {
                         ForEach(filteredProducts) { product in
-                            ProductCard(product: product) { onProductTap(product) }
+                            OProductCard(product: product) { onProductTap(product) }
                         }
                     }
                     .padding(16)
@@ -325,22 +313,27 @@ private struct ProductCatalog: View {
     }
 }
 
-private struct CategoryFilterBar: View {
+// MARK: - Category Tab Bar
+
+private struct OCategoryTabBar: View {
     let categories: [ProductCategoryRef]
     @Binding var selectedCategoryId: Int?
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                CategoryPill(label: "Alle", color: nil, isSelected: selectedCategoryId == nil) {
+            HStack(spacing: 0) {
+                OCategoryTab(
+                    label: "Alle",
+                    color: nil,
+                    isActive: selectedCategoryId == nil
+                ) {
                     withAnimation(.easeInOut(duration: 0.15)) { selectedCategoryId = nil }
                 }
                 ForEach(categories) { cat in
-                    CategoryPill(
+                    OCategoryTab(
                         label: cat.name,
                         color: cat.color,
-                        isSelected: selectedCategoryId == cat.id
+                        isActive: selectedCategoryId == cat.id
                     ) {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             selectedCategoryId = selectedCategoryId == cat.id ? nil : cat.id
@@ -348,8 +341,7 @@ private struct CategoryFilterBar: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 16)
         }
         .background(DS.C.sur)
         .overlay(
@@ -359,100 +351,126 @@ private struct CategoryFilterBar: View {
     }
 }
 
-private struct CategoryPill: View {
-    let label:      String
-    let color:      String?
-    let isSelected: Bool
-    let onTap:      () -> Void
-    @Environment(\.colorScheme) private var colorScheme
+private struct OCategoryTab: View {
+    let label:    String
+    let color:    String?
+    let isActive: Bool
+    let onTap:    () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 5) {
-                if let hex = color {
-                    Circle()
-                        .fill(Color(hex: hex))
-                        .frame(width: 7, height: 7)
+            VStack(spacing: 0) {
+                HStack(spacing: 7) {
+                    if let hex = color {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 8, height: 8)
+                    }
+                    Text(label)
+                        .font(.jakarta(12, weight: .semibold))
+                        .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
+                        .fixedSize()
                 }
-                Text(label)
-                    .font(.jakarta(DS.T.zonePill, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : DS.C.text2)
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, 16)
+
+                // Active bottom border (2px)
+                Rectangle()
+                    .fill(isActive ? DS.C.acc : Color.clear)
+                    .frame(height: 2)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(isSelected ? DS.C.acc : Color.clear)
-            .cornerRadius(DS.R.badge)
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.badge)
-                    .strokeBorder(
-                        isSelected ? DS.C.acc : DS.C.brd(colorScheme),
-                        lineWidth: 1
-                    )
-            )
         }
         .buttonStyle(.plain)
+        .frame(height: 40)
+        .animation(.easeInOut(duration: 0.15), value: isActive)
     }
 }
 
-private struct ProductCard: View {
+// MARK: - Product Card
+
+private struct OProductCard: View {
     let product: Product
     let onTap:   () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Kategorie-Farbstreifen — full-width oben (wird durch card cornerRadius geclipt)
-                if let hex = product.category?.color {
-                    Rectangle()
-                        .fill(Color(hex: hex))
-                        .frame(height: 4)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Spacer().frame(height: 2)
-
+            VStack(alignment: .leading, spacing: 8) {
+                // Zeile 1: Name + VAT-Badge
+                HStack(alignment: .top, spacing: 6) {
                     Text(product.name)
-                        .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                        .font(.jakarta(13, weight: .semibold))
                         .foregroundColor(DS.C.text)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text("19 %")
+                        .font(.jakarta(9, weight: .semibold))
+                        .foregroundColor(DS.C.warnText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(DS.C.warnBg)
+                        .cornerRadius(4)
+                        .padding(.top, 1)
+                        .fixedSize()
+                }
+
+                // Zeile 2: Subtitle (Kategoriename als Sub-Text)
+                if let catName = product.category?.name {
+                    Text(catName)
+                        .font(.jakarta(10, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                        .lineLimit(1)
+                }
+
+                // Zeile 3: Preis + Modifier-Hinweis
+                HStack(alignment: .center, spacing: 0) {
+                    Text(oFmtCents(product.priceCents))
+                        .font(.jakarta(15, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .tracking(-0.2)
 
                     Spacer()
 
-                    HStack {
-                        Text(formatCents(product.priceCents))
-                            .font(.jakarta(14, weight: .semibold))
-                            .foregroundColor(DS.C.acc)
-                        Spacer()
-                        // Modifier-Indikator
-                        if product.hasRequiredModifiers {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(DS.C.text2)
-                        }
+                    if product.hasRequiredModifiers {
+                        Text("Optionen")
+                            .font(.jakarta(10, weight: .semibold))
+                            .foregroundColor(DS.C.accT)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(DS.C.accBg)
+                            .cornerRadius(10)
                     }
                 }
-                .padding(12)
             }
-            .frame(minHeight: 100)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
             .background(DS.C.sur)
-            .cornerRadius(DS.R.card)
+            .cornerRadius(12)
             .overlay(
-                RoundedRectangle(cornerRadius: DS.R.card)
-                    .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(
+                        isHovered ? DS.C.acc.opacity(0.3) : DS.C.brd(colorScheme),
+                        lineWidth: 1
+                    )
             )
+            .scaleEffect(isHovered ? 0.99 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isHovered)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 
 // MARK: - Warenkorb (rechts)
 
-private struct CartPanel: View {
-    let tableName:  String?
+private struct OCartPanel: View {
     let orderId:    Int?
     let onRemove:   (Int) async -> Void
+    let onAdd:      (Int) async -> Void
+    let onClear:    () -> Void
     let onBezahlen: () -> Void
 
     @EnvironmentObject var orderStore: OrderStore
@@ -461,23 +479,32 @@ private struct CartPanel: View {
     private var order: OrderDetail? { orderStore.selectedOrder }
     private var items: [OrderItem]  { order?.items ?? [] }
     private var total: Int          { order?.totalCents ?? 0 }
+    private var vatCents: Int       { total * 19 / 119 }
+    private var totalArticles: Int  { items.reduce(0) { $0 + $1.quantity } }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(tableName ?? "Schnellkasse")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                Text("Bestellung")
+                    .font(.jakarta(13, weight: .semibold))
                     .foregroundColor(DS.C.text)
                 Spacer()
                 if orderStore.isLoading {
                     ProgressView()
                         .progressViewStyle(.circular)
-                        .scaleEffect(0.8)
+                        .scaleEffect(0.7)
+                        .padding(.trailing, 6)
+                }
+                if !items.isEmpty {
+                    Button("Leeren", action: onClear)
+                        .font(.jakarta(11, weight: .semibold))
+                        .foregroundColor(DS.C.dangerText)
+                        .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
             .background(DS.C.sur)
             .overlay(
                 Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
@@ -486,169 +513,250 @@ private struct CartPanel: View {
 
             // Items
             if items.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "cart")
-                        .font(.system(size: 28, weight: .light))
-                        .foregroundColor(DS.C.text2)
-                    Text("Noch keine Positionen")
-                        .font(.jakarta(DS.T.loginBody, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                    Text("Produkt antippen um es hinzuzufügen.")
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
+                OCartEmpty()
             } else {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 0) {
                         ForEach(items) { item in
-                            CartItemRow(item: item) {
-                                Task { await onRemove(item.id) }
+                            OCartItemRow(
+                                item:     item,
+                                onRemove: { Task { await onRemove(item.id) } },
+                                onAdd:    { Task { await onAdd(item.productId) } }
+                            )
+                            if item.id != items.last?.id {
+                                Rectangle()
+                                    .fill(DS.C.brdLight)
+                                    .frame(height: 1)
                             }
                         }
                     }
-                    .padding(12)
                 }
+                .background(DS.C.sur)
             }
 
-            // Footer: Total + Bezahlen
+            // Footer
             if !items.isEmpty {
-                CartFooter(total: total, onBezahlen: onBezahlen)
+                OCartFooter(
+                    itemCount:    items.count,
+                    articleCount: totalArticles,
+                    vatCents:     vatCents,
+                    total:        total,
+                    onBezahlen:   onBezahlen
+                )
             }
         }
-        .background(DS.C.bg)
+        .background(DS.C.sur)
     }
 }
 
-private struct CartItemRow: View {
+private struct OCartEmpty: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(DS.C.sur2)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "cart")
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundColor(DS.C.text2)
+            }
+            Text("Noch keine Positionen")
+                .font(.jakarta(12, weight: .regular))
+                .foregroundColor(DS.C.text2)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DS.C.sur)
+    }
+}
+
+private struct OCartItemRow: View {
     let item:     OrderItem
     let onRemove: () -> Void
+    let onAdd:    () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @State private var removeHovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // Menge-Badge
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(DS.C.sur2)
-                    .frame(width: 26, height: 26)
-                Text("\(item.quantity)×")
-                    .font(.jakarta(10, weight: .semibold))
-                    .foregroundColor(DS.C.text2)
-            }
-            .padding(.top, 1)
-
-            VStack(alignment: .leading, spacing: 3) {
+            // Info: Name + Mods + Qty-Row
+            VStack(alignment: .leading, spacing: 0) {
                 Text(item.productName)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                    .font(.jakarta(12, weight: .semibold))
                     .foregroundColor(DS.C.text)
                     .lineLimit(1)
 
-                // Modifier-Namen
                 if !item.modifiers.isEmpty {
-                    Text(item.modifiers.map { $0.name }.joined(separator: ", "))
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
+                    Text(item.modifiers.map { $0.name }.joined(separator: " · "))
+                        .font(.jakarta(10, weight: .regular))
                         .foregroundColor(DS.C.text2)
                         .lineLimit(1)
+                        .padding(.top, 2)
                 }
 
-                // Rabatt
-                if item.discountCents > 0 {
-                    Text("– \(formatCents(item.discountCents))")
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                        .foregroundColor(DS.C.freeText)
+                // Qty-Buttons: − | num | +
+                HStack(spacing: 6) {
+                    OQtyButton(label: "−", isDanger: true, isHovered: removeHovered) {
+                        onRemove()
+                    }
+                    .onHover { removeHovered = $0 }
+
+                    Text("\(item.quantity)")
+                        .font(.jakarta(12, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .frame(minWidth: 16, alignment: .center)
+
+                    OQtyButton(label: "+", isDanger: false, isHovered: false) {
+                        onAdd()
+                    }
                 }
+                .padding(.top, 6)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(formatCents(item.subtotalCents))
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-
-                // Entfernen
-                Button(action: onRemove) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(DS.C.text2)
-                        .frame(width: 20, height: 20)
-                        .background(DS.C.sur2)
-                        .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
-            }
+            // Preis (rechts)
+            Text(oFmtCents(item.subtotalCents))
+                .font(.jakarta(12, weight: .semibold))
+                .foregroundColor(DS.C.text)
+                .fixedSize()
+                .padding(.top, 1)
         }
-        .padding(12)
-        .background(DS.C.sur)
-        .cornerRadius(DS.R.pinRow)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.R.pinRow)
-                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }
 
-private struct CartFooter: View {
-    let total:       Int
-    let onBezahlen:  () -> Void
+private struct OQtyButton: View {
+    let label:     String
+    let isDanger:  Bool
+    let isHovered: Bool
+    let onTap:     () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hov = false
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(label)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(
+                    isDanger && hov ? DS.C.dangerText :
+                    hov ? DS.C.text : DS.C.text2
+                )
+                .frame(width: 22, height: 22)
+                .background(
+                    isDanger && hov ? DS.C.dangerBg :
+                    hov ? DS.C.sur2 : Color.clear
+                )
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(
+                            isDanger && hov ? DS.C.dangerText.opacity(0.4) : DS.C.brd(colorScheme),
+                            lineWidth: 1
+                        )
+                )
+                .animation(.easeInOut(duration: 0.1), value: hov)
+        }
+        .buttonStyle(.plain)
+        .onHover { hov = $0 }
+    }
+}
+
+private struct OCartFooter: View {
+    let itemCount:    Int
+    let articleCount: Int
+    let vatCents:     Int
+    let total:        Int
+    let onBezahlen:   () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
             Rectangle().fill(DS.C.brdLight).frame(height: 1)
 
             VStack(spacing: 10) {
-                // Gesamtsumme
+                // Positionen-Zeile
+                HStack {
+                    Text("\(itemCount) Position\(itemCount == 1 ? "" : "en")")
+                        .font(.jakarta(11, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                    Spacer()
+                    Text("\(articleCount) Artikel")
+                        .font(.jakarta(11, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                }
+
+                // MwSt-Zeile
+                HStack {
+                    Text("MwSt. 19 %")
+                        .font(.jakarta(11, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                    Spacer()
+                    Text(oFmtCents(vatCents))
+                        .font(.jakarta(11, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                }
+
+                // Gesamt-Trennlinie + Zeile
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
                 HStack {
                     Text("Gesamt")
-                        .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                        .font(.jakarta(14, weight: .semibold))
                         .foregroundColor(DS.C.text)
                     Spacer()
-                    Text(formatCents(total))
-                        .font(.jakarta(18, weight: .semibold))
+                    Text(oFmtCents(total))
+                        .font(.jakarta(20, weight: .semibold))
                         .foregroundColor(DS.C.text)
                         .tracking(-0.3)
                 }
 
+                // Notiz-Button
+                Button("+ Notiz zur Bestellung") {}
+                    .font(.jakarta(12, weight: .medium))
+                    .foregroundColor(DS.C.text2)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 34)
+                    .background(Color.clear)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+                    )
+                    .buttonStyle(.plain)
+
+                // Bezahlen-Button
                 Button(action: onBezahlen) {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Jetzt bezahlen")
-                            .font(.jakarta(DS.T.loginButton, weight: .bold))
+                        Image(systemName: "creditcard")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Zur Kasse · \(oFmtCents(total))")
+                            .font(.jakarta(14, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: DS.S.buttonHeight)
+                    .frame(height: 44)
                 }
-                .background(
-                    LinearGradient(
-                        colors: [DS.C.acc, DS.C.acc.opacity(0.85)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(DS.R.button)
+                .background(DS.C.acc)
+                .cornerRadius(12)
                 .buttonStyle(.plain)
             }
-            .padding(14)
+            .padding(16)
             .background(DS.C.sur)
         }
     }
 }
 
-// MARK: - ModifierSheet (Placeholder — vollständige Implementierung folgt in ModifierSheet.swift)
+// MARK: - ModifierSheet
 
 private struct ModifierSelectionSheet: View {
     let product:   Product
     let onConfirm: ([Int]) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedOptionIds: [Int] = []
 
-    /// Alle Pflicht-Gruppen bereits abgedeckt?
     private var requiredGroupsSatisfied: Bool {
         product.modifierGroups
             .filter { $0.isRequired }
@@ -657,74 +765,118 @@ private struct ModifierSelectionSheet: View {
             }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Drag Indicator
-            HStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(DS.C.text2.opacity(0.3))
-                    .frame(width: 36, height: 4)
-                Spacer()
+    /// Basispreis + alle ausgewählten Aufpreise
+    private var totalCents: Int {
+        let deltas = selectedOptionIds.compactMap { id -> Int? in
+            for group in product.modifierGroups {
+                if let opt = group.options.first(where: { $0.id == id }) {
+                    return opt.priceDeltaCents
+                }
             }
-            .padding(.top, 12)
+            return nil
+        }
+        return product.priceCents + deltas.reduce(0, +)
+    }
 
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(product.name)
+                        .font(.jakarta(16, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .tracking(-0.3)
+
+                    Text("Basispreis: \(oFmtCents(product.priceCents))\(requiredGroupsSatisfied ? "" : " · Bitte Pflichtfelder auswählen")")
+                        .font(.jakarta(12, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+
+                // Close button
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DS.C.text2)
+                        .frame(width: 28, height: 28)
+                        .background(DS.C.sur)
+                        .cornerRadius(7)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7)
+                                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
+                .padding(.trailing, 16)
+            }
+            .background(DS.C.sur)
+            .overlay(
+                Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+                alignment: .bottom
+            )
+
+            // Body
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Spacer().frame(height: 20)
-
-                    // Produkt-Info
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(product.name)
-                                .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                                .foregroundColor(DS.C.text)
-                            Text(formatCents(product.priceCents))
-                                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                                .foregroundColor(DS.C.acc)
-                        }
-                        Spacer()
-                    }
-
-                    // Modifier-Gruppen
+                VStack(alignment: .leading, spacing: 18) {
                     ForEach(product.modifierGroups) { group in
-                        ModifierGroupSection(
+                        MGroupSection(
                             group:             group,
                             selectedOptionIds: $selectedOptionIds
                         )
                     }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+            }
 
-                    Spacer().frame(height: 24)
-
-                    // Buttons
-                    HStack(spacing: 10) {
-                        Button("Abbrechen") { dismiss() }
-                            .font(.jakarta(DS.T.loginButton, weight: .medium))
+            // Footer
+            VStack(spacing: 0) {
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                HStack(alignment: .center) {
+                    // Gesamtpreis links
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("GESAMTPREIS")
+                            .font(.jakarta(10, weight: .semibold))
                             .foregroundColor(DS.C.text2)
-                            .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
-                            .background(DS.C.sur2)
-                            .cornerRadius(DS.R.button)
-                            .buttonStyle(.plain)
-
-                        Button {
-                            onConfirm(selectedOptionIds)
-                            dismiss()
-                        } label: {
-                            Text("Hinzufügen")
-                                .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
+                            .tracking(0.5)
+                        Text(oFmtCents(totalCents))
+                            .font(.jakarta(18, weight: .semibold))
+                            .foregroundColor(DS.C.text)
+                            .tracking(-0.3)
+                        if !requiredGroupsSatisfied {
+                            Text("Pflichtfelder auswählen")
+                                .font(.jakarta(10, weight: .regular))
+                                .foregroundColor(DS.C.dangerText)
                         }
-                        .background(requiredGroupsSatisfied ? DS.C.acc : DS.C.acc.opacity(0.4))
-                        .cornerRadius(DS.R.button)
-                        .disabled(!requiredGroupsSatisfied)
-                        .buttonStyle(.plain)
-                        .animation(.easeInOut(duration: 0.15), value: requiredGroupsSatisfied)
                     }
 
-                    Spacer().frame(height: 24)
+                    Spacer()
+
+                    // Hinzufügen rechts
+                    Button {
+                        onConfirm(selectedOptionIds)
+                        dismiss()
+                    } label: {
+                        Text("Hinzufügen · \(oFmtCents(totalCents))")
+                            .font(.jakarta(13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .frame(height: 42)
+                    }
+                    .background(requiredGroupsSatisfied ? DS.C.acc : DS.C.acc.opacity(0.4))
+                    .cornerRadius(10)
+                    .disabled(!requiredGroupsSatisfied)
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.15), value: requiredGroupsSatisfied)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(DS.C.sur)
             }
         }
         .background(DS.C.sur)
@@ -733,40 +885,49 @@ private struct ModifierSelectionSheet: View {
     }
 }
 
-private struct ModifierGroupSection: View {
+private struct MGroupSection: View {
     let group:             ModifierGroup
     @Binding var selectedOptionIds: [Int]
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Spacer().frame(height: 16)
+        VStack(alignment: .leading, spacing: 10) {
+            // Group header: name + badge
+            HStack {
+                Text(group.name)
+                    .font(.jakarta(13, weight: .semibold))
+                    .foregroundColor(DS.C.text)
 
-            HStack(spacing: 6) {
-                Text(group.name.uppercased())
-                    .font(.jakarta(DS.T.sectionHeader, weight: .semibold))
-                    .foregroundColor(DS.C.text2)
-                    .tracking(0.5)
+                Spacer()
+
                 if group.isRequired {
-                    Text("PFLICHT")
-                        .font(.jakarta(8, weight: .semibold))
-                        .foregroundColor(DS.C.acc)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(DS.C.accBg)
-                        .cornerRadius(4)
+                    Text("Pflicht · \(group.maxSelections ?? 1) auswählen")
+                        .font(.jakarta(10, weight: .semibold))
+                        .foregroundColor(DS.C.dangerText)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(DS.C.dangerBg)
+                        .cornerRadius(20)
+                } else {
+                    Text("Optional")
+                        .font(.jakarta(10, weight: .semibold))
+                        .foregroundColor(DS.C.text2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(DS.C.sur2)
+                        .cornerRadius(20)
                 }
             }
 
-            ForEach(group.options) { option in
-                ModifierOptionRow(
-                    option:            option,
-                    isSelected:        selectedOptionIds.contains(option.id),
-                    isSingleSelect:    group.maxSelections == 1,
-                    onTap: {
-                        toggleOption(option, group: group)
-                    }
-                )
+            // Options
+            VStack(spacing: 6) {
+                ForEach(group.options) { option in
+                    MOptionRow(
+                        option:         option,
+                        isSelected:     selectedOptionIds.contains(option.id),
+                        isSingleSelect: group.maxSelections == 1,
+                        onTap: { toggleOption(option, group: group) }
+                    )
+                }
             }
         }
     }
@@ -774,7 +935,6 @@ private struct ModifierGroupSection: View {
     private func toggleOption(_ option: ModifierOption, group: ModifierGroup) {
         let singleSelect = group.maxSelections == 1
         if singleSelect {
-            // Alle Optionen dieser Gruppe deselektieren, dann neue wählen
             let groupOptionIds = group.options.map { $0.id }
             selectedOptionIds.removeAll { groupOptionIds.contains($0) }
             selectedOptionIds.append(option.id)
@@ -788,64 +948,101 @@ private struct ModifierGroupSection: View {
     }
 }
 
-private struct ModifierOptionRow: View {
+private struct MOptionRow: View {
     let option:         ModifierOption
     let isSelected:     Bool
     let isSingleSelect: Bool
     let onTap:          () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Checkbox / Radio
+            HStack(spacing: 10) {
+                // Radio or Checkbox (18×18)
                 ZStack {
-                    RoundedRectangle(cornerRadius: isSingleSelect ? 10 : 5)
-                        .strokeBorder(
-                            isSelected ? DS.C.acc : DS.C.brd(colorScheme),
-                            lineWidth: 1.5
-                        )
-                        .frame(width: 20, height: 20)
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: isSingleSelect ? 7 : 3)
-                            .fill(DS.C.acc)
-                            .frame(width: 12, height: 12)
+                    if isSingleSelect {
+                        // Radio
+                        Circle()
+                            .strokeBorder(
+                                isSelected ? DS.C.acc : DS.C.brd(colorScheme),
+                                lineWidth: 2
+                            )
+                            .background(
+                                Circle().fill(isSelected ? DS.C.acc : Color.clear)
+                            )
+                            .frame(width: 18, height: 18)
+                        if isSelected {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 7, height: 7)
+                        }
+                    } else {
+                        // Checkbox
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(
+                                isSelected ? DS.C.acc : DS.C.brd(colorScheme),
+                                lineWidth: 2
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(isSelected ? DS.C.acc : Color.clear)
+                            )
+                            .frame(width: 18, height: 18)
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                        }
                     }
                 }
+                .frame(width: 18, height: 18)
 
+                // Name
                 Text(option.name)
-                    .font(.jakarta(DS.T.loginBody, weight: .regular))
-                    .foregroundColor(DS.C.text)
+                    .font(.jakarta(13, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? DS.C.accT : DS.C.text)
 
                 Spacer()
 
-                if option.priceDeltaCents > 0 {
-                    Text("+ \(formatCents(option.priceDeltaCents))")
-                        .font(.jakarta(DS.T.loginBody, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                }
+                // Preis
+                Text(option.priceDeltaCents > 0 ? "+ \(oFmtCents(option.priceDeltaCents))" : "inklusive")
+                    .font(.jakarta(12, weight: .semibold))
+                    .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(isSelected ? DS.C.accBg : DS.C.bg)
-            .cornerRadius(DS.R.pinRow)
+            .background(isSelected ? DS.C.accBg : (isHovered ? DS.C.bg : Color.clear))
+            .cornerRadius(10)
             .overlay(
-                RoundedRectangle(cornerRadius: DS.R.pinRow)
+                RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(
-                        isSelected ? DS.C.acc : DS.C.brd(colorScheme),
-                        lineWidth: 1
+                        isSelected ? DS.C.acc : (isHovered ? DS.C.acc.opacity(0.25) : DS.C.brd(colorScheme)),
+                        lineWidth: 1.5
                     )
             )
             .animation(.easeInOut(duration: 0.1), value: isSelected)
+            .animation(.easeInOut(duration: 0.1), value: isHovered)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 
 // MARK: - Helpers
 
-private func formatCents(_ cents: Int) -> String {
-    String(format: "%.2f €", Double(cents) / 100)
+private let _oFmt: NumberFormatter = {
+    let f = NumberFormatter()
+    f.numberStyle = .decimal
+    f.minimumFractionDigits = 2
+    f.maximumFractionDigits = 2
+    f.locale = Locale(identifier: "de_DE")
+    return f
+}()
+
+private func oFmtCents(_ cents: Int) -> String {
+    let val = NSNumber(value: Double(cents) / 100.0)
+    return (_oFmt.string(from: val) ?? "0,00") + " €"
 }
 
 // MARK: - Previews

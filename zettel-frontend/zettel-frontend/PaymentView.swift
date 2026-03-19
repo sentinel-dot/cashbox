@@ -1,5 +1,5 @@
 // PaymentView.swift
-// cashbox — Bezahlung: Bar / Karte / Gemischt, MwSt-Aufschlüsselung, Bon-Zusammenfassung
+// cashbox — Bezahlung: Bar / Karte / Gemischt
 
 import SwiftUI
 
@@ -16,14 +16,14 @@ struct PaymentView: View {
 
     enum PayMode { case bar, karte, gemischt }
     @State private var payMode       = PayMode.bar
-    @State private var cashInputText = ""
+    @State private var barRaw        = ""   // Ziffernfolge in Cent, z.B. "5000" = 50,00 €
     @State private var isLoading     = false
     @State private var error:        AppError?
     @State private var showError     = false
     @State private var paymentResult: PaymentResult?
     @State private var showReceipt   = false
 
-    private var total:        Int             { order.totalCents }
+    private var total:        Int              { order.totalCents }
     private var vatBreakdown: VatBreakdownLocal { computeVat(order.items) }
 
     var body: some View {
@@ -36,28 +36,26 @@ struct PaymentView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                PaymentTopBar(
+                PTopBar(
                     tableName: tableName,
                     orderId:   order.id,
                     onClose:   { dismiss() }
                 )
 
                 HStack(spacing: 0) {
-                    OrderSummaryPanel(order: order, vat: vatBreakdown)
-                        .frame(maxWidth: .infinity)
+                    POrderSummary(order: order, vat: vatBreakdown)
+                        .frame(width: 290)
 
-                    Rectangle()
-                        .fill(DS.C.brdLight)
-                        .frame(width: 1)
+                    Rectangle().fill(DS.C.brdLight).frame(width: 1)
 
-                    PaymentPanel(
+                    PPaymentRight(
                         payMode:    $payMode,
-                        cashInput:  $cashInputText,
+                        barRaw:     $barRaw,
                         totalCents: total,
                         isLoading:  isLoading,
                         onPay:      { Task { await performPayment() } }
                     )
-                    .frame(width: 340)
+                    .frame(maxWidth: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -78,6 +76,7 @@ struct PaymentView: View {
                 .presentationDetents([.large])
             }
         }
+        .onChange(of: payMode) { barRaw = "" }
     }
 
     // MARK: - Actions
@@ -86,8 +85,7 @@ struct PaymentView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let items  = buildPayments()
-            let result = try await orderStore.pay(orderId: order.id, payments: items)
+            let result = try await orderStore.pay(orderId: order.id, payments: buildPayments())
             paymentResult = result
             showReceipt   = true
         } catch let e as AppError {
@@ -104,11 +102,11 @@ struct PaymentView: View {
         case .karte:
             return [PaymentItem(method: .card, amountCents: total)]
         case .gemischt:
-            let cash = parseCents(cashInputText)
-            let card = total - cash
+            let barC  = Int(barRaw) ?? 0
+            let cardC = total - barC
             var out: [PaymentItem] = []
-            if cash > 0 { out.append(PaymentItem(method: .cash, amountCents: cash)) }
-            if card > 0 { out.append(PaymentItem(method: .card, amountCents: card)) }
+            if barC  > 0 { out.append(PaymentItem(method: .cash, amountCents: barC)) }
+            if cardC > 0 { out.append(PaymentItem(method: .card, amountCents: cardC)) }
             return out
         }
     }
@@ -116,49 +114,69 @@ struct PaymentView: View {
 
 // MARK: - Top Bar
 
-private struct PaymentTopBar: View {
+private struct PTopBar: View {
     let tableName: String?
     let orderId:   Int
     let onClose:   () -> Void
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var cs
 
     var body: some View {
-        HStack(spacing: 16) {
-            Button(action: onClose) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("Zurück")
-                        .font(.jakarta(DS.T.loginButton, weight: .medium))
+        HStack(spacing: 0) {
+            HStack(spacing: 14) {
+                HStack(spacing: 7) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(DS.C.acc)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Image(systemName: "squareshape.split.2x2")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                        )
+                    Text("Kassensystem")
+                        .font(.jakarta(13, weight: .semibold))
+                        .foregroundColor(DS.C.text)
                 }
-                .foregroundColor(DS.C.acc)
-            }
-            .buttonStyle(.plain)
-
-            Rectangle().fill(DS.C.brdLight).frame(width: 1, height: 20)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Bezahlung\(tableName.map { " — \($0)" } ?? "")")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                Text("Bestellung #\(orderId)")
-                    .font(.jakarta(DS.T.loginFooter, weight: .regular))
+                Button(action: onClose) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Zurück")
+                            .font(.jakarta(12, weight: .semibold))
+                    }
                     .foregroundColor(DS.C.text2)
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.leading, 20)
 
             Spacer()
+
+            Text(tableName ?? "Schnellkasse")
+                .font(.jakarta(13, weight: .semibold))
+                .foregroundColor(DS.C.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background(DS.C.sur2)
+                .cornerRadius(20)
+
+            Spacer()
+
+            Text("Bestellung #\(orderId)")
+                .font(.jakarta(11, weight: .semibold))
+                .foregroundColor(DS.C.accT)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(DS.C.accBg)
+                .cornerRadius(20)
+                .padding(.trailing, 20)
         }
-        .padding(.horizontal, 20)
         .frame(height: DS.S.topbarHeight)
         .background(DS.C.sur)
-        .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
-            alignment: .bottom
-        )
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
     }
 }
 
-// MARK: - Order Summary Panel (links)
+// MARK: - Order Summary (links, 290px)
 
 private struct VatBreakdownLocal {
     let vat7NetCents:  Int
@@ -179,404 +197,775 @@ private func computeVat(_ items: [OrderItem]) -> VatBreakdownLocal {
         if is7 { v7n += net; v7t += tax } else { v19n += net; v19t += tax }
     }
     return VatBreakdownLocal(
-        vat7NetCents:  v7n, vat7TaxCents:  v7t,
+        vat7NetCents: v7n, vat7TaxCents: v7t,
         vat19NetCents: v19n, vat19TaxCents: v19t
     )
 }
 
-private struct OrderSummaryPanel: View {
+private struct POrderSummary: View {
     let order: OrderDetail
     let vat:   VatBreakdownLocal
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var cs
 
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                SummarySection("POSITIONEN")
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                VStack(spacing: 6) {
-                    ForEach(order.items) { item in
-                        SummaryItemRow(item: item)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-
-                SummarySection("MWST-AUFSCHLÜSSELUNG")
-                    .padding(.horizontal, 20)
-
-                VStack(spacing: 8) {
-                    if vat.has7 {
-                        VatRow(label: "7 % Netto",   value: vat.vat7NetCents)
-                        VatRow(label: "7 % Steuer",  value: vat.vat7TaxCents,  dim: true)
-                    }
-                    if vat.has19 {
-                        VatRow(label: "19 % Netto",  value: vat.vat19NetCents)
-                        VatRow(label: "19 % Steuer", value: vat.vat19TaxCents, dim: true)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-
-                HStack {
-                    Text("Gesamtbetrag (Brutto)")
-                        .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                    Spacer()
-                    Text(formatCents(order.totalCents))
-                        .font(.jakarta(18, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                        .tracking(-0.3)
-                }
-                .padding(.horizontal, 20)
-
-                Spacer().frame(height: 28)
-            }
-        }
-        .background(DS.C.bg)
+    private var nettoCents:    Int { vat.vat19NetCents + vat.vat7NetCents }
+    private var vatTotalCents: Int { vat.vat19TaxCents + vat.vat7TaxCents }
+    private var itemCount:     Int { order.items.count }
+    private var tableLabel:    String {
+        order.table?.name ?? "Schnellkasse"
     }
-}
-
-private struct SummarySection: View {
-    let title: String
-    init(_ title: String) { self.title = title }
-    var body: some View {
-        Text(title)
-            .font(.jakarta(DS.T.sectionHeader, weight: .semibold))
-            .foregroundColor(DS.C.text2)
-            .tracking(0.5)
-    }
-}
-
-private struct SummaryItemRow: View {
-    let item: OrderItem
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text("\(item.quantity)×")
-                .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .frame(width: 28, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.productName)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                    .lineLimit(1)
-                if !item.modifiers.isEmpty {
-                    Text(item.modifiers.map { $0.name }.joined(separator: ", "))
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                        .lineLimit(1)
-                }
-                Text("\(item.vatRate) % MwSt")
-                    .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                    .foregroundColor(DS.C.text2)
-            }
-
-            Spacer()
-
-            Text(formatCents(item.subtotalCents))
-                .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                .foregroundColor(DS.C.text)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(DS.C.sur)
-        .cornerRadius(DS.R.pinRow)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.R.pinRow)
-                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-        )
-    }
-}
-
-private struct VatRow: View {
-    let label: String
-    let value: Int
-    var dim:   Bool = false
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                .foregroundColor(dim ? DS.C.text2 : DS.C.text)
-            Spacer()
-            Text(formatCents(value))
-                .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                .foregroundColor(dim ? DS.C.text2 : DS.C.text)
-        }
-    }
-}
-
-// MARK: - Payment Panel (rechts)
-
-private struct PaymentPanel: View {
-    @Binding var payMode:   PaymentView.PayMode
-    @Binding var cashInput: String
-    let totalCents: Int
-    let isLoading:  Bool
-    let onPay:      () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var cashFocused = false
-
-    private var cashCents:     Int  { parseCents(cashInput) }
-    private var cardCents:     Int  { max(0, totalCents - cashCents) }
-    private var cashOverflow:  Bool { cashCents > totalCents }
-    private var gemischtValid: Bool { cashCents > 0 && !cashOverflow }
-    private var canPay:        Bool { payMode != .gemischt || gemischtValid }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Text("Zahlungsart")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Bestellübersicht")
+                    .font(.jakarta(12, weight: .semibold))
                     .foregroundColor(DS.C.text)
-                Spacer()
+                Text("\(tableLabel) · \(itemCount) Position\(itemCount == 1 ? "" : "en")")
+                    .font(.jakarta(10, weight: .regular))
+                    .foregroundColor(DS.C.text2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(DS.C.sur)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+
+            // Items
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    ForEach(order.items) { item in
+                        POSItemRow(item: item)
+                        if item.id != order.items.last?.id {
+                            Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .background(DS.C.bg)
+
+            // Totals footer
+            VStack(spacing: 5) {
+                HStack {
+                    Text("Netto")
+                        .font(.jakarta(11, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                    Spacer()
+                    Text(pFmt(nettoCents))
+                        .font(.jakarta(11, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                }
+                HStack {
+                    Text("MwSt. 19 %")
+                        .font(.jakarta(11, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                    Spacer()
+                    Text(pFmt(vatTotalCents))
+                        .font(.jakarta(11, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                }
+                Rectangle().fill(DS.C.brdLight).frame(height: 1).padding(.vertical, 3)
+                HStack {
+                    Text("Gesamt")
+                        .font(.jakarta(14, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                    Spacer()
+                    Text(pFmt(order.totalCents))
+                        .font(.jakarta(20, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .tracking(-0.3)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(DS.C.sur)
-            .overlay(
-                Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
-                alignment: .bottom
-            )
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    // Zahlungsart-Buttons
-                    VStack(spacing: 8) {
-                        PayModeButton(
-                            icon:     "banknote",
-                            label:    "Bar",
-                            isActive: payMode == .bar,
-                            onTap:    { withAnimation(.easeInOut(duration: 0.15)) { payMode = .bar } }
-                        )
-                        PayModeButton(
-                            icon:     "creditcard",
-                            label:    "Karte",
-                            isActive: payMode == .karte,
-                            onTap:    { withAnimation(.easeInOut(duration: 0.15)) { payMode = .karte } }
-                        )
-                        PayModeButton(
-                            icon:     "shuffle",
-                            label:    "Gemischt",
-                            isActive: payMode == .gemischt,
-                            onTap:    { withAnimation(.easeInOut(duration: 0.15)) { payMode = .gemischt } }
-                        )
-                    }
-
-                    // Gemischt-Details
-                    if payMode == .gemischt {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("AUFTEILUNG")
-                                .font(.jakarta(DS.T.sectionHeader, weight: .semibold))
-                                .foregroundColor(DS.C.text2)
-                                .tracking(0.5)
-
-                            // Barbetrag-Eingabe
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Barbetrag")
-                                    .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                                    .foregroundColor(DS.C.text2)
-                                NoAssistantTextField(
-                                    placeholder:  "0,00 €",
-                                    text:         $cashInput,
-                                    keyboardType: .decimalPad,
-                                    uiFont:       UIFont.systemFont(ofSize: 14),
-                                    uiTextColor:  UIColor(DS.C.text),
-                                    isFocused:    $cashFocused
-                                )
-                                .padding(.horizontal, 12)
-                                .frame(height: DS.S.inputHeight)
-                                .background(DS.C.bg)
-                                .cornerRadius(DS.R.input)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.R.input)
-                                        .strokeBorder(
-                                            cashOverflow  ? Color(hex: "e74c3c") :
-                                            cashFocused   ? DS.C.acc : DS.C.brd(colorScheme),
-                                            lineWidth: 1
-                                        )
-                                )
-                                .animation(.easeInOut(duration: 0.15), value: cashFocused)
-                            }
-
-                            // Kartenbetrag — auto-berechnet
-                            HStack {
-                                Text("Kartenbetrag")
-                                    .font(.jakarta(DS.T.loginBody, weight: .regular))
-                                    .foregroundColor(DS.C.text2)
-                                Spacer()
-                                Text(formatCents(cardCents))
-                                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
-                                    .foregroundColor(gemischtValid ? DS.C.text : DS.C.text2)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(DS.C.sur2)
-                            .cornerRadius(DS.R.input)
-
-                            if cashOverflow {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 11))
-                                    Text("Barbetrag übersteigt Gesamtbetrag")
-                                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
-                                }
-                                .foregroundColor(Color(hex: "e74c3c"))
-                            }
-                        }
-                        .padding(14)
-                        .background(DS.C.sur)
-                        .cornerRadius(DS.R.card)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.R.card)
-                                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
-                    // Zu-zahlen-Chip
-                    HStack {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("ZU ZAHLEN")
-                                .font(.jakarta(DS.T.sectionHeader, weight: .semibold))
-                                .foregroundColor(DS.C.accT)
-                                .tracking(0.8)
-                            Text(formatCents(totalCents))
-                                .font(.jakarta(28, weight: .bold))
-                                .foregroundColor(DS.C.acc)
-                                .tracking(-0.8)
-                        }
-                        Spacer()
-                        Image(systemName: "eurosign.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(DS.C.acc.opacity(0.3))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(DS.C.accBg)
-                    .cornerRadius(DS.R.card)
-                }
-                .padding(14)
-            }
-
-            // Bezahlen-Button
-            VStack(spacing: 0) {
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
-                Button(action: onPay) {
-                    Group {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.white)
-                        } else {
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text(payLabel)
-                                    .font(.jakarta(DS.T.loginButton, weight: .bold))
-                            }
-                            .foregroundColor(.white)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: DS.S.buttonHeight)
-                }
-                .background(
-                    canPay
-                        ? LinearGradient(colors: [DS.C.acc, DS.C.acc.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
-                        : LinearGradient(colors: [DS.C.acc.opacity(0.4), DS.C.acc.opacity(0.4)], startPoint: .leading, endPoint: .trailing)
-                )
-                .cornerRadius(DS.R.button)
-                .disabled(!canPay || isLoading)
-                .opacity(isLoading ? 0.6 : 1.0)
-                .padding(14)
-                .animation(.easeInOut(duration: 0.15), value: canPay)
-                .buttonStyle(.plain)
-            }
-            .background(DS.C.sur)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .top)
         }
         .background(DS.C.bg)
     }
+}
 
-    private var payLabel: String {
+private struct POSItemRow: View {
+    let item: OrderItem
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(item.productName)
+                    .font(.jakarta(12, weight: .semibold))
+                    .foregroundColor(DS.C.text)
+                    .lineLimit(1)
+                if !item.modifiers.isEmpty {
+                    Text(item.modifiers.map { $0.name }.joined(separator: " · "))
+                        .font(.jakarta(10, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                        .lineLimit(1)
+                        .padding(.top, 1)
+                }
+                Text("\(item.quantity)×")
+                    .font(.jakarta(10, weight: .regular))
+                    .foregroundColor(DS.C.text2)
+                    .padding(.top, 1)
+            }
+            Spacer()
+            Text(pFmt(item.subtotalCents))
+                .font(.jakarta(12, weight: .semibold))
+                .foregroundColor(DS.C.text)
+                .padding(.leading, 8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+    }
+}
+
+// MARK: - Payment Right Panel
+
+private struct PPaymentRight: View {
+    @Binding var payMode:   PaymentView.PayMode
+    @Binding var barRaw:    String
+    let totalCents: Int
+    let isLoading:  Bool
+    let onPay:      () -> Void
+
+    private var barCents:       Int  { Int(barRaw) ?? 0 }
+    private var cardCents:      Int  { max(0, totalCents - barCents) }
+    private var canPayBar:      Bool { barCents >= totalCents }
+    private var canPayGemischt: Bool { barCents > 0 && barCents <= totalCents }
+    private var canPay: Bool {
         switch payMode {
-        case .bar:      return "Bar — \(formatCents(totalCents))"
-        case .karte:    return "Karte — \(formatCents(totalCents))"
-        case .gemischt: return "Gemischt — \(formatCents(totalCents))"
+        case .bar:      return canPayBar
+        case .karte:    return true
+        case .gemischt: return canPayGemischt
+        }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 14) {
+                PMethodGrid(payMode: $payMode)
+
+                switch payMode {
+                case .bar:
+                    PBarView(
+                        totalCents: totalCents,
+                        barRaw:     $barRaw,
+                        canPay:     canPayBar,
+                        isLoading:  isLoading,
+                        onPay:      onPay
+                    )
+                case .karte:
+                    PKarteView(
+                        totalCents: totalCents,
+                        isLoading:  isLoading,
+                        onPay:      onPay
+                    )
+                case .gemischt:
+                    PGemischtView(
+                        totalCents: totalCents,
+                        barRaw:     $barRaw,
+                        cardCents:  cardCents,
+                        canPay:     canPayGemischt,
+                        isLoading:  isLoading,
+                        onPay:      onPay
+                    )
+                }
+            }
+            .padding(18)
+        }
+        .background(DS.C.bg)
+    }
+}
+
+// MARK: - Method Grid
+
+private struct PMethodGrid: View {
+    @Binding var payMode: PaymentView.PayMode
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PMethodCard(icon: "banknote", label: "Barzahlung",   isSelected: payMode == .bar)      { withAnimation(.easeInOut(duration: 0.15)) { payMode = .bar } }
+            PMethodCard(icon: "creditcard", label: "Kartenzahlung", isSelected: payMode == .karte)  { withAnimation(.easeInOut(duration: 0.15)) { payMode = .karte } }
+            PMethodCard(icon: "arrow.left.arrow.right", label: "Gemischt", isSelected: payMode == .gemischt) { withAnimation(.easeInOut(duration: 0.15)) { payMode = .gemischt } }
         }
     }
 }
 
-private struct PayModeButton: View {
-    let icon:     String
-    let label:    String
-    let isActive: Bool
-    let onTap:    () -> Void
-    @Environment(\.colorScheme) private var colorScheme
+private struct PMethodCard: View {
+    let icon:       String
+    let label:      String
+    let isSelected: Bool
+    let onTap:      () -> Void
+    @Environment(\.colorScheme) private var cs
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 14) {
+            VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isActive ? Color.white.opacity(0.2) : DS.C.sur2)
-                        .frame(width: 36, height: 36)
+                    RoundedRectangle(cornerRadius: 9)
+                        .fill(isSelected ? DS.C.acc.opacity(0.15) : DS.C.sur2)
+                        .frame(width: 32, height: 32)
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(isActive ? .white : DS.C.text2)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                 }
                 Text(label)
-                    .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                    .foregroundColor(isActive ? .white : DS.C.text)
-                Spacer()
-                if isActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                    .font(.jakarta(11, weight: .semibold))
+                    .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(isActive ? DS.C.acc : DS.C.sur)
-            .cornerRadius(DS.R.card)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+            .background(isSelected ? DS.C.accBg : DS.C.sur)
+            .cornerRadius(12)
             .overlay(
-                RoundedRectangle(cornerRadius: DS.R.card)
-                    .strokeBorder(
-                        isActive ? DS.C.acc : DS.C.brd(colorScheme),
-                        lineWidth: isActive ? 0 : 1
-                    )
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isSelected ? DS.C.acc : DS.C.brd(cs), lineWidth: 1.5)
             )
+            .animation(.easeInOut(duration: 0.15), value: isSelected)
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Bon-Zusammenfassung
+// MARK: - Bar View
+
+private struct PBarView: View {
+    let totalCents: Int
+    @Binding var barRaw: String
+    let canPay:    Bool
+    let isLoading: Bool
+    let onPay:     () -> Void
+    @Environment(\.colorScheme) private var cs
+
+    private var barCents:    Int  { Int(barRaw) ?? 0 }
+    private var changeCents: Int  { barCents - totalCents }
+    private var isExact:     Bool { !barRaw.isEmpty && changeCents == 0 }
+    private var isOver:      Bool { !barRaw.isEmpty && changeCents > 0 }
+    private var isUnder:     Bool { !barRaw.isEmpty && changeCents < 0 }
+
+    private var givenColor: Color {
+        if barRaw.isEmpty { return DS.C.text2 }
+        if isExact { return DS.C.acc }
+        if isOver  { return DS.C.freeText }
+        return DS.C.dangerText
+    }
+    private var changeText: String {
+        if barRaw.isEmpty { return "—" }
+        if isExact { return pFmt(0) }
+        if isOver  { return pFmt(changeCents) }
+        return "\(pFmt(-changeCents)) fehlt"
+    }
+    private var changeColor: Color {
+        if barRaw.isEmpty || isExact { return DS.C.text2 }
+        if isOver { return DS.C.freeText }
+        return DS.C.dangerText
+    }
+    private var confirmLabel: String {
+        if barRaw.isEmpty { return "Betrag eingeben" }
+        if isExact { return "Zahlung abschließen · Passend" }
+        if isOver  { return "Zahlung abschließen · Wechselgeld \(pFmt(changeCents))" }
+        return "Betrag unvollständig"
+    }
+    private var quickAmounts: [Int] {
+        var set = Set<Int>()
+        set.insert(totalCents)
+        for div in [500, 1000, 2000, 5000, 10000] {
+            let r = ((totalCents + div - 1) / div) * div
+            if r >= totalCents && r < totalCents * 5 / 2 { set.insert(r) }
+        }
+        return set.sorted()
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 0) {
+                // Amount top
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("ZU ZAHLEN")
+                            .font(.jakarta(10, weight: .semibold))
+                            .foregroundColor(DS.C.text2)
+                            .tracking(0.5)
+                        Text(pFmt(totalCents))
+                            .font(.jakarta(13, weight: .semibold))
+                            .foregroundColor(DS.C.text)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("GEGEBEN")
+                            .font(.jakarta(10, weight: .semibold))
+                            .foregroundColor(DS.C.text2)
+                            .tracking(0.5)
+                        Text(barRaw.isEmpty ? "—" : pFmt(barCents))
+                            .font(.jakarta(26, weight: .semibold))
+                            .foregroundColor(givenColor)
+                            .tracking(-0.5)
+                            .animation(.easeInOut(duration: 0.1), value: givenColor.description)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                // Quick amounts
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(quickAmounts, id: \.self) { amount in
+                            let exact = (amount == totalCents)
+                            Button { barRaw = String(amount) } label: {
+                                Text(exact ? "\(pFmt(amount)) ✓" : pFmt(amount))
+                                    .font(.jakarta(11, weight: .semibold))
+                                    .foregroundColor(exact ? DS.C.accT : DS.C.text)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 5)
+                                    .background(exact ? DS.C.accBg : Color.clear)
+                                    .cornerRadius(20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .strokeBorder(exact ? DS.C.acc : DS.C.brd(cs), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                }
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                // Wechselgeld row
+                HStack {
+                    Text("Wechselgeld")
+                        .font(.jakarta(12, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                    Spacer()
+                    Text(changeText)
+                        .font(.jakarta(14, weight: .semibold))
+                        .foregroundColor(changeColor)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                // Numpad
+                PNumpad { key in
+                    if key == "del" { if !barRaw.isEmpty { barRaw.removeLast() } }
+                    else if barRaw.count < 8 { barRaw += key }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
+            }
+            .background(DS.C.sur)
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(DS.C.brd(cs), lineWidth: 1))
+
+            PConfirmBtn(enabled: canPay, isLoading: isLoading, label: confirmLabel, onTap: onPay)
+        }
+    }
+}
+
+// MARK: - Karte View
+
+private struct PKarteView: View {
+    let totalCents: Int
+    let isLoading:  Bool
+    let onPay:      () -> Void
+    @Environment(\.colorScheme) private var cs
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 0) {
+                VStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(DS.C.accBg)
+                            .frame(width: 56, height: 56)
+                        Image(systemName: "creditcard")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundColor(DS.C.accT)
+                    }
+                    Text(pFmt(totalCents))
+                        .font(.jakarta(32, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .tracking(-0.5)
+                    Text("Karte am Terminal vorzeigen.\nZahlung wird direkt vom Terminal bestätigt.")
+                        .font(.jakarta(12, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 28)
+                .background(DS.C.sur)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                HStack(spacing: 10) {
+                    PKartePulse()
+                    Text("Warte auf Kartenzahlung …")
+                        .font(.jakarta(12, weight: .medium))
+                        .foregroundColor(DS.C.warnText)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(DS.C.sur)
+            }
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(DS.C.brd(cs), lineWidth: 1))
+
+            PConfirmBtn(
+                enabled:   true,
+                isLoading: isLoading,
+                label:     "Kartenzahlung bestätigen",
+                onTap:     onPay
+            )
+        }
+    }
+}
+
+private struct PKartePulse: View {
+    @State private var opacity: Double = 1.0
+    var body: some View {
+        Circle()
+            .fill(DS.C.warnText)
+            .frame(width: 10, height: 10)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
+                    opacity = 0.3
+                }
+            }
+    }
+}
+
+// MARK: - Gemischt View
+
+private struct PGemischtView: View {
+    let totalCents: Int
+    @Binding var barRaw: String
+    let cardCents:  Int
+    let canPay:     Bool
+    let isLoading:  Bool
+    let onPay:      () -> Void
+    @Environment(\.colorScheme) private var cs
+
+    private var barCents:   Int    { Int(barRaw) ?? 0 }
+    private var isOverflow: Bool   { barCents > totalCents }
+    private var barPct:     Double { totalCents > 0 ? min(1.0, Double(barCents) / Double(totalCents)) : 0 }
+    private var barPctInt:  Int    { Int(barPct * 100) }
+
+    private var confirmLabel: String {
+        if barRaw.isEmpty { return "Bar-Betrag eingeben" }
+        if isOverflow     { return "Bar-Betrag zu hoch" }
+        return "Zahlung abschließen · \(pFmt(barCents)) bar + \(pFmt(cardCents)) Karte"
+    }
+    private var quickAmounts: [Int] {
+        [1000, 2000, 2500, 3000, 5000].filter { $0 <= totalCents }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 0) {
+                // Total row
+                HStack {
+                    Text("Zu zahlen gesamt")
+                        .font(.jakarta(11, weight: .regular))
+                        .foregroundColor(DS.C.text2)
+                    Spacer()
+                    Text(pFmt(totalCents))
+                        .font(.jakarta(16, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(DS.C.sur)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                // 2-col split
+                HStack(spacing: 0) {
+                    // Bar (active/manual)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 7) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(DS.C.sur2)
+                                    .frame(width: 26, height: 26)
+                                Image(systemName: "banknote")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(DS.C.text2)
+                            }
+                            Text("Bar")
+                                .font(.jakarta(12, weight: .semibold))
+                                .foregroundColor(DS.C.accT)
+                        }
+                        HStack {
+                            Spacer()
+                            Text(barRaw.isEmpty ? "0,00" : pFmt(barCents).replacingOccurrences(of: " €", with: ""))
+                                .font(.jakarta(16, weight: .semibold))
+                                .foregroundColor(isOverflow ? DS.C.dangerText : DS.C.text)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .padding(.horizontal, 12)
+                        .background(DS.C.bg)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(DS.C.acc, lineWidth: 1.5)
+                        )
+                        Text(isOverflow ? "Bar-Betrag zu hoch" : (barCents > 0 ? "\(pFmt(barCents)) bar" : "Betrag eingeben"))
+                            .font(.jakarta(10, weight: .regular))
+                            .foregroundColor(isOverflow ? DS.C.dangerText : (barCents > 0 ? DS.C.accT : DS.C.text2))
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+
+                    Rectangle().fill(DS.C.brdLight).frame(width: 1)
+
+                    // Karte (auto)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 7) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(DS.C.sur2)
+                                    .frame(width: 26, height: 26)
+                                Image(systemName: "creditcard")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(DS.C.text2)
+                            }
+                            Text("Karte")
+                                .font(.jakarta(12, weight: .semibold))
+                                .foregroundColor(DS.C.text)
+                        }
+                        HStack {
+                            Spacer()
+                            Text(!barRaw.isEmpty && !isOverflow ? pFmt(cardCents).replacingOccurrences(of: " €", with: "") : "—")
+                                .font(.jakarta(16, weight: .semibold))
+                                .foregroundColor(DS.C.text2)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .padding(.horizontal, 12)
+                        .background(DS.C.sur2)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(DS.C.brd(cs), lineWidth: 1.5)
+                        )
+                        Text("Wird automatisch berechnet")
+                            .font(.jakarta(10, weight: .regular))
+                            .foregroundColor(DS.C.accT)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                }
+                .background(DS.C.sur)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                // Bar chart
+                VStack(spacing: 8) {
+                    Text("AUFTEILUNG")
+                        .font(.jakarta(9, weight: .semibold))
+                        .foregroundColor(DS.C.text2)
+                        .tracking(0.5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(DS.C.sur2)
+                                .frame(height: 8)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(DS.C.acc)
+                                .frame(width: max(0, geo.size.width * barPct), height: 8)
+                        }
+                    }
+                    .frame(height: 8)
+                    .animation(.easeInOut(duration: 0.2), value: barPct)
+                    HStack {
+                        Text("Bar: \(barPctInt) %")
+                            .font(.jakarta(10, weight: .regular))
+                            .foregroundColor(DS.C.text2)
+                        Spacer()
+                        Text("Karte: \(100 - barPctInt) %")
+                            .font(.jakarta(10, weight: .regular))
+                            .foregroundColor(DS.C.text2)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(DS.C.sur)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                // Quick amounts
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(quickAmounts, id: \.self) { amount in
+                            Button { barRaw = String(amount) } label: {
+                                Text("\(amount / 100) € bar")
+                                    .font(.jakarta(11, weight: .semibold))
+                                    .foregroundColor(DS.C.text)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 5)
+                                    .background(Color.clear)
+                                    .cornerRadius(20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .strokeBorder(DS.C.brd(cs), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                }
+                .background(DS.C.sur)
+
+                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+
+                PNumpad { key in
+                    if key == "del" { if !barRaw.isEmpty { barRaw.removeLast() } }
+                    else if barRaw.count < 7 { barRaw += key }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
+                .background(DS.C.sur)
+            }
+            .background(DS.C.sur)
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(DS.C.brd(cs), lineWidth: 1))
+
+            PConfirmBtn(enabled: canPay, isLoading: isLoading, label: confirmLabel, onTap: onPay)
+        }
+    }
+}
+
+// MARK: - Numpad
+
+private struct PNumpad: View {
+    let onTap: (String) -> Void
+    @Environment(\.colorScheme) private var cs
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3),
+            spacing: 6
+        ) {
+            ForEach(["1","2","3","4","5","6","7","8","9"], id: \.self) { key in
+                PNumKeyBtn(label: key, cs: cs) { onTap(key) }
+                    .frame(height: 46)
+            }
+            PNumKeyBtn(label: "0", cs: cs) { onTap("0") }
+                .gridCellColumns(2)
+                .frame(height: 46)
+            PNumDelBtn(cs: cs) { onTap("del") }
+                .frame(height: 46)
+        }
+    }
+}
+
+private struct PNumKeyBtn: View {
+    let label:  String
+    let cs:     ColorScheme
+    let onTap:  () -> Void
+    @State private var hov = false
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(label)
+                .font(.jakarta(16, weight: .semibold))
+                .foregroundColor(DS.C.text)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(hov ? DS.C.sur2 : DS.C.sur)
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DS.C.brd(cs), lineWidth: 1))
+                .animation(.easeInOut(duration: 0.08), value: hov)
+        }
+        .buttonStyle(.plain)
+        .onHover { hov = $0 }
+    }
+}
+
+private struct PNumDelBtn: View {
+    let cs:    ColorScheme
+    let onTap: () -> Void
+    @State private var hov = false
+
+    var body: some View {
+        Button(action: onTap) {
+            Image(systemName: "delete.left")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(hov ? DS.C.dangerText : DS.C.text2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(hov ? DS.C.dangerBg : DS.C.sur2)
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(hov ? DS.C.dangerText.opacity(0.4) : DS.C.brd(cs), lineWidth: 1)
+                )
+                .animation(.easeInOut(duration: 0.08), value: hov)
+        }
+        .buttonStyle(.plain)
+        .onHover { hov = $0 }
+    }
+}
+
+// MARK: - Confirm Button
+
+private struct PConfirmBtn: View {
+    let enabled:   Bool
+    let isLoading: Bool
+    let label:     String
+    let onTap:     () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Group {
+                if isLoading {
+                    ProgressView().progressViewStyle(.circular).tint(.white)
+                } else {
+                    HStack(spacing: 9) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(label)
+                            .font(.jakarta(13, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+        }
+        .background(enabled ? DS.C.acc : DS.C.acc.opacity(0.35))
+        .cornerRadius(12)
+        .disabled(!enabled || isLoading)
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: enabled)
+    }
+}
+
+// MARK: - Receipt Summary Sheet
 
 private struct ReceiptSummarySheet: View {
     let result:    PaymentResult
     let tableName: String?
     let onDone:    () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showFullReceipt = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Drag Indicator
             HStack {
                 Spacer()
                 RoundedRectangle(cornerRadius: 2)
@@ -586,7 +975,6 @@ private struct ReceiptSummarySheet: View {
             }
             .padding(.top, 12)
 
-            // Success-Header
             VStack(spacing: 10) {
                 ZStack {
                     Circle()
@@ -610,9 +998,8 @@ private struct ReceiptSummarySheet: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Zahlungsmittel
                     VStack(alignment: .leading, spacing: 10) {
-                        ReceiptSectionHeader("ZAHLUNG")
+                        RSHeader("ZAHLUNG")
                         VStack(spacing: 6) {
                             ForEach(result.payments.indices, id: \.self) { i in
                                 let p = result.payments[i]
@@ -626,7 +1013,7 @@ private struct ReceiptSummarySheet: View {
                                             .foregroundColor(DS.C.text)
                                     }
                                     Spacer()
-                                    Text(formatCents(p.amountCents))
+                                    Text(pFmt(p.amountCents))
                                         .font(.jakarta(DS.T.loginBody, weight: .semibold))
                                         .foregroundColor(DS.C.text)
                                 }
@@ -642,22 +1029,21 @@ private struct ReceiptSummarySheet: View {
                         }
                     }
 
-                    // MwSt-Aufschlüsselung
                     VStack(alignment: .leading, spacing: 10) {
-                        ReceiptSectionHeader("MWST-AUFSCHLÜSSELUNG")
+                        RSHeader("MWST-AUFSCHLÜSSELUNG")
                         VStack(spacing: 6) {
                             let has7  = result.vat7NetCents  + result.vat7TaxCents  > 0
                             let has19 = result.vat19NetCents + result.vat19TaxCents > 0
                             if has7 {
-                                ReceiptVatRow(label: "7 % Netto",  value: result.vat7NetCents)
-                                ReceiptVatRow(label: "7 % Steuer", value: result.vat7TaxCents, dim: true)
+                                RSVatRow(label: "7 % Netto",  value: result.vat7NetCents)
+                                RSVatRow(label: "7 % Steuer", value: result.vat7TaxCents, dim: true)
                             }
                             if has19 {
-                                ReceiptVatRow(label: "19 % Netto",  value: result.vat19NetCents)
-                                ReceiptVatRow(label: "19 % Steuer", value: result.vat19TaxCents, dim: true)
+                                RSVatRow(label: "19 % Netto",  value: result.vat19NetCents)
+                                RSVatRow(label: "19 % Steuer", value: result.vat19TaxCents, dim: true)
                             }
                             Divider()
-                            ReceiptVatRow(label: "Gesamt (Brutto)", value: result.totalGrossCents, bold: true)
+                            RSVatRow(label: "Gesamt (Brutto)", value: result.totalGrossCents, bold: true)
                         }
                         .padding(12)
                         .background(DS.C.sur)
@@ -668,7 +1054,6 @@ private struct ReceiptSummarySheet: View {
                         )
                     }
 
-                    // TSE-Hinweis
                     if result.tsePending {
                         HStack(spacing: 8) {
                             Image(systemName: "clock.arrow.circlepath")
@@ -686,29 +1071,48 @@ private struct ReceiptSummarySheet: View {
                 .padding(20)
             }
 
-            // Fertig-Button
             VStack(spacing: 0) {
                 Rectangle().fill(DS.C.brdLight).frame(height: 1)
-                Button(action: onDone) {
-                    Text("Fertig")
-                        .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: DS.S.buttonHeight)
+                VStack(spacing: 8) {
+                    Button {
+                        showFullReceipt = true
+                    } label: {
+                        Text("Bon anzeigen")
+                            .font(.jakarta(DS.T.loginButton, weight: .semibold))
+                            .foregroundColor(DS.C.acc)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: DS.S.buttonHeight)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.R.button)
+                                    .strokeBorder(DS.C.acc, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onDone) {
+                        Text("Fertig")
+                            .font(.jakarta(DS.T.loginButton, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: DS.S.buttonHeight)
+                    }
+                    .background(DS.C.acc)
+                    .cornerRadius(DS.R.button)
+                    .buttonStyle(.plain)
                 }
-                .background(DS.C.acc)
-                .cornerRadius(DS.R.button)
                 .padding(14)
-                .buttonStyle(.plain)
             }
             .background(DS.C.sur)
         }
         .background(DS.C.sur)
         .presentationDragIndicator(.hidden)
+        .sheet(isPresented: $showFullReceipt) {
+            ReceiptView(receiptId: result.receiptId)
+        }
     }
 }
 
-private struct ReceiptSectionHeader: View {
+private struct RSHeader: View {
     let title: String
     init(_ title: String) { self.title = title }
     var body: some View {
@@ -719,7 +1123,7 @@ private struct ReceiptSectionHeader: View {
     }
 }
 
-private struct ReceiptVatRow: View {
+private struct RSVatRow: View {
     let label: String
     let value: Int
     var dim:   Bool = false
@@ -730,7 +1134,7 @@ private struct ReceiptVatRow: View {
                 .font(.jakarta(DS.T.loginBody, weight: bold ? .semibold : .regular))
                 .foregroundColor(dim ? DS.C.text2 : DS.C.text)
             Spacer()
-            Text(formatCents(value))
+            Text(pFmt(value))
                 .font(.jakarta(DS.T.loginBody, weight: bold ? .semibold : .regular))
                 .foregroundColor(bold ? DS.C.acc : (dim ? DS.C.text2 : DS.C.text))
         }
@@ -739,8 +1143,18 @@ private struct ReceiptVatRow: View {
 
 // MARK: - Helpers
 
-private func formatCents(_ cents: Int) -> String {
-    String(format: "%.2f €", Double(cents) / 100)
+private let _pFmt: NumberFormatter = {
+    let f = NumberFormatter()
+    f.numberStyle = .decimal
+    f.minimumFractionDigits = 2
+    f.maximumFractionDigits = 2
+    f.locale = Locale(identifier: "de_DE")
+    return f
+}()
+
+private func pFmt(_ cents: Int) -> String {
+    let val = NSNumber(value: Double(cents) / 100.0)
+    return (_pFmt.string(from: val) ?? "0,00") + " €"
 }
 
 private func parseCents(_ text: String) -> Int {
@@ -764,29 +1178,29 @@ private extension OrderDetail {
             table: OrderTable(id: 3, name: "Tisch 3"),
             items: [
                 OrderItem(
-                    id: 1, productId: 1, productName: "Cappuccino",
-                    productPriceCents: 350, vatRate: "19", quantity: 2,
-                    subtotalCents: 700, discountCents: 0, discountReason: nil,
+                    id: 1, productId: 1, productName: "Shisha Premium",
+                    productPriceCents: 2500, vatRate: "19", quantity: 1,
+                    subtotalCents: 2500, discountCents: 0, discountReason: nil,
                     createdAt: "", modifiers: [
-                        OrderItemModifier(modifierOptionId: 2, name: "Hafermilch", priceDeltaCents: 50)
+                        OrderItemModifier(modifierOptionId: 2, name: "Fumari Ambrosia", priceDeltaCents: 0)
                     ]
                 ),
                 OrderItem(
-                    id: 2, productId: 6, productName: "Shisha Miete",
-                    productPriceCents: 1500, vatRate: "19", quantity: 1,
-                    subtotalCents: 1500, discountCents: 0, discountReason: nil,
+                    id: 2, productId: 2, productName: "Shisha Standard",
+                    productPriceCents: 1900, vatRate: "19", quantity: 1,
+                    subtotalCents: 1900, discountCents: 0, discountReason: nil,
                     createdAt: "", modifiers: [
-                        OrderItemModifier(modifierOptionId: 4, name: "Double Apple", priceDeltaCents: 0)
+                        OrderItemModifier(modifierOptionId: 3, name: "Al Fakher Mint", priceDeltaCents: 0)
                     ]
                 ),
                 OrderItem(
-                    id: 3, productId: 8, productName: "Chips",
-                    productPriceCents: 200, vatRate: "7", quantity: 1,
-                    subtotalCents: 200, discountCents: 0, discountReason: nil,
+                    id: 3, productId: 4, productName: "Kohle Nachfüllen",
+                    productPriceCents: 300, vatRate: "19", quantity: 2,
+                    subtotalCents: 600, discountCents: 0, discountReason: nil,
                     createdAt: "", modifiers: []
                 ),
             ],
-            totalCents: 2400
+            totalCents: 5000
         )
     }
 }
@@ -799,21 +1213,15 @@ private extension OrderDetail {
         .environmentObject(NetworkMonitor.preview)
 }
 
-#Preview("Gemischt") {
+#Preview("Dark Mode") {
     PaymentView(order: .previewSample, tableName: "Tisch 3")
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(NetworkMonitor.preview)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Offline") {
     PaymentView(order: .previewSample, tableName: "Tisch 3")
         .environmentObject(OrderStore.previewEmpty)
         .environmentObject(NetworkMonitor.previewOffline)
-}
-
-#Preview("Dark Mode") {
-    PaymentView(order: .previewSample, tableName: "Tisch 3")
-        .environmentObject(OrderStore.previewEmpty)
-        .environmentObject(NetworkMonitor.preview)
-        .preferredColorScheme(.dark)
 }

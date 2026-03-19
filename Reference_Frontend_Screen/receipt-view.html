@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — ReceiptView</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--free-bg);color:var(--free-t);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;}
+.session-chip-dot{width:6px;height:6px;border-radius:50%;background:var(--free-t);}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+.body{display:flex;flex:1;justify-content:center;background:var(--bg);padding:32px;gap:24px;flex-wrap:wrap;}
+
+/* Success splash */
+.success-col{display:flex;flex-direction:column;align-items:center;gap:16px;width:200px;padding-top:8px;}
+.success-icon{width:64px;height:64px;border-radius:18px;background:var(--free-bg);display:flex;align-items:center;justify-content:center;}
+.success-icon svg{width:28px;height:28px;stroke:var(--free-t);fill:none;stroke-width:2.5;}
+.success-title{font-size:16px;font-weight:600;color:var(--text);text-align:center;letter-spacing:-0.2px;}
+.success-amount{font-size:28px;font-weight:600;color:var(--acc);letter-spacing:-0.5px;}
+.success-meta{font-size:11px;color:var(--text2);text-align:center;line-height:1.6;}
+.action-btns{display:flex;flex-direction:column;gap:8px;width:100%;}
+.action-btn{height:38px;border-radius:10px;font-size:12px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;}
+.action-btn svg{width:14px;height:14px;fill:none;stroke-width:2;}
+.btn-primary{background:var(--acc);color:white;border:none;}
+.btn-primary svg{stroke:white;}
+.btn-secondary{background:var(--sur);color:var(--text);border:1px solid var(--brd);}
+.btn-secondary svg{stroke:var(--text2);}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--brd);}
+.btn-ghost svg{stroke:var(--text2);}
+.new-order-btn{height:44px;border-radius:12px;font-size:13px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;background:var(--acc);color:white;border:none;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;}
+.new-order-btn svg{width:16px;height:16px;stroke:white;fill:none;stroke-width:2;}
+
+/* Receipt document */
+.receipt-doc{background:var(--sur);border:1px solid var(--brd);border-radius:14px;width:380px;overflow:hidden;flex-shrink:0;}
+
+.rc-header{padding:18px 20px 14px;border-bottom:1px solid var(--brd);text-align:center;}
+.rc-brand{font-size:15px;font-weight:600;color:var(--text);}
+.rc-address{font-size:10px;color:var(--text2);margin-top:4px;line-height:1.6;}
+
+.rc-meta{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--brd);}
+.rc-meta-cell{padding:8px 16px;border-right:1px solid var(--brd);}
+.rc-meta-cell:nth-child(2n){border-right:none;}
+.rc-meta-cell:nth-child(3),.rc-meta-cell:nth-child(4){border-top:1px solid var(--brd);}
+.rc-meta-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:2px;}
+.rc-meta-value{font-size:11px;font-weight:600;color:var(--text);}
+
+.rc-items{padding:10px 16px;border-bottom:1px solid var(--brd);}
+.rc-item{display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--brd);}
+.rc-item:last-child{border-bottom:none;}
+.rc-item-left{}
+.rc-item-name{font-size:12px;font-weight:600;color:var(--text);}
+.rc-item-mods{font-size:10px;color:var(--text2);margin-top:1px;}
+.rc-item-qty{font-size:10px;color:var(--text2);}
+.rc-item-price{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;}
+
+.rc-totals{padding:10px 16px;border-bottom:1px solid var(--brd);}
+.rc-row{display:flex;justify-content:space-between;margin-bottom:4px;}
+.rc-row:last-child{margin-bottom:0;}
+.rc-row-label{font-size:11px;color:var(--text2);}
+.rc-row-value{font-size:11px;font-weight:600;color:var(--text);}
+.rc-total-row{display:flex;justify-content:space-between;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--brd);}
+.rc-total-label{font-size:13px;font-weight:600;color:var(--text);}
+.rc-total-value{font-size:16px;font-weight:600;color:var(--acc);}
+
+.rc-payment{padding:10px 16px;border-bottom:1px solid var(--brd);}
+.rc-pay-row{display:flex;justify-content:space-between;margin-bottom:3px;}
+.rc-pay-label{font-size:11px;color:var(--text2);}
+.rc-pay-value{font-size:11px;font-weight:600;color:var(--text);}
+
+/* QR Code placeholder */
+.rc-qr{padding:14px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--brd);}
+.qr-box{width:64px;height:64px;border-radius:8px;border:1.5px solid var(--brd);display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:1px;padding:4px;flex-shrink:0;}
+.qr-cell{border-radius:1px;}
+.rc-tse-info{flex:1;}
+.rc-tse-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:4px;}
+.rc-tse-row{display:flex;gap:6px;margin-bottom:2px;}
+.rc-tse-key{font-size:9px;color:var(--text2);min-width:70px;}
+.rc-tse-val{font-size:9px;color:var(--text);font-family:monospace;}
+
+.rc-footer{padding:10px 20px;text-align:center;}
+.rc-footer-text{font-size:10px;color:var(--text2);}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip"><span class="session-chip-dot"></span>Zahlung erfolgreich</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Left: Success + Actions -->
+    <div class="success-col">
+      <div class="success-icon">
+        <svg viewBox="0 0 28 28"><polyline points="5,14 11,20 23,8"/></svg>
+      </div>
+      <div class="success-title">Zahlung erfolgreich</div>
+      <div class="success-amount">50,00 €</div>
+      <div class="success-meta">Tisch 4 · 18.03.2026<br/>11:42 Uhr · Bar</div>
+
+      <div class="action-btns">
+        <button class="action-btn btn-primary">
+          <svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg>
+          PDF senden
+        </button>
+        <button class="action-btn btn-secondary">
+          <svg viewBox="0 0 14 14"><polyline points="2,4.5 7,9.5 12,4.5"/><line x1="2" y1="10" x2="12" y2="10"/></svg>
+          Bon drucken
+        </button>
+        <button class="action-btn btn-ghost">
+          <svg viewBox="0 0 14 14"><path d="M3 7h8M9 4.5l2.5 2.5L9 9.5"/></svg>
+          Stornieren
+        </button>
+      </div>
+
+      <div style="width:100%;height:1px;background:var(--brd);margin:4px 0;"></div>
+      <button class="new-order-btn">
+        <svg viewBox="0 0 16 16"><polyline points="2,10 2,14 6,14"/><path d="M14 6A6 6 0 102 10"/><rect x="9" y="2" width="5" height="5" rx="1"/></svg>
+        Neuer Tisch / Bestellung
+      </button>
+    </div>
+
+    <!-- Right: Bon -->
+    <div class="receipt-doc">
+
+      <div class="rc-header">
+        <div class="rc-brand">Shishabar Mustermann</div>
+        <div class="rc-address">
+          Musterstraße 12 · 60311 Frankfurt am Main<br/>
+          St.-Nr.: 14/123/45678 · USt-IdNr.: DE123456789
+        </div>
+      </div>
+
+      <div class="rc-meta">
+        <div class="rc-meta-cell"><div class="rc-meta-label">Bon-Nr.</div><div class="rc-meta-value">#0058</div></div>
+        <div class="rc-meta-cell"><div class="rc-meta-label">Datum</div><div class="rc-meta-value">18.03.2026</div></div>
+        <div class="rc-meta-cell"><div class="rc-meta-label">Uhrzeit</div><div class="rc-meta-value">11:42:07</div></div>
+        <div class="rc-meta-cell"><div class="rc-meta-label">Gerät</div><div class="rc-meta-value">iPad Theke</div></div>
+      </div>
+
+      <div class="rc-items">
+        <div class="rc-item">
+          <div class="rc-item-left">
+            <div class="rc-item-name">Shisha Premium</div>
+            <div class="rc-item-mods">Fumari Ambrosia · Groß</div>
+            <div class="rc-item-qty">1 × 25,00 €</div>
+          </div>
+          <div class="rc-item-price">25,00 €</div>
+        </div>
+        <div class="rc-item">
+          <div class="rc-item-left">
+            <div class="rc-item-name">Shisha Standard</div>
+            <div class="rc-item-mods">Al Fakher Mint · Standard</div>
+            <div class="rc-item-qty">1 × 19,00 €</div>
+          </div>
+          <div class="rc-item-price">19,00 €</div>
+        </div>
+        <div class="rc-item">
+          <div class="rc-item-left">
+            <div class="rc-item-name">Kohle Nachfüllen</div>
+            <div class="rc-item-qty">2 × 3,00 €</div>
+          </div>
+          <div class="rc-item-price">6,00 €</div>
+        </div>
+      </div>
+
+      <div class="rc-totals">
+        <div class="rc-row"><span class="rc-row-label">Netto</span><span class="rc-row-value">42,02 €</span></div>
+        <div class="rc-row"><span class="rc-row-label">MwSt. 19 % (auf 50,00 €)</span><span class="rc-row-value">7,98 €</span></div>
+      </div>
+
+      <div class="rc-total-row">
+        <span class="rc-total-label">Gesamt</span>
+        <span class="rc-total-value">50,00 €</span>
+      </div>
+
+      <div class="rc-payment">
+        <div class="rc-pay-row"><span class="rc-pay-label">Barzahlung</span><span class="rc-pay-value">50,00 €</span></div>
+        <div class="rc-pay-row"><span class="rc-pay-label">Gegeben</span><span class="rc-pay-value">50,00 €</span></div>
+        <div class="rc-pay-row"><span class="rc-pay-label">Wechselgeld</span><span class="rc-pay-value">0,00 €</span></div>
+      </div>
+
+      <div class="rc-qr">
+        <!-- QR Code visual representation -->
+        <div class="qr-box" id="qr-box"></div>
+        <div class="rc-tse-info">
+          <div class="rc-tse-label">TSE-Signatur (KassenSichV)</div>
+          <div class="rc-tse-row"><span class="rc-tse-key">Seriennr.</span><span class="rc-tse-val">FKL-A4B7</span></div>
+          <div class="rc-tse-row"><span class="rc-tse-key">Counter</span><span class="rc-tse-val">2847</span></div>
+          <div class="rc-tse-row"><span class="rc-tse-key">TX-Start</span><span class="rc-tse-val">11:42:01 UTC</span></div>
+          <div class="rc-tse-row"><span class="rc-tse-key">TX-Ende</span><span class="rc-tse-val">11:42:07 UTC</span></div>
+          <div class="rc-tse-row"><span class="rc-tse-key">Signatur</span><span class="rc-tse-val">MEQCIBx9…</span></div>
+        </div>
+      </div>
+
+      <div class="rc-footer">
+        <div class="rc-footer-text">Vielen Dank für Ihren Besuch! · Shishabar Mustermann</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  // Generate simple QR pattern
+  const qr = document.getElementById('qr-box');
+  const pattern = [1,1,1,0,1,1,1,1,0,0,0,1,0,1,1,0,1,0,1,0,1,1,0,1,0,1,0,1,1,0,0,0,1,0,1,1,1,1,1,0,1,1,1,0,0,1,0,0,1,0];
+  pattern.forEach(v => {
+    const c = document.createElement('div');
+    c.className = 'qr-cell';
+    c.style.background = v ? 'var(--text)' : 'transparent';
+    qr.appendChild(c);
+  });
+</script>
+</body>
+</html>

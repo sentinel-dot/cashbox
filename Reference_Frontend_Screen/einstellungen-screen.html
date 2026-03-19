@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Einstellungen</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+.body{display:flex;flex:1;min-height:0;}
+
+/* Sidebar */
+.sidebar{width:200px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.nav-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:14px 16px 4px;}
+.nav-item{font-size:12px;font-weight:500;color:var(--text2);padding:7px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.nav-item:hover{color:var(--text);}
+.nav-item.active{color:var(--acc-t);background:var(--acc-bg);font-weight:600;}
+.nav-count{font-size:10px;background:var(--sur2);color:var(--text2);padding:2px 7px;border-radius:10px;}
+.nav-sep{height:1px;background:var(--brd);margin:4px 0;}
+
+/* Content */
+.content{flex:1;display:flex;min-height:0;}
+
+/* Settings sidebar */
+.settings-nav{width:200px;border-right:1px solid var(--brd);background:var(--bg);display:flex;flex-direction:column;flex-shrink:0;padding:16px 0;}
+.sn-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:10px 16px 4px;}
+.sn-item{font-size:12px;font-weight:500;color:var(--text2);padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:9px;border-left:2px solid transparent;}
+.sn-item:hover{color:var(--text);}
+.sn-item.active{color:var(--text);border-left-color:var(--acc);background:var(--sur);font-weight:600;}
+.sn-item svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;flex-shrink:0;}
+
+/* Main settings area */
+.settings-main{flex:1;overflow:auto;padding:24px;}
+
+/* Section */
+.settings-section{margin-bottom:28px;}
+.settings-section:last-child{margin-bottom:0;}
+.section-title{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px;}
+.section-sub{font-size:11px;color:var(--text2);margin-bottom:14px;}
+
+/* Card */
+.settings-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;}
+
+/* Row inside card */
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--brd);gap:16px;}
+.settings-row:last-child{border-bottom:none;}
+.settings-row-info{flex:1;min-width:0;}
+.row-label{font-size:13px;font-weight:500;color:var(--text);}
+.row-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+.row-right{flex-shrink:0;display:flex;align-items:center;gap:10px;}
+
+/* Inline input */
+.inline-input{height:34px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;min-width:200px;}
+.inline-input:focus{border-color:var(--acc);}
+.inline-input.sm{min-width:100px;}
+
+/* Toggle switch */
+.toggle-sw{width:38px;height:22px;border-radius:11px;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;}
+.toggle-sw.on{background:var(--acc);}
+.toggle-sw.off{background:var(--sur2);border:1px solid var(--brd);}
+.toggle-sw::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:white;top:3px;transition:transform .2s;}
+.toggle-sw.on::after{transform:translateX(18px);}
+.toggle-sw.off::after{transform:translateX(2px);background:var(--text2);}
+
+/* Badge */
+.plan-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;}
+.plan-badge.starter{background:var(--sur2);color:var(--text2);}
+.plan-badge.pro{background:var(--acc-bg);color:var(--acc-t);}
+.plan-badge.trial{background:var(--pay-bg);color:var(--pay-t);}
+
+/* Action link */
+.action-link{font-size:12px;font-weight:600;color:var(--acc-t);cursor:pointer;background:none;border:none;font-family:'Plus Jakarta Sans',sans-serif;padding:0;}
+.action-link:hover{text-decoration:underline;}
+.action-link.danger{color:var(--dan-t);}
+
+/* Small button */
+.small-btn{font-size:11px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--brd);background:transparent;color:var(--text2);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;}
+.small-btn:hover{background:var(--sur2);}
+.small-btn.primary{background:var(--acc);color:white;border-color:var(--acc);}
+.small-btn.danger{border-color:var(--dan-t);color:var(--dan-t);}
+.small-btn.danger:hover{background:var(--dan-bg);}
+
+/* User row */
+.user-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--brd);}
+.user-row:last-child{border-bottom:none;}
+.user-avatar{width:34px;height:34px;border-radius:50%;background:var(--acc-bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--acc-t);flex-shrink:0;}
+.user-info{flex:1;}
+.user-name{font-size:13px;font-weight:600;color:var(--text);}
+.user-role-meta{font-size:11px;color:var(--text2);margin-top:1px;}
+.role-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-left:5px;}
+.role-badge.owner{background:var(--acc-bg);color:var(--acc-t);}
+.role-badge.manager{background:var(--pay-bg);color:var(--pay-t);}
+.role-badge.staff{background:var(--sur2);color:var(--text2);}
+
+/* Device row */
+.device-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--brd);}
+.device-row:last-child{border-bottom:none;}
+.device-icon{width:34px;height:34px;border-radius:9px;background:var(--sur2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.device-icon svg{width:15px;height:15px;stroke:var(--text2);fill:none;stroke-width:1.8;}
+.device-info{flex:1;}
+.device-name{font-size:13px;font-weight:600;color:var(--text);}
+.device-meta{font-size:11px;color:var(--text2);margin-top:1px;}
+.device-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;}
+.device-status-dot{width:5px;height:5px;border-radius:50%;background:currentColor;}
+.device-status.online{background:var(--free-bg);color:var(--free-t);}
+.device-status.offline{background:var(--sur2);color:var(--text2);}
+
+/* Abo card highlight */
+.abo-highlight{background:var(--acc-bg);border:1px solid rgba(26,111,255,0.15);border-radius:14px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px;}
+.app.dark .abo-highlight{border-color:rgba(77,143,255,0.15);}
+.abo-left{}
+.abo-plan{font-size:15px;font-weight:600;color:var(--acc-t);}
+.abo-meta{font-size:11px;color:var(--acc-t);opacity:0.7;margin-top:3px;}
+.abo-right{display:flex;gap:8px;}
+
+/* Separator line */
+.settings-sep{height:1px;background:var(--brd);margin:20px 0;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Main nav sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">Übersicht</div>
+      <div class="nav-item">Tische <span class="nav-count">8</span></div>
+      <div class="nav-item">Produkte <span class="nav-count">24</span></div>
+      <div class="nav-item">Kategorien <span class="nav-count">5</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Abrechnung</div>
+      <div class="nav-item">Kassensitzung</div>
+      <div class="nav-item">Berichte</div>
+      <div class="nav-item">Z-Bericht</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">System</div>
+      <div class="nav-item active">Einstellungen</div>
+    </div>
+
+    <!-- Content: settings nav + main -->
+    <div class="content">
+
+      <!-- Settings sub-nav -->
+      <div class="settings-nav">
+        <div class="sn-section">Allgemein</div>
+        <div class="sn-item active" onclick="switchTab('betrieb')">
+          <svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="2"/><line x1="5" y1="7" x2="9" y2="7"/><line x1="7" y1="5" x2="7" y2="9"/></svg>
+          Betriebsdaten
+        </div>
+        <div class="sn-item" onclick="switchTab('benutzer')">
+          <svg viewBox="0 0 14 14"><circle cx="7" cy="5" r="2.5"/><path d="M2 12c0-2.8 2.2-5 5-5s5 2.2 5 5"/></svg>
+          Benutzer
+        </div>
+        <div class="sn-item" onclick="switchTab('geraete')">
+          <svg viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="8" rx="1.5"/><line x1="5" y1="11" x2="9" y2="11"/><line x1="7" y1="11" x2="7" y2="12.5"/></svg>
+          Geräte
+        </div>
+        <div class="sn-section">Kasse</div>
+        <div class="sn-item" onclick="switchTab('kasse')">
+          <svg viewBox="0 0 14 14"><rect x="2" y="4" width="10" height="7" rx="1"/><line x1="2" y1="7" x2="12" y2="7"/><line x1="5" y1="4" x2="5" y2="2.5"/><line x1="9" y1="4" x2="9" y2="2.5"/></svg>
+          Kassensystem
+        </div>
+        <div class="sn-item" onclick="switchTab('tse')">
+          <svg viewBox="0 0 14 14"><path d="M7 2l1.5 3.5H12l-3 2.2 1.2 3.3L7 9l-3.2 2 1.2-3.3L2 5.5h3.5z"/></svg>
+          TSE / Fiskaly
+        </div>
+        <div class="sn-section">Abonnement</div>
+        <div class="sn-item" onclick="switchTab('abo')">
+          <svg viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="8" rx="1.5"/><line x1="2" y1="6" x2="12" y2="6" stroke-width="2"/><line x1="4.5" y1="9" x2="6.5" y2="9"/></svg>
+          Abonnement
+        </div>
+        <div class="sn-item" onclick="switchTab('datenschutz')">
+          <svg viewBox="0 0 14 14"><path d="M7 2l4 1.5v4c0 2.5-1.8 4.5-4 5-2.2-.5-4-2.5-4-5v-4z"/></svg>
+          Datenschutz
+        </div>
+      </div>
+
+      <!-- Settings main -->
+      <div class="settings-main" id="settings-main">
+
+        <!-- TAB: Betriebsdaten (default) -->
+        <div id="tab-betrieb">
+          <div class="settings-section">
+            <div class="section-title">Betriebsdaten</div>
+            <div class="section-sub">Pflichtfelder für den Bon — müssen mit Ihren steuerlichen Angaben übereinstimmen.</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Unternehmensname</div><div class="row-sub">Erscheint auf jedem Bon (§ 14 UStG)</div></div>
+                <div class="row-right"><input class="inline-input" type="text" value="Shishabar Mustermann"/></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Adresse</div><div class="row-sub">Vollständige Betriebsadresse</div></div>
+                <div class="row-right"><input class="inline-input" type="text" value="Musterstraße 12, 60311 Frankfurt"/></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Steuernummer</div><div class="row-sub">Vom Finanzamt zugewiesene Steuernummer</div></div>
+                <div class="row-right"><input class="inline-input sm" type="text" value="14/123/45678"/></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">USt-IdNr.</div><div class="row-sub">Optional, aber empfohlen (§ 14 UStG)</div></div>
+                <div class="row-right"><input class="inline-input sm" type="text" value="DE123456789"/></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">Bon-Einstellungen</div>
+            <div class="section-sub">Wie Bons angezeigt und verteilt werden.</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Bon per E-Mail versenden</div><div class="row-sub">Kunde kann nach Zahlung eine Bon-PDF anfordern</div></div>
+                <div class="row-right"><div class="toggle-sw on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Fußzeilentext (optional)</div><div class="row-sub">z.B. "Danke für Ihren Besuch!"</div></div>
+                <div class="row-right"><input class="inline-input" type="text" placeholder="z.B. Vielen Dank!"/></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+            <button class="small-btn primary">Änderungen speichern</button>
+          </div>
+        </div>
+
+        <!-- TAB: Benutzer -->
+        <div id="tab-benutzer" style="display:none;">
+          <div class="settings-section">
+            <div class="section-title">Benutzer</div>
+            <div class="section-sub">Mitarbeiter mit Zugang zum Kassensystem. PIN ermöglicht schnellen Gerätewechsel.</div>
+            <div class="settings-card">
+              <div class="user-row">
+                <div class="user-avatar">N</div>
+                <div class="user-info">
+                  <div class="user-name">Niko Mustermann <span class="role-badge owner">Owner</span></div>
+                  <div class="user-role-meta">niko@shishabar.de · PIN: ••••</div>
+                </div>
+                <div class="row-right">
+                  <button class="small-btn">Bearbeiten</button>
+                </div>
+              </div>
+              <div class="user-row">
+                <div class="user-avatar" style="background:var(--pay-bg);color:var(--pay-t);">A</div>
+                <div class="user-info">
+                  <div class="user-name">Ali Yilmaz <span class="role-badge manager">Manager</span></div>
+                  <div class="user-role-meta">ali@shishabar.de · PIN: ••••</div>
+                </div>
+                <div class="row-right">
+                  <button class="small-btn">Bearbeiten</button>
+                  <button class="small-btn danger">Entfernen</button>
+                </div>
+              </div>
+              <div class="user-row">
+                <div class="user-avatar" style="background:var(--sur2);color:var(--text2);">S</div>
+                <div class="user-info">
+                  <div class="user-name">Sara Kaya <span class="role-badge staff">Staff</span></div>
+                  <div class="user-role-meta">sara@shishabar.de · PIN: ••••</div>
+                </div>
+                <div class="row-right">
+                  <button class="small-btn">Bearbeiten</button>
+                  <button class="small-btn danger">Entfernen</button>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+              <button class="small-btn primary">+ Benutzer hinzufügen</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Geräte -->
+        <div id="tab-geraete" style="display:none;">
+          <div class="settings-section">
+            <div class="section-title">Geräte</div>
+            <div class="section-sub">Jedes Gerät hat einen eigenen Fiskaly TSE-Client. Bei Verlust sofort sperren.</div>
+            <div class="settings-card">
+              <div class="device-row">
+                <div class="device-icon"><svg viewBox="0 0 15 15"><rect x="2" y="2" width="11" height="11" rx="2"/><circle cx="7.5" cy="11.5" r="0.8" fill="var(--text2)"/></svg></div>
+                <div class="device-info">
+                  <div class="device-name">iPad Theke</div>
+                  <div class="device-meta">Zuletzt aktiv: heute 11:42 · TSE-Client: FKL-001 <span class="device-status online" style="margin-left:6px;"><span class="device-status-dot"></span>Online</span></div>
+                </div>
+                <div class="row-right">
+                  <button class="small-btn">Token erneuern</button>
+                  <button class="small-btn danger">Sperren</button>
+                </div>
+              </div>
+              <div class="device-row">
+                <div class="device-icon"><svg viewBox="0 0 15 15"><rect x="2" y="2" width="11" height="11" rx="2"/><circle cx="7.5" cy="11.5" r="0.8" fill="var(--text2)"/></svg></div>
+                <div class="device-info">
+                  <div class="device-name">iPad Bar</div>
+                  <div class="device-meta">Zuletzt aktiv: gestern 22:30 · TSE-Client: FKL-002 <span class="device-status offline" style="margin-left:6px;"><span class="device-status-dot"></span>Offline</span></div>
+                </div>
+                <div class="row-right">
+                  <button class="small-btn">Token erneuern</button>
+                  <button class="small-btn danger">Sperren</button>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+              <button class="small-btn primary">+ Gerät registrieren</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Kassensystem -->
+        <div id="tab-kasse" style="display:none;">
+          <div class="settings-section">
+            <div class="section-title">Kassensystem</div>
+            <div class="section-sub">Betriebsverhalten und Pflicht-Einstellungen.</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Tische verwenden</div><div class="row-sub">Deaktivieren für reinen Schnellkassenbetrieb (z.B. Späti)</div></div>
+                <div class="row-right"><div class="toggle-sw on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Tägliche Schicht-Erinnerung</div><div class="row-sub">Warnung wenn Sitzung länger als 24 Stunden offen (GoBD)</div></div>
+                <div class="row-right"><div class="toggle-sw on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Stornobegründung erzwingen</div><div class="row-sub">Storno ohne Pflichtfeld-Begründung nicht möglich</div></div>
+                <div class="row-right"><div class="toggle-sw on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Mindest-App-Version</div><div class="row-sub">Ältere App-Versionen werden blockiert (426)</div></div>
+                <div class="row-right"><input class="inline-input sm" type="text" value="1.2.0"/></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: TSE -->
+        <div id="tab-tse" style="display:none;">
+          <div class="settings-section">
+            <div class="section-title">TSE / Fiskaly</div>
+            <div class="section-sub">Technische Signatureinheit — gesetzlich vorgeschrieben (KassenSichV).</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">TSS-Status</div><div class="row-sub">Fiskaly Cloud-TSE</div></div>
+                <div class="row-right">
+                  <span class="device-status online"><span class="device-status-dot"></span>Aktiv</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">TSS-ID</div><div class="row-sub">Fiskaly Technische Sicherheitseinrichtung</div></div>
+                <div class="row-right"><input class="inline-input" type="text" value="FKL-TSE-2025-A4B7-9C21" style="font-family:monospace;font-size:12px;" readonly/></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Offline-Betrieb erlaubt</div><div class="row-sub">Transaktionen werden lokal gespeichert und bei Reconnect signiert</div></div>
+                <div class="row-right"><div class="toggle-sw on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">TSE-Ausfall-Meldung</div><div class="row-sub">E-Mail-Benachrichtigung nach 48h Ausfall (KassenSichV-Pflicht)</div></div>
+                <div class="row-right"><div class="toggle-sw on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">ELSTER-Meldung</div><div class="row-sub">Kasse beim Finanzamt gemeldet am</div></div>
+                <div class="row-right">
+                  <span style="font-size:12px;font-weight:600;color:var(--free-t);">✓ 15.01.2026</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Abonnement -->
+        <div id="tab-abo" style="display:none;">
+          <div class="settings-section">
+            <div class="section-title">Abonnement</div>
+            <div class="section-sub">Ihr aktueller Plan und Abrechnungsdetails.</div>
+
+            <div class="abo-highlight">
+              <div class="abo-left">
+                <div class="abo-plan">Starter Plan <span class="plan-badge trial">Trial</span></div>
+                <div class="abo-meta">14-Tage-Testphase · Endet am 25.03.2026 · Noch 7 Tage</div>
+              </div>
+              <div class="abo-right">
+                <button class="small-btn primary">Auf Pro upgraden</button>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Geräte</div><div class="row-sub">Starter: max. 1 Gerät</div></div>
+                <div class="row-right"><span style="font-size:12px;font-weight:600;color:var(--text);">1 / 1</span></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Produkte</div><div class="row-sub">Starter: max. 50 Produkte</div></div>
+                <div class="row-right"><span style="font-size:12px;font-weight:600;color:var(--text);">24 / 50</span></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Berichts-Zeitraum</div><div class="row-sub">Starter: 30 Tage History</div></div>
+                <div class="row-right"><span style="font-size:12px;font-weight:600;color:var(--text);">30 Tage</span></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Stripe Kundennummer</div><div class="row-sub">Für Rechnungen und Zahlungsmethoden</div></div>
+                <div class="row-right">
+                  <button class="action-link">Stripe-Portal öffnen →</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">Gefahrenzone</div>
+            <div class="section-sub">Irreversible Aktionen — mit Bedacht verwenden.</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Abonnement kündigen</div><div class="row-sub">Zugang endet zum Periodenende. Daten werden 10 Jahre aufbewahrt (GoBD).</div></div>
+                <div class="row-right"><button class="small-btn danger">Kündigen</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Datenschutz -->
+        <div id="tab-datenschutz" style="display:none;">
+          <div class="settings-section">
+            <div class="section-title">Datenschutz &amp; Rechtliches</div>
+            <div class="section-sub">Ihre Pflichten als Kassenbetreiber und Datenschutzeinstellungen.</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">AVV unterzeichnet</div><div class="row-sub">Auftragsverarbeitungsvertrag (DSGVO-Pflicht)</div></div>
+                <div class="row-right">
+                  <span style="font-size:12px;font-weight:600;color:var(--free-t);">✓ 15.01.2026</span>
+                  <button class="small-btn">Herunterladen</button>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Verfahrensdokumentation</div><div class="row-sub">Pflicht vor produktivem Einsatz (GoBD)</div></div>
+                <div class="row-right">
+                  <span style="font-size:12px;font-weight:600;color:var(--free-t);">✓ Erstellt</span>
+                  <button class="small-btn">PDF herunterladen</button>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Datenspeicherung</div><div class="row-sub">Hetzner Frankfurt · DSGVO-konform</div></div>
+                <div class="row-right">
+                  <span style="font-size:12px;color:var(--text2);">EU · DE</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info"><div class="row-label">Daten exportieren</div><div class="row-sub">ZIP-Export aller Betriebsdaten (30 Tage nach Kündigung)</div></div>
+                <div class="row-right">
+                  <button class="small-btn">Export anfordern</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  const tabs = ['betrieb','benutzer','geraete','kasse','tse','abo','datenschutz'];
+
+  function switchTab(name) {
+    tabs.forEach(t => {
+      document.getElementById('tab-' + t).style.display = 'none';
+    });
+    document.getElementById('tab-' + name).style.display = 'block';
+
+    document.querySelectorAll('.sn-item').forEach(item => item.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+
+  document.querySelectorAll('.toggle-sw').forEach(sw => {
+    if (!sw.classList.contains('on') && !sw.classList.contains('off')) {
+      sw.classList.add('off');
+    }
+  });
+</script>
+</body>
+</html>

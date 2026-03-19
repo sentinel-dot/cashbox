@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Berichte</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+.body{display:flex;flex:1;min-height:0;}
+
+/* Sidebar */
+.sidebar{width:200px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.nav-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:14px 16px 4px;}
+.nav-item{font-size:12px;font-weight:500;color:var(--text2);padding:7px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.nav-item:hover{color:var(--text);}
+.nav-item.active{color:var(--acc-t);background:var(--acc-bg);font-weight:600;}
+.nav-count{font-size:10px;background:var(--sur2);color:var(--text2);padding:2px 7px;border-radius:10px;}
+.nav-sep{height:1px;background:var(--brd);margin:4px 0;}
+
+/* Content */
+.content{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto;}
+
+/* Toolbar */
+.toolbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0;}
+.toolbar-left{display:flex;align-items:center;gap:8px;}
+.range-pill{font-size:11px;font-weight:600;padding:5px 13px;border-radius:20px;border:1px solid var(--brd);color:var(--text2);cursor:pointer;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;}
+.range-pill.active{background:var(--acc);color:#fff;border-color:var(--acc);}
+.toolbar-right{display:flex;align-items:center;gap:8px;}
+.date-input{height:34px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;}
+.export-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--sur2);color:var(--text);border:1px solid var(--brd);padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;}
+.export-btn svg{width:13px;height:13px;stroke:var(--text2);fill:none;stroke-width:2;}
+
+/* KPI row */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:20px 20px 0;}
+.kpi-card{background:var(--sur);border:1px solid var(--brd);border-radius:12px;padding:14px 16px;}
+.kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:5px;}
+.kpi-value{font-size:19px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.kpi-value.acc{color:var(--acc);}
+.kpi-value.green{color:var(--free-t);}
+.kpi-value.red{color:var(--dan-t);}
+.kpi-delta{font-size:10px;margin-top:3px;display:flex;align-items:center;gap:3px;}
+.kpi-delta.up{color:var(--free-t);}
+.kpi-delta.down{color:var(--dan-t);}
+.kpi-delta.neutral{color:var(--text2);}
+
+/* Main grid */
+.main-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;padding:16px 20px 20px;}
+.left-col{display:flex;flex-direction:column;gap:16px;}
+.right-col{display:flex;flex-direction:column;gap:16px;}
+
+/* Section card */
+.sec-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;}
+.sec-head{padding:14px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;}
+.sec-title{font-size:13px;font-weight:600;color:var(--text);}
+.sec-sub{font-size:11px;color:var(--text2);}
+
+/* Bar chart */
+.chart-area{padding:16px 16px 12px;}
+.chart-bars{display:flex;align-items:flex-end;gap:6px;height:120px;border-bottom:1px solid var(--brd);padding-bottom:6px;}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
+.bar{width:100%;border-radius:4px 4px 0 0;background:var(--acc);opacity:0.18;transition:opacity .15s;cursor:pointer;min-height:4px;}
+.bar.today{opacity:1;}
+.bar:hover{opacity:0.7;}
+.bar-label{font-size:9px;color:var(--text2);white-space:nowrap;}
+.bar-val{font-size:9px;font-weight:600;color:var(--text2);}
+.bar-col.today .bar-label{color:var(--acc-t);font-weight:600;}
+.bar-col.today .bar-val{color:var(--acc);}
+
+/* Umsatz pro Tag Tabelle */
+.day-table{padding:0;}
+.day-row{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--brd);}
+.day-row:last-child{border-bottom:none;}
+.day-row:hover{background:var(--bg);cursor:pointer;}
+.day-name{font-size:12px;font-weight:500;color:var(--text);}
+.day-date{font-size:10px;color:var(--text2);}
+.day-right{display:flex;align-items:center;gap:16px;}
+.day-tx{font-size:11px;color:var(--text2);}
+.day-amount{font-size:13px;font-weight:600;color:var(--text);}
+.day-bar-wrap{width:80px;height:4px;background:var(--sur2);border-radius:2px;}
+.day-bar-fill{height:4px;border-radius:2px;background:var(--acc);opacity:0.5;}
+.day-row.today .day-name{color:var(--acc-t);}
+.day-row.today .day-amount{color:var(--acc);}
+.day-row.today .day-bar-fill{opacity:1;}
+
+/* Category breakdown */
+.cat-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--brd);}
+.cat-row:last-child{border-bottom:none;}
+.cat-color{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.cat-name{font-size:12px;font-weight:500;color:var(--text);flex:1;}
+.cat-bar-wrap{width:80px;height:4px;background:var(--sur2);border-radius:2px;}
+.cat-bar-fill{height:4px;border-radius:2px;}
+.cat-amount{font-size:12px;font-weight:600;color:var(--text);min-width:64px;text-align:right;}
+.cat-pct{font-size:10px;color:var(--text2);min-width:32px;text-align:right;}
+
+/* Payment split */
+.payment-split{padding:16px;}
+.split-visual{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;margin-bottom:12px;}
+.split-seg{height:100%;border-radius:3px;}
+.split-legend{display:flex;flex-direction:column;gap:8px;}
+.split-item{display:flex;align-items:center;justify-content:space-between;}
+.split-label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);}
+.split-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.split-val{font-size:12px;font-weight:600;color:var(--text);}
+.split-pct{font-size:10px;color:var(--text2);}
+
+/* MwSt card */
+.vat-rows{padding:4px 0;}
+.vat-row{display:flex;justify-content:space-between;align-items:center;padding:9px 16px;border-bottom:1px solid var(--brd);}
+.vat-row:last-child{border-bottom:none;}
+.vat-label{font-size:12px;color:var(--text);}
+.vat-right{text-align:right;}
+.vat-gross{font-size:13px;font-weight:600;color:var(--text);}
+.vat-detail{font-size:10px;color:var(--text2);margin-top:1px;}
+.vat-total-row{padding:10px 16px;border-top:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;}
+.vat-total-label{font-size:12px;font-weight:600;color:var(--text);}
+.vat-total-val{font-size:14px;font-weight:600;color:var(--acc);}
+
+/* Top products */
+.top-prod-row{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--brd);}
+.top-prod-row:last-child{border-bottom:none;}
+.top-rank{font-size:11px;font-weight:600;color:var(--text2);min-width:18px;}
+.top-name{flex:1;font-size:12px;font-weight:500;color:var(--text);}
+.top-count{font-size:11px;color:var(--text2);min-width:40px;text-align:right;}
+.top-amount{font-size:12px;font-weight:600;color:var(--text);min-width:64px;text-align:right;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="sidebar">
+      <div class="nav-section">Übersicht</div>
+      <div class="nav-item">Tische <span class="nav-count">8</span></div>
+      <div class="nav-item">Produkte <span class="nav-count">24</span></div>
+      <div class="nav-item">Kategorien <span class="nav-count">5</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Abrechnung</div>
+      <div class="nav-item">Kassensitzung</div>
+      <div class="nav-item active">Berichte</div>
+      <div class="nav-item">Z-Bericht</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">System</div>
+      <div class="nav-item">Einstellungen</div>
+    </div>
+
+    <div class="content">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="range-pill active" onclick="setRange(this)">Heute</button>
+          <button class="range-pill" onclick="setRange(this)">7 Tage</button>
+          <button class="range-pill" onclick="setRange(this)">30 Tage</button>
+          <button class="range-pill" onclick="setRange(this)">Monat</button>
+          <button class="range-pill" onclick="setRange(this)">Benutzerdefiniert</button>
+        </div>
+        <div class="toolbar-right">
+          <input class="date-input" type="date" value="2026-03-18"/>
+          <button class="export-btn">
+            <svg viewBox="0 0 13 13"><path d="M6.5 2v7M4 7l2.5 2.5L9 7"/><rect x="2" y="10" width="9" height="1.5" rx="0.5"/></svg>
+            Exportieren
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">Umsatz (brutto)</div>
+          <div class="kpi-value acc">229,00 €</div>
+          <div class="kpi-delta up">↑ +12 % vs. gestern</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Transaktionen</div>
+          <div class="kpi-value">18</div>
+          <div class="kpi-delta up">↑ +3 vs. gestern</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Ø Bon-Wert</div>
+          <div class="kpi-value">12,72 €</div>
+          <div class="kpi-delta neutral">≈ gestern</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Stornos</div>
+          <div class="kpi-value red">1</div>
+          <div class="kpi-delta neutral">− 19,00 €</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">MwSt gesamt</div>
+          <div class="kpi-value">34,77 €</div>
+          <div class="kpi-delta neutral">19 % + 7 %</div>
+        </div>
+      </div>
+
+      <!-- Main grid -->
+      <div class="main-grid">
+
+        <!-- Left -->
+        <div class="left-col">
+
+          <!-- Bar chart: letzte 7 Tage -->
+          <div class="sec-card">
+            <div class="sec-head">
+              <div class="sec-title">Umsatz letzte 7 Tage</div>
+              <div class="sec-sub">Tagesansicht</div>
+            </div>
+            <div class="chart-area">
+              <div class="chart-bars" id="chart-bars">
+                <div class="bar-col"><div class="bar" style="height:55%"></div><div class="bar-val">289 €</div><div class="bar-label">Mi</div></div>
+                <div class="bar-col"><div class="bar" style="height:78%"></div><div class="bar-val">412 €</div><div class="bar-label">Do</div></div>
+                <div class="bar-col"><div class="bar" style="height:60%"></div><div class="bar-val">318 €</div><div class="bar-label">Fr</div></div>
+                <div class="bar-col"><div class="bar" style="height:90%"></div><div class="bar-val">475 €</div><div class="bar-label">Sa</div></div>
+                <div class="bar-col"><div class="bar" style="height:82%"></div><div class="bar-val">435 €</div><div class="bar-label">So</div></div>
+                <div class="bar-col"><div class="bar" style="height:62%"></div><div class="bar-val">319 €</div><div class="bar-label">Mo</div></div>
+                <div class="bar-col today"><div class="bar today" style="height:43%"></div><div class="bar-val">229 €</div><div class="bar-label">Heute</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tages-Tabelle -->
+          <div class="sec-card">
+            <div class="sec-head">
+              <div class="sec-title">Tagesübersicht</div>
+              <div class="sec-sub">Letzte 7 Tage</div>
+            </div>
+            <div class="day-table">
+              <div class="day-row today">
+                <div><div class="day-name">Heute</div><div class="day-date">18. März 2026</div></div>
+                <div class="day-right">
+                  <span class="day-tx">18 Tx</span>
+                  <div class="day-bar-wrap"><div class="day-bar-fill" style="width:48%"></div></div>
+                  <span class="day-amount">229,00 €</span>
+                </div>
+              </div>
+              <div class="day-row">
+                <div><div class="day-name">Montag</div><div class="day-date">17. März 2026</div></div>
+                <div class="day-right">
+                  <span class="day-tx">24 Tx</span>
+                  <div class="day-bar-wrap"><div class="day-bar-fill" style="width:67%"></div></div>
+                  <span class="day-amount">318,50 €</span>
+                </div>
+              </div>
+              <div class="day-row">
+                <div><div class="day-name">Sonntag</div><div class="day-date">16. März 2026</div></div>
+                <div class="day-right">
+                  <span class="day-tx">31 Tx</span>
+                  <div class="day-bar-wrap"><div class="day-bar-fill" style="width:92%"></div></div>
+                  <span class="day-amount">435,00 €</span>
+                </div>
+              </div>
+              <div class="day-row">
+                <div><div class="day-name">Samstag</div><div class="day-date">15. März 2026</div></div>
+                <div class="day-right">
+                  <span class="day-tx">34 Tx</span>
+                  <div class="day-bar-wrap"><div class="day-bar-fill" style="width:100%"></div></div>
+                  <span class="day-amount">475,00 €</span>
+                </div>
+              </div>
+              <div class="day-row">
+                <div><div class="day-name">Freitag</div><div class="day-date">14. März 2026</div></div>
+                <div class="day-right">
+                  <span class="day-tx">22 Tx</span>
+                  <div class="day-bar-wrap"><div class="day-bar-fill" style="width:67%"></div></div>
+                  <span class="day-amount">318,00 €</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right -->
+        <div class="right-col">
+
+          <!-- Zahlungsarten -->
+          <div class="sec-card">
+            <div class="sec-head"><div class="sec-title">Zahlungsarten</div></div>
+            <div class="payment-split">
+              <div class="split-visual">
+                <div class="split-seg" style="width:62%;background:var(--acc);"></div>
+                <div class="split-seg" style="width:38%;background:var(--pay-t);"></div>
+              </div>
+              <div class="split-legend">
+                <div class="split-item">
+                  <div class="split-label"><div class="split-dot" style="background:var(--acc)"></div>Barzahlung</div>
+                  <div style="display:flex;align-items:center;gap:8px;"><span class="split-pct">62 %</span><span class="split-val">142,50 €</span></div>
+                </div>
+                <div class="split-item">
+                  <div class="split-label"><div class="split-dot" style="background:var(--pay-t)"></div>Kartenzahlung</div>
+                  <div style="display:flex;align-items:center;gap:8px;"><span class="split-pct">38 %</span><span class="split-val">86,50 €</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Umsatz nach Kategorie -->
+          <div class="sec-card">
+            <div class="sec-head"><div class="sec-title">Nach Kategorie</div></div>
+            <div style="padding:4px 0;">
+              <div class="cat-row">
+                <div class="cat-color" style="background:#1a6fff"></div>
+                <span class="cat-name">Shisha</span>
+                <div class="cat-bar-wrap"><div class="cat-bar-fill" style="width:100%;background:#1a6fff;opacity:0.5;"></div></div>
+                <span class="cat-amount">152,00 €</span>
+                <span class="cat-pct">66 %</span>
+              </div>
+              <div class="cat-row">
+                <div class="cat-color" style="background:#3aada0"></div>
+                <span class="cat-name">Getränke</span>
+                <div class="cat-bar-wrap"><div class="cat-bar-fill" style="width:46%;background:#3aada0;opacity:0.6;"></div></div>
+                <span class="cat-amount">51,00 €</span>
+                <span class="cat-pct">22 %</span>
+              </div>
+              <div class="cat-row">
+                <div class="cat-color" style="background:#d4a017"></div>
+                <span class="cat-name">Snacks</span>
+                <div class="cat-bar-wrap"><div class="cat-bar-fill" style="width:17%;background:#d4a017;opacity:0.6;"></div></div>
+                <span class="cat-amount">18,00 €</span>
+                <span class="cat-pct">8 %</span>
+              </div>
+              <div class="cat-row">
+                <div class="cat-color" style="background:#888780"></div>
+                <span class="cat-name">Sonstiges</span>
+                <div class="cat-bar-wrap"><div class="cat-bar-fill" style="width:9%;background:#888780;opacity:0.5;"></div></div>
+                <span class="cat-amount">8,00 €</span>
+                <span class="cat-pct">4 %</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- MwSt -->
+          <div class="sec-card">
+            <div class="sec-head"><div class="sec-title">MwSt-Aufschlüsselung</div></div>
+            <div class="vat-rows">
+              <div class="vat-row">
+                <span class="vat-label">19 % Regelsteuersatz</span>
+                <div class="vat-right">
+                  <div class="vat-gross">210,00 €</div>
+                  <div class="vat-detail">Netto 176,47 € · MwSt 33,53 €</div>
+                </div>
+              </div>
+              <div class="vat-row">
+                <span class="vat-label">7 % Ermäßigt</span>
+                <div class="vat-right">
+                  <div class="vat-gross">19,00 €</div>
+                  <div class="vat-detail">Netto 17,76 € · MwSt 1,24 €</div>
+                </div>
+              </div>
+            </div>
+            <div class="vat-total-row">
+              <span class="vat-total-label">MwSt gesamt</span>
+              <span class="vat-total-val">34,77 €</span>
+            </div>
+          </div>
+
+          <!-- Top Produkte -->
+          <div class="sec-card">
+            <div class="sec-head"><div class="sec-title">Top Produkte</div></div>
+            <div style="padding:4px 0;">
+              <div class="top-prod-row">
+                <span class="top-rank">1</span>
+                <span class="top-name">Shisha Premium</span>
+                <span class="top-count">6×</span>
+                <span class="top-amount">150,00 €</span>
+              </div>
+              <div class="top-prod-row">
+                <span class="top-rank">2</span>
+                <span class="top-name">Shisha Standard</span>
+                <span class="top-count">4×</span>
+                <span class="top-amount">76,00 €</span>
+              </div>
+              <div class="top-prod-row">
+                <span class="top-rank">3</span>
+                <span class="top-name">Schwarzer Tee</span>
+                <span class="top-count">8×</span>
+                <span class="top-amount">20,00 €</span>
+              </div>
+              <div class="top-prod-row">
+                <span class="top-rank">4</span>
+                <span class="top-name">Ayran</span>
+                <span class="top-count">5×</span>
+                <span class="top-amount">17,50 €</span>
+              </div>
+              <div class="top-prod-row">
+                <span class="top-rank">5</span>
+                <span class="top-name">Red Bull</span>
+                <span class="top-count">3×</span>
+                <span class="top-amount">12,00 €</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  function setRange(btn) {
+    document.querySelectorAll('.range-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+  }
+</script>
+</body>
+</html>

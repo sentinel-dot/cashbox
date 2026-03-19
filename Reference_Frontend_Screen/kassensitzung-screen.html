@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Kassensitzung</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;position:relative;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--free-bg);color:var(--free-t);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;}
+.session-chip-dot{width:6px;height:6px;border-radius:50%;background:var(--free-t);}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+/* Body */
+.body{display:flex;flex:1;min-height:0;}
+
+/* Sidebar */
+.sidebar{width:200px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.nav-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:14px 16px 4px;}
+.nav-item{font-size:12px;font-weight:500;color:var(--text2);padding:7px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.nav-item:hover{color:var(--text);}
+.nav-item.active{color:var(--acc-t);background:var(--acc-bg);font-weight:600;}
+.nav-count{font-size:10px;background:var(--sur2);color:var(--text2);padding:2px 7px;border-radius:10px;}
+.nav-sep{height:1px;background:var(--brd);margin:4px 0;}
+
+/* Content */
+.content{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto;}
+
+/* Page header */
+.page-header{padding:20px 24px 0;display:flex;align-items:flex-start;justify-content:space-between;}
+.page-title{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+.close-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--dan-bg);color:var(--dan-t);border:1px solid transparent;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.close-btn svg{width:14px;height:14px;stroke:var(--dan-t);fill:none;stroke-width:2;}
+
+/* KPI row */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:20px 24px 0;}
+.kpi-card{background:var(--sur);border:1px solid var(--brd);border-radius:12px;padding:14px 16px;}
+.kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:5px;}
+.kpi-value{font-size:20px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.kpi-value.acc{color:var(--acc);}
+.kpi-value.green{color:var(--free-t);}
+.kpi-sub{font-size:10px;color:var(--text2);margin-top:3px;}
+
+/* Two column below */
+.main-cols{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px 24px 24px;}
+
+/* Left col */
+.left-col{display:flex;flex-direction:column;gap:16px;}
+
+/* Section card */
+.sec-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;}
+.sec-head{padding:14px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;}
+.sec-title{font-size:13px;font-weight:600;color:var(--text);}
+.sec-sub{font-size:11px;color:var(--text2);}
+.add-movement-btn{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);border:none;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.add-movement-btn svg{width:12px;height:12px;stroke:var(--acc-t);fill:none;stroke-width:2.5;}
+
+/* Kassenstand table */
+.kassenstand-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;}
+.ks-cell{padding:14px 16px;border-right:1px solid var(--brd);}
+.ks-cell:last-child{border-right:none;}
+.ks-label{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:4px;}
+.ks-value{font-size:18px;font-weight:600;color:var(--text);}
+.ks-value.pos{color:var(--free-t);}
+.ks-value.neg{color:var(--dan-t);}
+.ks-sub{font-size:10px;color:var(--text2);margin-top:2px;}
+.ks-input-row{padding:14px 16px;border-top:1px solid var(--brd);display:flex;align-items:center;gap:10px;}
+.ks-input-label{font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap;}
+.ks-input{height:34px;flex:1;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;max-width:160px;}
+.ks-input:focus{border-color:var(--acc);}
+.ks-hint{font-size:10px;color:var(--text2);}
+
+/* Bewegungen */
+.movement-list{padding:4px 0;}
+.movement-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--brd);}
+.movement-row:last-child{border-bottom:none;}
+.movement-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.movement-icon.dep{background:var(--free-bg);}
+.movement-icon.dep svg{stroke:var(--free-t);}
+.movement-icon.wit{background:var(--pay-bg);}
+.movement-icon.wit svg{stroke:var(--pay-t);}
+.movement-icon svg{width:14px;height:14px;fill:none;stroke-width:2;}
+.movement-info{flex:1;min-width:0;}
+.movement-reason{font-size:12px;font-weight:500;color:var(--text);}
+.movement-time{font-size:10px;color:var(--text2);margin-top:1px;}
+.movement-amount{font-size:13px;font-weight:600;white-space:nowrap;}
+.movement-amount.dep{color:var(--free-t);}
+.movement-amount.wit{color:var(--pay-t);}
+
+/* Right col */
+.right-col{display:flex;flex-direction:column;gap:16px;}
+
+/* Zahlungsarten breakdown */
+.payment-list{padding:4px 0;}
+.payment-row{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--brd);}
+.payment-row:last-child{border-bottom:none;}
+.payment-label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--text);}
+.payment-icon{width:28px;height:28px;border-radius:7px;background:var(--sur2);display:flex;align-items:center;justify-content:center;}
+.payment-icon svg{width:13px;height:13px;stroke:var(--text2);fill:none;stroke-width:1.8;}
+.payment-value{font-size:13px;font-weight:600;color:var(--text);}
+.payment-count{font-size:10px;color:var(--text2);text-align:right;margin-top:1px;}
+
+/* MwSt breakdown */
+.vat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--brd);}
+.vat-row:last-child{border-bottom:none;}
+.vat-label{font-size:12px;color:var(--text);}
+.vat-vals{text-align:right;}
+.vat-gross{font-size:13px;font-weight:600;color:var(--text);}
+.vat-net{font-size:10px;color:var(--text2);margin-top:1px;}
+
+/* Total row */
+.total-row{padding:14px 16px;border-top:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;}
+.total-label{font-size:12px;font-weight:600;color:var(--text);}
+.total-value{font-size:16px;font-weight:600;color:var(--acc);}
+
+/* Abschluss modal */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;border-radius:18px;z-index:10;}
+.app.dark .overlay{background:rgba(0,0,0,0.55);}
+.overlay.visible{display:flex;}
+.modal{background:var(--sur);border-radius:16px;width:420px;overflow:hidden;}
+.modal-head{padding:18px 20px 14px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);}
+.modal-close{width:26px;height:26px;border-radius:6px;border:1px solid var(--brd);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.modal-close svg{width:12px;height:12px;stroke:var(--text2);fill:none;stroke-width:2;}
+.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);}
+.field input,.field select{height:36px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;width:100%;}
+.field input:focus{border-color:var(--acc);}
+.modal-diff-hint{background:var(--acc-bg);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--acc-t);line-height:1.5;}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:flex-end;}
+.btn-cancel{font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--brd);background:transparent;color:var(--text2);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.btn-close-session{font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:none;background:var(--dan-t);color:white;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+
+/* movement modal */
+.modal-small{background:var(--sur);border-radius:16px;width:360px;overflow:hidden;}
+
+.badge-running{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;background:var(--free-bg);color:var(--free-t);padding:3px 9px;border-radius:20px;}
+.badge-running-dot{width:6px;height:6px;border-radius:50%;background:var(--free-t);}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip"><span class="session-chip-dot"></span>Schicht läuft · 3:42 h</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">Übersicht</div>
+      <div class="nav-item">Tische <span class="nav-count">8</span></div>
+      <div class="nav-item">Produkte <span class="nav-count">24</span></div>
+      <div class="nav-item">Kategorien <span class="nav-count">5</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Abrechnung</div>
+      <div class="nav-item active">Kassensitzung</div>
+      <div class="nav-item">Berichte</div>
+      <div class="nav-item">Z-Bericht</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">System</div>
+      <div class="nav-item">Einstellungen</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- Page header -->
+      <div class="page-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="page-title">Kassensitzung</div>
+            <span class="badge-running"><span class="badge-running-dot"></span>Offen seit 08:00</span>
+          </div>
+          <div class="page-sub">Gerät: iPad Theke · Geöffnet von Niko</div>
+        </div>
+        <button class="close-btn" id="open-close-modal">
+          <svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="2"/><line x1="5" y1="7" x2="9" y2="7"/></svg>
+          Schicht abschließen
+        </button>
+      </div>
+
+      <!-- KPI row -->
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">Umsatz (brutto)</div>
+          <div class="kpi-value acc">229,00 €</div>
+          <div class="kpi-sub">18 Transaktionen</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Barzahlungen</div>
+          <div class="kpi-value">142,50 €</div>
+          <div class="kpi-sub">11 Transaktionen</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Kartenzahlungen</div>
+          <div class="kpi-value">86,50 €</div>
+          <div class="kpi-sub">7 Transaktionen</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Stornos</div>
+          <div class="kpi-value">1</div>
+          <div class="kpi-sub">− 19,00 €</div>
+        </div>
+      </div>
+
+      <!-- Main cols -->
+      <div class="main-cols">
+
+        <!-- Left -->
+        <div class="left-col">
+
+          <!-- Kassenstand -->
+          <div class="sec-card">
+            <div class="sec-head">
+              <div>
+                <div class="sec-title">Kassenstand</div>
+                <div class="sec-sub">Anfangsbestand + Einnahmen ± Einlagen/Entnahmen</div>
+              </div>
+            </div>
+            <div class="kassenstand-grid">
+              <div class="ks-cell">
+                <div class="ks-label">Anfangsbestand</div>
+                <div class="ks-value">50,00 €</div>
+                <div class="ks-sub">manuell gezählt</div>
+              </div>
+              <div class="ks-cell">
+                <div class="ks-label">Erwarteter Bestand</div>
+                <div class="ks-value">192,50 €</div>
+                <div class="ks-sub">berechnet</div>
+              </div>
+              <div class="ks-cell">
+                <div class="ks-label">Differenz</div>
+                <div class="ks-value pos">+ 0,00 €</div>
+                <div class="ks-sub">Soll = Ist</div>
+              </div>
+            </div>
+            <div class="ks-input-row">
+              <span class="ks-input-label">Aktueller Kasseninhalt:</span>
+              <input class="ks-input" type="text" placeholder="0,00 €" value="192,50"/>
+              <span class="ks-hint">€ — wird bei Abschluss gespeichert</span>
+            </div>
+          </div>
+
+          <!-- Einlagen & Entnahmen -->
+          <div class="sec-card">
+            <div class="sec-head">
+              <div>
+                <div class="sec-title">Einlagen &amp; Entnahmen</div>
+                <div class="sec-sub">Kassenbewegungen dieser Schicht</div>
+              </div>
+              <button class="add-movement-btn" id="open-movement-modal">
+                <svg viewBox="0 0 12 12"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>
+                Hinzufügen
+              </button>
+            </div>
+            <div class="movement-list">
+              <div class="movement-row">
+                <div class="movement-icon dep">
+                  <svg viewBox="0 0 14 14"><line x1="7" y1="11" x2="7" y2="3"/><polyline points="4,6 7,3 10,6"/></svg>
+                </div>
+                <div class="movement-info">
+                  <div class="movement-reason">Wechselgeld eingelegt</div>
+                  <div class="movement-time">08:05 · Niko</div>
+                </div>
+                <div class="movement-amount dep">+ 50,00 €</div>
+              </div>
+              <div class="movement-row">
+                <div class="movement-icon wit">
+                  <svg viewBox="0 0 14 14"><line x1="7" y1="3" x2="7" y2="11"/><polyline points="4,8 7,11 10,8"/></svg>
+                </div>
+                <div class="movement-info">
+                  <div class="movement-reason">Betriebsausgabe Reinigung</div>
+                  <div class="movement-time">10:30 · Niko</div>
+                </div>
+                <div class="movement-amount wit">− 12,00 €</div>
+              </div>
+              <div class="movement-row">
+                <div class="movement-icon dep">
+                  <svg viewBox="0 0 14 14"><line x1="7" y1="11" x2="7" y2="3"/><polyline points="4,6 7,3 10,6"/></svg>
+                </div>
+                <div class="movement-info">
+                  <div class="movement-reason">Kleingeld nachgelegt</div>
+                  <div class="movement-time">11:15 · Niko</div>
+                </div>
+                <div class="movement-amount dep">+ 20,00 €</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right -->
+        <div class="right-col">
+
+          <!-- Zahlungsarten -->
+          <div class="sec-card">
+            <div class="sec-head">
+              <div class="sec-title">Zahlungsarten</div>
+            </div>
+            <div class="payment-list">
+              <div class="payment-row">
+                <div class="payment-label">
+                  <div class="payment-icon"><svg viewBox="0 0 13 13"><rect x="2" y="4" width="9" height="6" rx="1"/><line x1="2" y1="7" x2="11" y2="7"/></svg></div>
+                  Barzahlung
+                </div>
+                <div style="text-align:right">
+                  <div class="payment-value">142,50 €</div>
+                  <div class="payment-count">11 Transaktionen</div>
+                </div>
+              </div>
+              <div class="payment-row">
+                <div class="payment-label">
+                  <div class="payment-icon"><svg viewBox="0 0 13 13"><rect x="2" y="3" width="9" height="7" rx="1.5"/><line x1="2" y1="6" x2="11" y2="6" stroke-width="2"/></svg></div>
+                  Kartenzahlung
+                </div>
+                <div style="text-align:right">
+                  <div class="payment-value">86,50 €</div>
+                  <div class="payment-count">7 Transaktionen</div>
+                </div>
+              </div>
+              <div class="total-row">
+                <span class="total-label">Gesamt</span>
+                <span class="total-value">229,00 €</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- MwSt -->
+          <div class="sec-card">
+            <div class="sec-head">
+              <div class="sec-title">MwSt-Aufschlüsselung</div>
+            </div>
+            <div class="payment-list">
+              <div class="vat-row">
+                <div class="vat-label">19 % (Regelsteuersatz)</div>
+                <div class="vat-vals">
+                  <div class="vat-gross">210,00 €</div>
+                  <div class="vat-net">Netto 176,47 € · MwSt 33,53 €</div>
+                </div>
+              </div>
+              <div class="vat-row">
+                <div class="vat-label">7 % (Ermäßigt)</div>
+                <div class="vat-vals">
+                  <div class="vat-gross">19,00 €</div>
+                  <div class="vat-net">Netto 17,76 € · MwSt 1,24 €</div>
+                </div>
+              </div>
+              <div class="total-row">
+                <span class="total-label">MwSt gesamt</span>
+                <span class="total-value">34,77 €</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Schicht abschließen -->
+  <div class="overlay" id="close-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">Schicht abschließen</span>
+        <button class="modal-close" id="close-close-modal"><svg viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Kassenbestand (gezählt)</label>
+          <input type="text" placeholder="0,00 €" value="192,50"/>
+        </div>
+        <div class="modal-diff-hint">
+          Erwarteter Bestand: <strong>192,50 €</strong> &nbsp;·&nbsp; Gezählt: <strong>192,50 €</strong><br/>
+          Differenz: <strong>± 0,00 €</strong> — Kasse stimmt.
+        </div>
+        <div class="field">
+          <label>Anmerkung (optional)</label>
+          <input type="text" placeholder="z.B. Kasse ok, alles normal"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" id="cancel-close-modal">Abbrechen</button>
+        <button class="btn-close-session">Schicht jetzt abschließen &amp; Z-Bericht erstellen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Einlage / Entnahme -->
+  <div class="overlay" id="movement-overlay">
+    <div class="modal-small">
+      <div class="modal-head">
+        <span class="modal-title">Kassenbewegung</span>
+        <button class="modal-close" id="close-movement-modal"><svg viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Typ</label>
+          <select><option>Einlage</option><option>Entnahme</option></select>
+        </div>
+        <div class="field">
+          <label>Betrag (€)</label>
+          <input type="text" placeholder="0,00"/>
+        </div>
+        <div class="field">
+          <label>Grund (Pflichtfeld)</label>
+          <input type="text" placeholder="z.B. Wechselgeld einlegen"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" id="cancel-movement-modal">Abbrechen</button>
+        <button style="font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:none;background:var(--acc);color:white;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+  document.getElementById('open-close-modal').addEventListener('click', () => document.getElementById('close-overlay').classList.add('visible'));
+  document.getElementById('close-close-modal').addEventListener('click', () => document.getElementById('close-overlay').classList.remove('visible'));
+  document.getElementById('cancel-close-modal').addEventListener('click', () => document.getElementById('close-overlay').classList.remove('visible'));
+  document.getElementById('open-movement-modal').addEventListener('click', () => document.getElementById('movement-overlay').classList.add('visible'));
+  document.getElementById('close-movement-modal').addEventListener('click', () => document.getElementById('movement-overlay').classList.remove('visible'));
+  document.getElementById('cancel-movement-modal').addEventListener('click', () => document.getElementById('movement-overlay').classList.remove('visible'));
+</script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — ModifierSheet</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;position:relative;min-height:640px;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);}
+.tisch-badge{font-size:13px;font-weight:600;color:var(--text);background:var(--sur2);padding:5px 14px;border-radius:20px;}
+.tisch-badge span{color:var(--acc);}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+.body{display:flex;flex:1;min-height:0;}
+.product-area{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--brd);filter:blur(1px);opacity:0.45;pointer-events:none;}
+.cat-tabs{background:var(--sur);border-bottom:1px solid var(--brd);padding:0 16px;display:flex;gap:0;}
+.cat-tab{font-size:12px;font-weight:600;padding:12px 16px;color:var(--text2);border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;}
+.cat-tab.active{color:var(--acc-t);border-bottom-color:var(--acc);}
+.cat-dot{width:8px;height:8px;border-radius:50%;}
+.product-grid{padding:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.prod-card{background:var(--sur);border:1px solid var(--brd);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;gap:8px;}
+.prod-name{font-size:13px;font-weight:600;color:var(--text);}
+.prod-price{font-size:15px;font-weight:600;color:var(--text);}
+.cart{width:300px;background:var(--sur);display:flex;flex-direction:column;flex-shrink:0;filter:blur(1px);opacity:0.45;pointer-events:none;}
+.cart-head{padding:14px 16px;border-bottom:1px solid var(--brd);}
+.cart-title{font-size:13px;font-weight:600;color:var(--text);}
+.cart-item-mock{height:52px;margin:10px 16px;border-radius:8px;background:var(--sur2);}
+
+/* Modal overlay */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;border-radius:18px;z-index:10;}
+.app.dark .overlay{background:rgba(0,0,0,0.6);}
+
+/* Modifier Modal */
+.mod-modal{background:var(--sur);border-radius:18px;width:500px;display:flex;flex-direction:column;overflow:hidden;max-height:580px;}
+
+.mod-head{padding:18px 20px 14px;border-bottom:1px solid var(--brd);}
+.mod-prod-name{font-size:16px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.mod-prod-price{font-size:12px;color:var(--text2);margin-top:3px;}
+.mod-close{position:absolute;top:16px;right:16px;width:28px;height:28px;border-radius:7px;border:1px solid var(--brd);background:var(--sur);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.mod-close svg{width:12px;height:12px;stroke:var(--text2);fill:none;stroke-width:2;}
+
+.mod-body{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:18px;}
+
+/* Modifier group */
+.mod-group{}
+.mod-group-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.mod-group-name{font-size:13px;font-weight:600;color:var(--text);}
+.mod-group-badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;}
+.mod-group-badge.required{background:var(--dan-bg);color:var(--dan-t);}
+.mod-group-badge.optional{background:var(--sur2);color:var(--text2);}
+.mod-group-hint{font-size:10px;color:var(--text2);margin-top:-6px;margin-bottom:10px;}
+
+/* Option items */
+.mod-options{display:flex;flex-direction:column;gap:6px;}
+.mod-option{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:10px;border:1.5px solid var(--brd);cursor:pointer;transition:border-color .15s,background .15s;}
+.mod-option:hover{border-color:rgba(26,111,255,0.25);}
+.mod-option.selected{border-color:var(--acc);background:var(--acc-bg);}
+.mod-option-left{display:flex;align-items:center;gap:10px;}
+.mod-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--brd);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:border-color .15s;}
+.mod-option.selected .mod-radio{border-color:var(--acc);background:var(--acc);}
+.mod-radio-dot{width:7px;height:7px;border-radius:50%;background:white;opacity:0;}
+.mod-option.selected .mod-radio-dot{opacity:1;}
+.mod-checkbox{width:18px;height:18px;border-radius:5px;border:2px solid var(--brd);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:border-color .15s;}
+.mod-option.selected .mod-checkbox{border-color:var(--acc);background:var(--acc);}
+.mod-checkbox-check{width:10px;height:10px;opacity:0;}
+.mod-option.selected .mod-checkbox-check{opacity:1;}
+.mod-checkbox-check svg{width:10px;height:10px;stroke:white;fill:none;stroke-width:3;}
+.mod-option-name{font-size:13px;font-weight:500;color:var(--text);}
+.mod-option.selected .mod-option-name{color:var(--acc-t);font-weight:600;}
+.mod-option-price{font-size:12px;font-weight:600;color:var(--text2);}
+.mod-option.selected .mod-option-price{color:var(--acc-t);}
+
+/* Footer */
+.mod-footer{border-top:1px solid var(--brd);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mod-total{display:flex;flex-direction:column;}
+.mod-total-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);}
+.mod-total-value{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.mod-add-btn{height:42px;padding:0 24px;border-radius:10px;border:none;background:var(--acc);color:white;font-size:13px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;}
+.mod-add-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.mod-required-hint{font-size:10px;color:var(--dan-t);margin-top:3px;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="tisch-badge">Tisch <span>4</span> · Innen</div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="product-area">
+      <div class="cat-tabs">
+        <div class="cat-tab active"><div class="cat-dot" style="background:#1a6fff"></div>Shisha</div>
+        <div class="cat-tab"><div class="cat-dot" style="background:#3aada0"></div>Getränke</div>
+      </div>
+      <div class="product-grid">
+        <div class="prod-card"><div class="prod-name">Shisha Standard</div><div class="prod-price">19,00 €</div></div>
+        <div class="prod-card"><div class="prod-name">Shisha Premium</div><div class="prod-price">25,00 €</div></div>
+        <div class="prod-card"><div class="prod-name">Shisha Groß</div><div class="prod-price">32,00 €</div></div>
+      </div>
+    </div>
+    <div class="cart">
+      <div class="cart-head"><div class="cart-title">Bestellung</div></div>
+      <div class="cart-item-mock"></div>
+      <div class="cart-item-mock"></div>
+    </div>
+  </div>
+
+  <!-- Modal overlay -->
+  <div class="overlay">
+    <div class="mod-modal">
+
+      <div class="mod-head" style="position:relative;">
+        <div class="mod-prod-name">Shisha Standard</div>
+        <div class="mod-prod-price">Basispreis: 19,00 € · Bitte Pflichtfelder auswählen</div>
+        <button class="mod-close"><svg viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg></button>
+      </div>
+
+      <div class="mod-body">
+
+        <!-- Gruppe 1: Tabaksorte (Pflicht, max 1) -->
+        <div class="mod-group">
+          <div class="mod-group-head">
+            <span class="mod-group-name">Tabaksorte</span>
+            <span class="mod-group-badge required">Pflicht · 1 auswählen</span>
+          </div>
+          <div class="mod-options" id="group-tabak">
+            <div class="mod-option selected" onclick="selectRadio(this,'group-tabak')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Al Fakher Mint</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option" onclick="selectRadio(this,'group-tabak')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Al Fakher Doppelapfel</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option" onclick="selectRadio(this,'group-tabak')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Al Fakher Grape</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option" onclick="selectRadio(this,'group-tabak')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Adalya Love 66</span>
+              </div>
+              <span class="mod-option-price">+ 2,00 €</span>
+            </div>
+            <div class="mod-option" onclick="selectRadio(this,'group-tabak')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Fumari Ambrosia</span>
+              </div>
+              <span class="mod-option-price">+ 2,00 €</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gruppe 2: Kopfgröße (Pflicht, max 1) -->
+        <div class="mod-group">
+          <div class="mod-group-head">
+            <span class="mod-group-name">Kopfgröße</span>
+            <span class="mod-group-badge required">Pflicht · 1 auswählen</span>
+          </div>
+          <div class="mod-options" id="group-kopf">
+            <div class="mod-option" onclick="selectRadio(this,'group-kopf')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Klein</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option selected" onclick="selectRadio(this,'group-kopf')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Standard</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option" onclick="selectRadio(this,'group-kopf')">
+              <div class="mod-option-left">
+                <div class="mod-radio"><div class="mod-radio-dot"></div></div>
+                <span class="mod-option-name">Groß</span>
+              </div>
+              <span class="mod-option-price">+ 3,00 €</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gruppe 3: Extras (Optional, unbegrenzt) -->
+        <div class="mod-group">
+          <div class="mod-group-head">
+            <span class="mod-group-name">Extras</span>
+            <span class="mod-group-badge optional">Optional</span>
+          </div>
+          <div class="mod-options" id="group-extras">
+            <div class="mod-option" onclick="toggleCheck(this)">
+              <div class="mod-option-left">
+                <div class="mod-checkbox"><div class="mod-checkbox-check"><svg viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5"/></svg></div></div>
+                <span class="mod-option-name">Mit Eis</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option selected" onclick="toggleCheck(this)">
+              <div class="mod-option-left">
+                <div class="mod-checkbox"><div class="mod-checkbox-check"><svg viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5"/></svg></div></div>
+                <span class="mod-option-name">Extra Mundstück</span>
+              </div>
+              <span class="mod-option-price">inklusive</span>
+            </div>
+            <div class="mod-option" onclick="toggleCheck(this)">
+              <div class="mod-option-left">
+                <div class="mod-checkbox"><div class="mod-checkbox-check"><svg viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5"/></svg></div></div>
+                <span class="mod-option-name">Wärmer</span>
+              </div>
+              <span class="mod-option-price">+ 1,00 €</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="mod-footer">
+        <div class="mod-total">
+          <span class="mod-total-label">Gesamtpreis</span>
+          <span class="mod-total-value" id="mod-total">19,00 €</span>
+        </div>
+        <button class="mod-add-btn" id="mod-add-btn">Hinzufügen · 19,00 €</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  function selectRadio(el, groupId) {
+    document.querySelectorAll('#' + groupId + ' .mod-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    updateTotal();
+  }
+
+  function toggleCheck(el) {
+    el.classList.toggle('selected');
+    updateTotal();
+  }
+
+  function updateTotal() {
+    let base = 19.00;
+    let extra = 0;
+    // Tabak
+    const tabakSel = document.querySelector('#group-tabak .mod-option.selected .mod-option-price');
+    if (tabakSel && tabakSel.textContent.includes('+')) extra += parseFloat(tabakSel.textContent.replace('+ ','').replace(' €','').replace(',','.'));
+    // Kopf
+    const kopfSel = document.querySelector('#group-kopf .mod-option.selected .mod-option-price');
+    if (kopfSel && kopfSel.textContent.includes('+')) extra += parseFloat(kopfSel.textContent.replace('+ ','').replace(' €','').replace(',','.'));
+    // Extras
+    document.querySelectorAll('#group-extras .mod-option.selected .mod-option-price').forEach(p => {
+      if (p.textContent.includes('+')) extra += parseFloat(p.textContent.replace('+ ','').replace(' €','').replace(',','.'));
+    });
+    const total = base + extra;
+    const fmt = total.toFixed(2).replace('.',',') + ' €';
+    document.getElementById('mod-total').textContent = fmt;
+    document.getElementById('mod-add-btn').textContent = 'Hinzufügen · ' + fmt;
+  }
+</script>
+</body>
+</html>

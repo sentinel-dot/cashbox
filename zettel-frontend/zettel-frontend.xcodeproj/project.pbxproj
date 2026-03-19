@@ -255,15 +255,9 @@
 				DEVELOPMENT_TEAM = RNK5A8AP8B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIAppFonts = "PlusJakartaSans-Regular.ttf PlusJakartaSans-Medium.ttf PlusJakartaSans-SemiBold.ttf PlusJakartaSans-Bold.ttf PlusJakartaSans-ExtraBold.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIAppFonts = (
-					"PlusJakartaSans-Regular.ttf",
-					"PlusJakartaSans-Medium.ttf",
-					"PlusJakartaSans-SemiBold.ttf",
-					"PlusJakartaSans-Bold.ttf",
-					"PlusJakartaSans-ExtraBold.ttf",
-				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -291,15 +285,9 @@
 				DEVELOPMENT_TEAM = RNK5A8AP8B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIAppFonts = "PlusJakartaSans-Regular.ttf PlusJakartaSans-Medium.ttf PlusJakartaSans-SemiBold.ttf PlusJakartaSans-Bold.ttf PlusJakartaSans-ExtraBold.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIAppFonts = (
-					"PlusJakartaSans-Regular.ttf",
-					"PlusJakartaSans-Medium.ttf",
-					"PlusJakartaSans-SemiBold.ttf",
-					"PlusJakartaSans-Bold.ttf",
-					"PlusJakartaSans-ExtraBold.ttf",
-				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

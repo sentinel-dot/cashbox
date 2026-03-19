@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Kategorien</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;position:relative;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;transition:background .2s;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+/* Body */
+.body{display:flex;flex:1;min-height:0;}
+
+/* Sidebar */
+.sidebar{width:200px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.nav-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:14px 16px 4px;}
+.nav-item{font-size:12px;font-weight:500;color:var(--text2);padding:7px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.nav-item:hover{color:var(--text);}
+.nav-item.active{color:var(--acc-t);background:var(--acc-bg);font-weight:600;}
+.nav-count{font-size:10px;background:var(--sur2);color:var(--text2);padding:2px 7px;border-radius:10px;}
+.nav-sep{height:1px;background:var(--brd);margin:4px 0;}
+
+/* Content */
+.content{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+/* Toolbar */
+.toolbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;}
+.add-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--acc);color:white;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;}
+.add-btn svg{width:14px;height:14px;stroke:white;fill:none;stroke-width:2.5;}
+.toolbar-title{font-size:13px;font-weight:600;color:var(--text);}
+.toolbar-sub{font-size:11px;color:var(--text2);margin-top:1px;}
+
+/* Two-column layout */
+.two-col{display:grid;grid-template-columns:1fr 360px;flex:1;min-height:0;}
+
+/* Left: category list */
+.cat-list{padding:20px;display:flex;flex-direction:column;gap:10px;overflow:auto;}
+
+.cat-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;padding:16px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;position:relative;}
+.cat-card:hover{border-color:rgba(26,111,255,0.2);}
+.cat-card.selected{border-color:var(--acc);background:var(--acc-bg);}
+.app.dark .cat-card.selected{background:var(--acc-bg);}
+
+.cat-color-swatch{width:40px;height:40px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.cat-color-swatch svg{width:16px;height:16px;fill:white;opacity:0.9;}
+
+.cat-info{flex:1;min-width:0;}
+.cat-name{font-size:14px;font-weight:600;color:var(--text);}
+.cat-card.selected .cat-name{color:var(--acc-t);}
+.cat-meta{font-size:11px;color:var(--text2);margin-top:2px;}
+
+.cat-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.cat-sort{display:flex;flex-direction:column;gap:3px;cursor:grab;}
+.cat-sort span{display:block;width:16px;height:2px;background:var(--brd);border-radius:1px;}
+.cat-sort:hover span{background:var(--text2);}
+
+.cat-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;}
+.cat-badge.on{background:var(--free-bg);color:var(--free-t);}
+.cat-badge.off{background:var(--sur2);color:var(--text2);}
+.badge-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+.cat-actions{display:flex;gap:6px;}
+.action-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--brd);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.action-btn svg{width:13px;height:13px;stroke:var(--text2);fill:none;stroke-width:1.8;}
+.action-btn:hover svg{stroke:var(--text);}
+.action-btn.del:hover{background:var(--dan-bg);border-color:var(--dan-t);}
+.action-btn.del:hover svg{stroke:var(--dan-t);}
+
+/* Right: detail panel */
+.detail-panel{border-left:1px solid var(--brd);background:var(--sur);display:flex;flex-direction:column;}
+.detail-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:40px;}
+.detail-empty-icon{width:48px;height:48px;border-radius:14px;background:var(--sur2);display:flex;align-items:center;justify-content:center;}
+.detail-empty-icon svg{width:20px;height:20px;stroke:var(--text2);fill:none;stroke-width:1.5;}
+.detail-empty-text{font-size:13px;color:var(--text2);text-align:center;line-height:1.5;}
+
+.detail-content{display:flex;flex-direction:column;flex:1;}
+.detail-head{padding:18px 20px 14px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:12px;}
+.detail-color-preview{width:36px;height:36px;border-radius:9px;background:#1a6fff;flex-shrink:0;}
+.detail-head-info{flex:1;}
+.detail-head-name{font-size:15px;font-weight:600;color:var(--text);}
+.detail-head-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+
+.detail-body{padding:20px;display:flex;flex-direction:column;gap:16px;flex:1;overflow:auto;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);}
+.field input,.field select{height:36px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;width:100%;}
+.field input:focus,.field select:focus{border-color:var(--acc);}
+
+/* Color picker */
+.color-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;}
+.color-swatch{width:100%;aspect-ratio:1;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:transform .1s;}
+.color-swatch:hover{transform:scale(1.1);}
+.color-swatch.picked{border-color:var(--text);transform:scale(1.08);}
+
+/* Products in category */
+.prod-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.prod-chip{font-size:11px;font-weight:500;background:var(--sur2);color:var(--text2);padding:4px 10px;border-radius:20px;}
+
+.detail-footer{padding:14px 20px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;}
+.btn-cancel{font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--brd);background:transparent;color:var(--text2);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.btn-save{font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:none;background:var(--acc);color:white;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+
+/* Modal */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;border-radius:18px;z-index:10;}
+.app.dark .overlay{background:rgba(0,0,0,0.55);}
+.overlay.visible{display:flex;}
+.modal{background:var(--sur);border-radius:16px;width:380px;overflow:hidden;}
+.modal-head{padding:18px 20px 14px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);}
+.modal-close{width:26px;height:26px;border-radius:6px;border:1px solid var(--brd);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.modal-close svg{width:12px;height:12px;stroke:var(--text2);fill:none;stroke-width:2;}
+.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px;}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:flex-end;}
+
+/* Sort hint */
+.sort-hint{font-size:10px;color:var(--text2);display:flex;align-items:center;gap:5px;padding:0 0 4px;}
+.sort-hint svg{width:11px;height:11px;stroke:var(--text2);fill:none;stroke-width:1.5;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">Übersicht</div>
+      <div class="nav-item">Tische <span class="nav-count">8</span></div>
+      <div class="nav-item">Produkte <span class="nav-count">24</span></div>
+      <div class="nav-item active">Kategorien <span class="nav-count">5</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Abrechnung</div>
+      <div class="nav-item">Kassensitzung</div>
+      <div class="nav-item">Berichte</div>
+      <div class="nav-item">Z-Bericht</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">System</div>
+      <div class="nav-item">Einstellungen</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div>
+          <div class="toolbar-title">Kategorien</div>
+          <div class="toolbar-sub">Reihenfolge per Drag &amp; Drop änderbar</div>
+        </div>
+        <button class="add-btn" id="open-modal">
+          <svg viewBox="0 0 14 14"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>
+          Kategorie hinzufügen
+        </button>
+      </div>
+
+      <!-- Two-column -->
+      <div class="two-col">
+
+        <!-- Left: list -->
+        <div class="cat-list">
+          <div class="sort-hint">
+            <svg viewBox="0 0 11 11"><line x1="2" y1="3" x2="9" y2="3"/><line x1="2" y1="5.5" x2="9" y2="5.5"/><line x1="2" y1="8" x2="9" y2="8"/></svg>
+            Reihenfolge bestimmt die Anzeige im Kassensystem
+          </div>
+
+          <!-- Shisha -->
+          <div class="cat-card selected" id="card-shisha" onclick="selectCard('shisha')">
+            <div class="cat-color-swatch" style="background:#1a6fff">
+              <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" stroke="white" stroke-width="1.5" fill="none"/><line x1="8" y1="3" x2="8" y2="13" stroke="white" stroke-width="1.5"/></svg>
+            </div>
+            <div class="cat-info">
+              <div class="cat-name">Shisha</div>
+              <div class="cat-meta">8 Produkte · Sortierung: 1</div>
+            </div>
+            <div class="cat-right">
+              <span class="cat-badge on"><span class="badge-dot"></span>Aktiv</span>
+              <div class="cat-actions">
+                <button class="action-btn" onclick="event.stopPropagation();openEdit()">
+                  <svg viewBox="0 0 13 13"><path d="M2 9.5V11h1.5l4.4-4.4-1.5-1.5L2 9.5zM10.7 3.3a.4.4 0 000-.6L9.3 1.3a.4.4 0 00-.6 0L7.6 2.4l1.5 1.5 1.6-1.6z" style="fill:currentColor;stroke:none"/></svg>
+                </button>
+                <button class="action-btn del" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><polyline points="2,3.5 11,3.5"/><path d="M4.5 3.5V2.5h4v1M5 6v4M8 6v4"/><rect x="3" y="3.5" width="7" height="8" rx="1"/></svg>
+                </button>
+              </div>
+              <div class="cat-sort"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <!-- Getränke -->
+          <div class="cat-card" id="card-getraenke" onclick="selectCard('getraenke')">
+            <div class="cat-color-swatch" style="background:#3aada0">
+              <svg viewBox="0 0 16 16"><path d="M5 3h6l-1 8H6L5 3z" stroke="white" stroke-width="1.5" fill="none"/><line x1="4" y1="6" x2="12" y2="6" stroke="white" stroke-width="1.2"/></svg>
+            </div>
+            <div class="cat-info">
+              <div class="cat-name">Getränke</div>
+              <div class="cat-meta">11 Produkte · Sortierung: 2</div>
+            </div>
+            <div class="cat-right">
+              <span class="cat-badge on"><span class="badge-dot"></span>Aktiv</span>
+              <div class="cat-actions">
+                <button class="action-btn" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><path d="M2 9.5V11h1.5l4.4-4.4-1.5-1.5L2 9.5zM10.7 3.3a.4.4 0 000-.6L9.3 1.3a.4.4 0 00-.6 0L7.6 2.4l1.5 1.5 1.6-1.6z" style="fill:currentColor;stroke:none"/></svg>
+                </button>
+                <button class="action-btn del" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><polyline points="2,3.5 11,3.5"/><path d="M4.5 3.5V2.5h4v1M5 6v4M8 6v4"/><rect x="3" y="3.5" width="7" height="8" rx="1"/></svg>
+                </button>
+              </div>
+              <div class="cat-sort"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <!-- Snacks -->
+          <div class="cat-card" id="card-snacks" onclick="selectCard('snacks')">
+            <div class="cat-color-swatch" style="background:#d4a017">
+              <svg viewBox="0 0 16 16"><rect x="4" y="5" width="8" height="6" rx="2" stroke="white" stroke-width="1.5" fill="none"/><line x1="4" y1="8" x2="12" y2="8" stroke="white" stroke-width="1.2"/></svg>
+            </div>
+            <div class="cat-info">
+              <div class="cat-name">Snacks</div>
+              <div class="cat-meta">3 Produkte · Sortierung: 3</div>
+            </div>
+            <div class="cat-right">
+              <span class="cat-badge on"><span class="badge-dot"></span>Aktiv</span>
+              <div class="cat-actions">
+                <button class="action-btn" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><path d="M2 9.5V11h1.5l4.4-4.4-1.5-1.5L2 9.5zM10.7 3.3a.4.4 0 000-.6L9.3 1.3a.4.4 0 00-.6 0L7.6 2.4l1.5 1.5 1.6-1.6z" style="fill:currentColor;stroke:none"/></svg>
+                </button>
+                <button class="action-btn del" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><polyline points="2,3.5 11,3.5"/><path d="M4.5 3.5V2.5h4v1M5 6v4M8 6v4"/><rect x="3" y="3.5" width="7" height="8" rx="1"/></svg>
+                </button>
+              </div>
+              <div class="cat-sort"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <!-- Tabak -->
+          <div class="cat-card" id="card-tabak" onclick="selectCard('tabak')">
+            <div class="cat-color-swatch" style="background:#7c5cbf">
+              <svg viewBox="0 0 16 16"><path d="M4 10 Q8 4 12 10" stroke="white" stroke-width="1.5" fill="none"/><line x1="4" y1="10" x2="12" y2="10" stroke="white" stroke-width="1.2"/></svg>
+            </div>
+            <div class="cat-info">
+              <div class="cat-name">Tabak</div>
+              <div class="cat-meta">0 Produkte · Sortierung: 4</div>
+            </div>
+            <div class="cat-right">
+              <span class="cat-badge off"><span class="badge-dot"></span>Inaktiv</span>
+              <div class="cat-actions">
+                <button class="action-btn" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><path d="M2 9.5V11h1.5l4.4-4.4-1.5-1.5L2 9.5zM10.7 3.3a.4.4 0 000-.6L9.3 1.3a.4.4 0 00-.6 0L7.6 2.4l1.5 1.5 1.6-1.6z" style="fill:currentColor;stroke:none"/></svg>
+                </button>
+                <button class="action-btn del" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><polyline points="2,3.5 11,3.5"/><path d="M4.5 3.5V2.5h4v1M5 6v4M8 6v4"/><rect x="3" y="3.5" width="7" height="8" rx="1"/></svg>
+                </button>
+              </div>
+              <div class="cat-sort"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <!-- Sonstiges -->
+          <div class="cat-card" id="card-sonstiges" onclick="selectCard('sonstiges')">
+            <div class="cat-color-swatch" style="background:#888780">
+              <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.5" fill="white"/><circle cx="4" cy="8" r="1.5" fill="white"/><circle cx="12" cy="8" r="1.5" fill="white"/></svg>
+            </div>
+            <div class="cat-info">
+              <div class="cat-name">Sonstiges</div>
+              <div class="cat-meta">2 Produkte · Sortierung: 5</div>
+            </div>
+            <div class="cat-right">
+              <span class="cat-badge on"><span class="badge-dot"></span>Aktiv</span>
+              <div class="cat-actions">
+                <button class="action-btn" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><path d="M2 9.5V11h1.5l4.4-4.4-1.5-1.5L2 9.5zM10.7 3.3a.4.4 0 00-.6L9.3 1.3a.4.4 0 00-.6 0L7.6 2.4l1.5 1.5 1.6-1.6z" style="fill:currentColor;stroke:none"/></svg>
+                </button>
+                <button class="action-btn del" onclick="event.stopPropagation()">
+                  <svg viewBox="0 0 13 13"><polyline points="2,3.5 11,3.5"/><path d="M4.5 3.5V2.5h4v1M5 6v4M8 6v4"/><rect x="3" y="3.5" width="7" height="8" rx="1"/></svg>
+                </button>
+              </div>
+              <div class="cat-sort"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: detail panel -->
+        <div class="detail-panel" id="detail-panel">
+
+          <!-- Selected: Shisha -->
+          <div class="detail-content" id="detail-shisha">
+            <div class="detail-head">
+              <div class="detail-color-preview" id="detail-color-preview" style="background:#1a6fff"></div>
+              <div class="detail-head-info">
+                <div class="detail-head-name">Shisha</div>
+                <div class="detail-head-sub">8 Produkte zugewiesen</div>
+              </div>
+            </div>
+            <div class="detail-body">
+              <div class="field">
+                <label>Name</label>
+                <input type="text" value="Shisha" id="detail-name-input"/>
+              </div>
+              <div class="field">
+                <label>Farbe</label>
+                <div class="color-grid" id="color-grid">
+                  <div class="color-swatch picked" style="background:#1a6fff" data-color="#1a6fff"></div>
+                  <div class="color-swatch" style="background:#3aada0" data-color="#3aada0"></div>
+                  <div class="color-swatch" style="background:#d4a017" data-color="#d4a017"></div>
+                  <div class="color-swatch" style="background:#7c5cbf" data-color="#7c5cbf"></div>
+                  <div class="color-swatch" style="background:#e05a2b" data-color="#e05a2b"></div>
+                  <div class="color-swatch" style="background:#3a6b35" data-color="#3a6b35"></div>
+                  <div class="color-swatch" style="background:#c0112a" data-color="#c0112a"></div>
+                  <div class="color-swatch" style="background:#888780" data-color="#888780"></div>
+                  <div class="color-swatch" style="background:#1a6fff88;border:1.5px dashed #1a6fff" data-color="custom" title="Benutzerdefiniert"></div>
+                </div>
+              </div>
+              <div class="field">
+                <label>Sortierung</label>
+                <select><option>1 — Erste Position</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+              </div>
+              <div class="field">
+                <label>Status</label>
+                <select><option>Aktiv</option><option>Inaktiv</option></select>
+              </div>
+              <div class="field">
+                <label>Zugewiesene Produkte</label>
+                <div class="prod-chips">
+                  <span class="prod-chip">Shisha Standard</span>
+                  <span class="prod-chip">Shisha Premium</span>
+                  <span class="prod-chip">Wasserpfeife Doppel</span>
+                  <span class="prod-chip">Shisha Groß</span>
+                  <span class="prod-chip">Shisha Mini</span>
+                  <span class="prod-chip">+ 3 weitere</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-footer">
+              <button class="btn-cancel">Abbrechen</button>
+              <button class="btn-save">Änderungen speichern</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Neue Kategorie -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">Neue Kategorie</span>
+        <button class="modal-close" id="close-modal"><svg viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" placeholder="z.B. Heißgetränke"/>
+        </div>
+        <div class="field">
+          <label>Farbe</label>
+          <div class="color-grid">
+            <div class="color-swatch picked" style="background:#1a6fff"></div>
+            <div class="color-swatch" style="background:#3aada0"></div>
+            <div class="color-swatch" style="background:#d4a017"></div>
+            <div class="color-swatch" style="background:#7c5cbf"></div>
+            <div class="color-swatch" style="background:#e05a2b"></div>
+            <div class="color-swatch" style="background:#3a6b35"></div>
+            <div class="color-swatch" style="background:#c0112a"></div>
+            <div class="color-swatch" style="background:#888780"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select><option>Aktiv</option><option>Inaktiv</option></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" id="cancel-modal">Abbrechen</button>
+        <button class="btn-save">Kategorie speichern</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Dark mode
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  // Modal
+  document.getElementById('open-modal').addEventListener('click', () => document.getElementById('overlay').classList.add('visible'));
+  document.getElementById('close-modal').addEventListener('click', () => document.getElementById('overlay').classList.remove('visible'));
+  document.getElementById('cancel-modal').addEventListener('click', () => document.getElementById('overlay').classList.remove('visible'));
+
+  // Card selection
+  const cards = ['shisha','getraenke','snacks','tabak','sonstiges'];
+  function selectCard(id) {
+    cards.forEach(c => {
+      document.getElementById('card-' + c).classList.remove('selected');
+    });
+    document.getElementById('card-' + id).classList.add('selected');
+  }
+
+  // Color picker in detail panel
+  document.getElementById('color-grid').addEventListener('click', (e) => {
+    const swatch = e.target.closest('.color-swatch');
+    if (!swatch || swatch.dataset.color === 'custom') return;
+    document.querySelectorAll('#color-grid .color-swatch').forEach(s => s.classList.remove('picked'));
+    swatch.classList.add('picked');
+    document.getElementById('detail-color-preview').style.background = swatch.dataset.color;
+  });
+
+  // Edit button opens detail
+  function openEdit() { /* already shown */ }
+</script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Produkt bearbeiten</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;position:relative;min-height:680px;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+/* Body */
+.body{display:flex;flex:1;min-height:0;}
+
+/* Sidebar */
+.sidebar{width:200px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.nav-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:14px 16px 4px;}
+.nav-item{font-size:12px;font-weight:500;color:var(--text2);padding:7px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.nav-item.active{color:var(--acc-t);background:var(--acc-bg);font-weight:600;}
+.nav-count{font-size:10px;background:var(--sur2);color:var(--text2);padding:2px 7px;border-radius:10px;}
+.nav-sep{height:1px;background:var(--brd);margin:4px 0;}
+
+/* Dimmed content behind modal */
+.content-bg{flex:1;display:flex;flex-direction:column;filter:blur(1px);pointer-events:none;opacity:0.5;}
+.toolbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.add-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--acc);color:white;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--brd);}
+.stat{background:var(--sur);padding:10px 20px;border-right:1px solid var(--brd);}
+.stat:last-child{border-right:none;}
+.stat-label{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:3px;}
+.stat-value{font-size:17px;font-weight:600;color:var(--text);}
+.stat-value.accent{color:var(--acc);}
+.table-hint{padding:20px;display:flex;flex-direction:column;gap:12px;}
+.table-row-mock{height:44px;border-radius:8px;background:var(--sur);border:1px solid var(--brd);}
+
+/* Modal overlay */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.38);display:flex;align-items:center;justify-content:center;border-radius:18px;z-index:10;}
+.app.dark .overlay{background:rgba(0,0,0,0.58);}
+
+/* Modal */
+.modal{background:var(--sur);border-radius:16px;width:520px;overflow:hidden;display:flex;flex-direction:column;}
+
+.modal-head{padding:18px 20px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:12px;}
+.modal-head-icon{width:36px;height:36px;border-radius:10px;background:var(--acc-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.modal-head-icon svg{width:16px;height:16px;stroke:var(--acc);fill:none;stroke-width:2;}
+.modal-head-info{flex:1;}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);}
+.modal-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+.modal-close{width:28px;height:28px;border-radius:7px;border:1px solid var(--brd);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.modal-close svg{width:12px;height:12px;stroke:var(--text2);fill:none;stroke-width:2;}
+.modal-close:hover{background:var(--sur2);}
+
+/* Tabs inside modal */
+.modal-tabs{display:flex;border-bottom:1px solid var(--brd);padding:0 20px;}
+.modal-tab{font-size:12px;font-weight:500;color:var(--text2);padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+.modal-tab.active{color:var(--acc-t);border-bottom-color:var(--acc);font-weight:600;}
+
+/* Modal body */
+.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px;overflow:auto;max-height:420px;}
+.tab-panel{display:none;flex-direction:column;gap:14px;}
+.tab-panel.active{display:flex;}
+
+/* Fields */
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);}
+.field input,.field select{height:36px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;width:100%;}
+.field input:focus,.field select:focus{border-color:var(--acc);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.field-hint{font-size:10px;color:var(--text2);margin-top:2px;line-height:1.5;}
+
+/* Preis-Änderung Hinweis */
+.price-change-hint{background:var(--pay-bg);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--pay-t);line-height:1.6;display:flex;gap:10px;align-items:flex-start;}
+.price-change-hint svg{width:14px;height:14px;stroke:var(--pay-t);fill:none;stroke-width:2;flex-shrink:0;margin-top:1px;}
+
+/* Modifier groups */
+.modifier-group{background:var(--bg);border:1px solid var(--brd);border-radius:10px;overflow:hidden;}
+.modifier-group-head{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);}
+.mg-name{font-size:12px;font-weight:600;color:var(--text);}
+.mg-meta{font-size:10px;color:var(--text2);margin-top:1px;}
+.mg-badges{display:flex;gap:5px;}
+.mg-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;}
+.mg-badge.req{background:var(--acc-bg);color:var(--acc-t);}
+.mg-badge.opt{background:var(--sur2);color:var(--text2);}
+.modifier-options{padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;}
+.mod-option{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;background:var(--sur);border:1px solid var(--brd);padding:4px 10px;border-radius:20px;color:var(--text);}
+.mod-option-price{color:var(--acc-t);font-size:10px;}
+.mg-add{font-size:10px;font-weight:600;color:var(--acc-t);background:var(--acc-bg);border:none;padding:4px 10px;border-radius:20px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.add-modifier-btn{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--acc-t);background:var(--acc-bg);border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;align-self:flex-start;}
+.add-modifier-btn svg{width:12px;height:12px;stroke:var(--acc-t);fill:none;stroke-width:2.5;}
+
+/* Preishistorie */
+.price-history{display:flex;flex-direction:column;gap:0;}
+.ph-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);}
+.ph-row:last-child{border-bottom:none;}
+.ph-price{font-size:13px;font-weight:600;color:var(--text);}
+.ph-price.current{color:var(--acc);}
+.ph-meta{font-size:11px;color:var(--text2);}
+.ph-badge{font-size:10px;font-weight:600;background:var(--free-bg);color:var(--free-t);padding:2px 8px;border-radius:20px;}
+
+/* Footer */
+.modal-footer{padding:14px 20px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.footer-left{display:flex;align-items:center;gap:8px;}
+.btn-delete{font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--dan-t);background:transparent;color:var(--dan-t);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;display:flex;align-items:center;gap:6px;}
+.btn-delete svg{width:13px;height:13px;stroke:var(--dan-t);fill:none;stroke-width:1.8;}
+.btn-delete:hover{background:var(--dan-bg);}
+.footer-right{display:flex;gap:8px;}
+.btn-cancel{font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--brd);background:transparent;color:var(--text2);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.btn-save{font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;border:none;background:var(--acc);color:white;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+
+/* Toggle switch for Aktiv/Inaktiv */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--brd);border-radius:10px;}
+.toggle-label{font-size:12px;font-weight:500;color:var(--text);}
+.toggle-sub{font-size:10px;color:var(--text2);margin-top:1px;}
+.toggle-switch{width:42px;height:24px;border-radius:12px;background:var(--free-t);cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;}
+.toggle-switch.off{background:var(--sur2);}
+.toggle-switch::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:white;top:3px;right:3px;transition:transform .2s;}
+.toggle-switch.off::after{transform:translateX(-18px);}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">Übersicht</div>
+      <div class="nav-item">Tische <span class="nav-count">8</span></div>
+      <div class="nav-item active">Produkte <span class="nav-count">24</span></div>
+      <div class="nav-item">Kategorien <span class="nav-count">5</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Abrechnung</div>
+      <div class="nav-item">Kassensitzung</div>
+      <div class="nav-item">Berichte</div>
+      <div class="nav-item">Z-Bericht</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">System</div>
+      <div class="nav-item">Einstellungen</div>
+    </div>
+
+    <!-- Dimmed background content -->
+    <div class="content-bg">
+      <div class="toolbar">
+        <div style="display:flex;gap:8px;">
+          <div style="width:220px;height:34px;border-radius:8px;background:var(--bg);border:1px solid var(--brd);"></div>
+          <div style="width:60px;height:34px;border-radius:20px;background:var(--acc);"></div>
+          <div style="width:80px;height:34px;border-radius:20px;background:var(--sur2);border:1px solid var(--brd);"></div>
+          <div style="width:80px;height:34px;border-radius:20px;background:var(--sur2);border:1px solid var(--brd);"></div>
+        </div>
+        <div style="width:160px;height:34px;border-radius:8px;background:var(--acc);"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Produkte gesamt</div><div class="stat-value accent">24</div></div>
+        <div class="stat"><div class="stat-label">Aktiv</div><div class="stat-value">21</div></div>
+        <div class="stat"><div class="stat-label">Inaktiv</div><div class="stat-value">3</div></div>
+      </div>
+      <div class="table-hint">
+        <div class="table-row-mock"></div>
+        <div class="table-row-mock"></div>
+        <div class="table-row-mock"></div>
+        <div class="table-row-mock"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal overlay -->
+  <div class="overlay">
+    <div class="modal">
+
+      <!-- Head -->
+      <div class="modal-head">
+        <div class="modal-head-icon">
+          <svg viewBox="0 0 16 16"><path d="M3 11.5V13h1.5l4.4-4.4-1.5-1.5L3 11.5zM13.7 4.3a.4.4 0 000-.6L12.3 2.3a.4.4 0 00-.6 0L10.6 3.4l1.5 1.5 1.6-1.6z"/></svg>
+        </div>
+        <div class="modal-head-info">
+          <div class="modal-title">Shisha Standard</div>
+          <div class="modal-sub">Produkt bearbeiten · Erstellt 12.01.2026</div>
+        </div>
+        <button class="modal-close" id="modal-close">
+          <svg viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="modal-tabs">
+        <div class="modal-tab active" data-tab="allgemein">Allgemein</div>
+        <div class="modal-tab" data-tab="preis">Preis &amp; Steuer</div>
+        <div class="modal-tab" data-tab="modifiers">Modifikatoren</div>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+
+        <!-- Tab: Allgemein -->
+        <div class="tab-panel active" id="tab-allgemein">
+          <div class="field">
+            <label>Produktname</label>
+            <input type="text" value="Shisha Standard"/>
+          </div>
+          <div class="field">
+            <label>Beschreibung (optional)</label>
+            <input type="text" value="inkl. Kohle &amp; Mundstück"/>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Kategorie</label>
+              <select>
+                <option selected>Shisha</option>
+                <option>Getränke</option>
+                <option>Snacks</option>
+                <option>Sonstiges</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Sortierung</label>
+              <input type="text" value="1"/>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Produkt aktiv</div>
+              <div class="toggle-sub">Inaktive Produkte erscheinen nicht im Kassensystem</div>
+            </div>
+            <div class="toggle-switch" id="active-toggle"></div>
+          </div>
+        </div>
+
+        <!-- Tab: Preis & Steuer -->
+        <div class="tab-panel" id="tab-preis">
+          <div class="price-change-hint">
+            <svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5"/><line x1="7" y1="5" x2="7" y2="7.5"/><circle cx="7" cy="10" r="0.7" fill="currentColor" stroke="none"/></svg>
+            Preisänderungen werden als neue Einträge in der Preishistorie gespeichert (GoBD). Bestehende Bons bleiben unverändert.
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Aktueller Preis (€)</label>
+              <input type="text" value="19,00"/>
+              <div class="field-hint">Änderung erzeugt neuen Historieneintrag</div>
+            </div>
+            <div class="field">
+              <label>MwSt. Inhaus</label>
+              <select>
+                <option selected>19 %</option>
+                <option>7 %</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Preishistorie</label>
+            <div class="price-history">
+              <div class="ph-row">
+                <div>
+                  <div class="ph-price current">19,00 €</div>
+                  <div class="ph-meta">Seit 01.03.2026 · geändert von Niko</div>
+                </div>
+                <span class="ph-badge">Aktuell</span>
+              </div>
+              <div class="ph-row">
+                <div>
+                  <div class="ph-price">17,00 €</div>
+                  <div class="ph-meta">15.01.2026 – 28.02.2026 · geändert von Niko</div>
+                </div>
+              </div>
+              <div class="ph-row">
+                <div>
+                  <div class="ph-price">15,00 €</div>
+                  <div class="ph-meta">12.01.2026 – 14.01.2026 · geändert von Niko</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Modifikatoren -->
+        <div class="tab-panel" id="tab-modifiers">
+
+          <div class="modifier-group">
+            <div class="modifier-group-head">
+              <div>
+                <div class="mg-name">Tabaksorte</div>
+                <div class="mg-meta">Pflichtauswahl · max. 1</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="mg-badge req">Pflicht</span>
+                <button class="mg-add">+ Option</button>
+              </div>
+            </div>
+            <div class="modifier-options">
+              <span class="mod-option">Al Fakher Mint</span>
+              <span class="mod-option">Al Fakher Doppelapfel</span>
+              <span class="mod-option">Al Fakher Grape</span>
+              <span class="mod-option">Adalya Love 66 <span class="mod-option-price">+2,00 €</span></span>
+              <span class="mod-option">Fumari Ambrosia <span class="mod-option-price">+2,00 €</span></span>
+            </div>
+          </div>
+
+          <div class="modifier-group">
+            <div class="modifier-group-head">
+              <div>
+                <div class="mg-name">Kopfgröße</div>
+                <div class="mg-meta">Pflichtauswahl · max. 1</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="mg-badge req">Pflicht</span>
+                <button class="mg-add">+ Option</button>
+              </div>
+            </div>
+            <div class="modifier-options">
+              <span class="mod-option">Klein</span>
+              <span class="mod-option">Standard</span>
+              <span class="mod-option">Groß <span class="mod-option-price">+3,00 €</span></span>
+            </div>
+          </div>
+
+          <div class="modifier-group">
+            <div class="modifier-group-head">
+              <div>
+                <div class="mg-name">Extras</div>
+                <div class="mg-meta">Optional · unbegrenzt</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="mg-badge opt">Optional</span>
+                <button class="mg-add">+ Option</button>
+              </div>
+            </div>
+            <div class="modifier-options">
+              <span class="mod-option">Mit Eis</span>
+              <span class="mod-option">Extra Mundstück</span>
+              <span class="mod-option">Wärmer <span class="mod-option-price">+1,00 €</span></span>
+            </div>
+          </div>
+
+          <button class="add-modifier-btn">
+            <svg viewBox="0 0 12 12"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>
+            Modifier-Gruppe hinzufügen
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer">
+        <div class="footer-left">
+          <button class="btn-delete">
+            <svg viewBox="0 0 13 13"><polyline points="2,3.5 11,3.5"/><path d="M4.5 3.5V2.5h4v1M5 6v4M8 6v4"/><rect x="3" y="3.5" width="7" height="8" rx="1"/></svg>
+            Produkt löschen
+          </button>
+        </div>
+        <div class="footer-right">
+          <button class="btn-cancel" id="btn-cancel">Abbrechen</button>
+          <button class="btn-save">Änderungen speichern</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  // Tabs
+  document.querySelectorAll('.modal-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Active toggle
+  document.getElementById('active-toggle').addEventListener('click', function() {
+    this.classList.toggle('off');
+  });
+</script>
+</body>
+</html>

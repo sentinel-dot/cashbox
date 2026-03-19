@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — PaymentView Final</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);}
+.back-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:none;border:none;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.back-btn svg{width:14px;height:14px;stroke:var(--text2);fill:none;stroke-width:2;}
+.tisch-badge{font-size:13px;font-weight:600;color:var(--text);background:var(--sur2);padding:5px 14px;border-radius:20px;}
+.tisch-badge span{color:var(--acc);}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+.body{display:flex;flex:1;min-height:0;}
+
+/* Left: Bestellübersicht */
+.order-summary{width:290px;border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;background:var(--bg);}
+.os-head{padding:14px 16px;border-bottom:1px solid var(--brd);background:var(--sur);}
+.os-title{font-size:12px;font-weight:600;color:var(--text);}
+.os-sub{font-size:10px;color:var(--text2);margin-top:2px;}
+.os-items{flex:1;overflow-y:auto;padding:4px 0;}
+.os-item{display:flex;align-items:flex-start;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--brd);}
+.os-item:last-child{border-bottom:none;}
+.os-item-name{font-size:12px;font-weight:600;color:var(--text);}
+.os-item-mods{font-size:10px;color:var(--text2);margin-top:1px;}
+.os-item-qty{font-size:10px;color:var(--text2);}
+.os-item-price{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;}
+.os-totals{border-top:1px solid var(--brd);padding:12px 16px;background:var(--sur);display:flex;flex-direction:column;gap:5px;}
+.os-row{display:flex;justify-content:space-between;}
+.os-label{font-size:11px;color:var(--text2);}
+.os-value{font-size:11px;font-weight:600;color:var(--text);}
+.os-total-row{display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--brd);margin-top:2px;}
+.os-total-label{font-size:14px;font-weight:600;color:var(--text);}
+.os-total-value{font-size:20px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+
+/* Right: Payment panel */
+.payment-panel{flex:1;overflow:auto;}
+.pp-inner{padding:18px 20px;display:flex;flex-direction:column;gap:14px;}
+
+/* Zahlungsart */
+.payment-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.pm-card{background:var(--sur);border:1.5px solid var(--brd);border-radius:12px;padding:12px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all .15s;}
+.pm-card:hover{border-color:rgba(26,111,255,0.3);}
+.pm-card.selected{border-color:var(--acc);background:var(--acc-bg);}
+.pm-icon{width:32px;height:32px;border-radius:9px;background:var(--sur2);display:flex;align-items:center;justify-content:center;}
+.pm-card.selected .pm-icon{background:rgba(26,111,255,0.15);}
+.pm-icon svg{width:15px;height:15px;stroke:var(--text2);fill:none;stroke-width:1.8;}
+.pm-card.selected .pm-icon svg{stroke:var(--acc-t);}
+.pm-label{font-size:11px;font-weight:600;color:var(--text2);}
+.pm-card.selected .pm-label{color:var(--acc-t);}
+
+/* ─── VIEW PANELS ─── */
+.view-panel{display:none;flex-direction:column;gap:12px;}
+.view-panel.active{display:flex;}
+
+/* ── BAR VIEW ── */
+.amount-display{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;}
+.amount-top{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);}
+.amt-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);}
+.amt-total{font-size:13px;font-weight:600;color:var(--text);margin-top:2px;}
+.amt-given-col{text-align:right;}
+.amt-given{font-size:26px;font-weight:600;letter-spacing:-0.5px;color:var(--text);}
+.amt-given.exact{color:var(--acc);}
+.amt-given.over{color:var(--free-t);}
+.amt-given.under{color:var(--dan-t);}
+.quick-amounts{padding:10px 12px;border-bottom:1px solid var(--brd);display:flex;gap:6px;flex-wrap:wrap;}
+.qa-btn{font-size:11px;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid var(--brd);background:transparent;color:var(--text);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all .1s;white-space:nowrap;}
+.qa-btn:hover{background:var(--sur2);}
+.qa-btn.exact{background:var(--acc-bg);border-color:var(--acc);color:var(--acc-t);}
+.change-row{padding:9px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);}
+.change-lbl{font-size:12px;color:var(--text2);}
+.change-val{font-size:14px;font-weight:600;color:var(--text2);}
+.change-val.pos{color:var(--free-t);}
+.change-val.neg{color:var(--dan-t);}
+.numpad{padding:10px 12px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.np-btn{height:46px;border-radius:10px;border:1px solid var(--brd);background:var(--sur);font-size:16px;font-weight:600;color:var(--text);cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;display:flex;align-items:center;justify-content:center;transition:background .1s;}
+.np-btn:hover{background:var(--sur2);}
+.np-btn:active{transform:scale(0.96);}
+.np-btn.span2{grid-column:span 2;}
+.np-btn.del{background:var(--sur2);color:var(--text2);}
+.np-btn.del:hover{background:var(--dan-bg);color:var(--dan-t);border-color:var(--dan-t);}
+.np-btn.del svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;}
+
+/* ── KARTE VIEW ── */
+.karte-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;}
+.karte-main{padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;border-bottom:1px solid var(--brd);}
+.karte-icon{width:56px;height:56px;border-radius:16px;background:var(--acc-bg);display:flex;align-items:center;justify-content:center;}
+.karte-icon svg{width:24px;height:24px;stroke:var(--acc-t);fill:none;stroke-width:1.8;}
+.karte-amount{font-size:32px;font-weight:600;color:var(--text);letter-spacing:-0.5px;}
+.karte-hint{font-size:12px;color:var(--text2);text-align:center;line-height:1.5;}
+.karte-status{padding:14px 20px;display:flex;align-items:center;gap:10px;}
+.karte-status-dot{width:10px;height:10px;border-radius:50%;background:var(--pay-t);flex-shrink:0;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.karte-status-text{font-size:12px;font-weight:500;color:var(--pay-t);}
+.karte-status.done .karte-status-dot{background:var(--free-t);animation:none;}
+.karte-status.done .karte-status-text{color:var(--free-t);}
+.karte-confirm-btn{height:46px;border-radius:10px;border:none;background:var(--free-t);color:white;font-size:13px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin:0 20px 16px;}
+.karte-confirm-btn svg{width:16px;height:16px;stroke:white;fill:none;stroke-width:2.2;}
+
+/* ── GEMISCHT VIEW ── */
+.gemischt-card{background:var(--sur);border:1px solid var(--brd);border-radius:14px;overflow:hidden;}
+.gemischt-total-row{padding:12px 18px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;}
+.gt-label{font-size:11px;color:var(--text2);}
+.gt-value{font-size:16px;font-weight:600;color:var(--text);}
+.gemischt-split{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+.gs-col{padding:14px 18px;border-bottom:1px solid var(--brd);}
+.gs-col:first-child{border-right:1px solid var(--brd);}
+.gs-method{display:flex;align-items:center;gap:7px;margin-bottom:10px;}
+.gs-method-icon{width:26px;height:26px;border-radius:7px;background:var(--sur2);display:flex;align-items:center;justify-content:center;}
+.gs-method-icon svg{width:13px;height:13px;stroke:var(--text2);fill:none;stroke-width:1.8;}
+.gs-method-label{font-size:12px;font-weight:600;color:var(--text);}
+.gs-input-wrap{position:relative;}
+.gs-input{width:100%;height:40px;border-radius:8px;border:1.5px solid var(--brd);background:var(--bg);padding:0 12px;font-size:16px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;text-align:right;}
+.gs-input:focus{border-color:var(--acc);}
+.gs-input.auto{color:var(--text2);background:var(--sur2);border-style:dashed;}
+.gs-hint{font-size:10px;color:var(--text2);margin-top:5px;}
+.gs-hint.auto{color:var(--acc-t);}
+.gemischt-bar{padding:10px 12px 12px;border-bottom:1px solid var(--brd);}
+.gs-bar-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:8px;}
+.gs-bar-track{height:8px;border-radius:4px;background:var(--sur2);overflow:hidden;}
+.gs-bar-fill{height:100%;border-radius:4px;background:var(--acc);transition:width .2s;}
+.gs-bar-labels{display:flex;justify-content:space-between;margin-top:5px;}
+.gs-bar-lbl{font-size:10px;color:var(--text2);}
+.gs-bar-lbl span{font-weight:600;color:var(--acc-t);}
+.gemischt-quick{padding:10px 12px;border-bottom:1px solid var(--brd);display:flex;gap:6px;flex-wrap:wrap;}
+.gemischt-numpad{padding:10px 12px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+
+/* ── ACTIVE FIELD INDICATOR ── */
+.gs-col.active-field .gs-input{border-color:var(--acc);}
+.gs-col.active-field .gs-method-label{color:var(--acc-t);}
+
+/* Confirm btn shared */
+.confirm-btn{height:46px;border-radius:12px;border:none;background:var(--acc);color:white;font-size:13px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;transition:opacity .15s;}
+.confirm-btn:disabled{opacity:0.35;cursor:not-allowed;}
+.confirm-btn svg{width:16px;height:16px;stroke:white;fill:none;stroke-width:2.2;}
+
+/* Split hint */
+.split-hint{background:var(--sur2);border-radius:10px;padding:8px 14px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px;}
+.split-hint svg{width:13px;height:13px;stroke:var(--text2);fill:none;stroke-width:1.8;flex-shrink:0;}
+.split-link{font-size:11px;font-weight:600;color:var(--acc-t);background:none;border:none;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div class="wordmark">
+        <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+        <span class="brand-name">Kassensystem</span>
+      </div>
+      <button class="back-btn"><svg viewBox="0 0 14 14"><polyline points="9,2 4,7 9,12"/></svg> Zurück</button>
+    </div>
+    <div class="tisch-badge">Tisch <span>4</span> · Innen</div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Left -->
+    <div class="order-summary">
+      <div class="os-head">
+        <div class="os-title">Bestellübersicht</div>
+        <div class="os-sub">Tisch 4 · 3 Positionen</div>
+      </div>
+      <div class="os-items">
+        <div class="os-item">
+          <div><div class="os-item-name">Shisha Premium</div><div class="os-item-mods">Fumari Ambrosia · Groß</div><div class="os-item-qty">1×</div></div>
+          <div class="os-item-price">25,00 €</div>
+        </div>
+        <div class="os-item">
+          <div><div class="os-item-name">Shisha Standard</div><div class="os-item-mods">Al Fakher Mint · Standard</div><div class="os-item-qty">1×</div></div>
+          <div class="os-item-price">19,00 €</div>
+        </div>
+        <div class="os-item">
+          <div><div class="os-item-name">Kohle Nachfüllen</div><div class="os-item-qty">2×</div></div>
+          <div class="os-item-price">6,00 €</div>
+        </div>
+      </div>
+      <div class="os-totals">
+        <div class="os-row"><span class="os-label">Netto</span><span class="os-value">42,02 €</span></div>
+        <div class="os-row"><span class="os-label">MwSt. 19 %</span><span class="os-value">7,98 €</span></div>
+        <div class="os-total-row">
+          <span class="os-total-label">Gesamt</span>
+          <span class="os-total-value">50,00 €</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right -->
+    <div class="payment-panel">
+      <div class="pp-inner">
+
+        <!-- Zahlungsart -->
+        <div class="payment-methods">
+          <div class="pm-card selected" id="pm-bar" onclick="switchMethod('bar')">
+            <div class="pm-icon"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v5M6 7.5h4"/></svg></div>
+            <div class="pm-label">Barzahlung</div>
+          </div>
+          <div class="pm-card" id="pm-karte" onclick="switchMethod('karte')">
+            <div class="pm-icon"><svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9" rx="1.5"/><line x1="2" y1="7.5" x2="14" y2="7.5" stroke-width="2"/></svg></div>
+            <div class="pm-label">Kartenzahlung</div>
+          </div>
+          <div class="pm-card" id="pm-mix" onclick="switchMethod('mix')">
+            <div class="pm-icon"><svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9" rx="1.5"/><path d="M8 4v9"/></svg></div>
+            <div class="pm-label">Gemischt</div>
+          </div>
+        </div>
+
+        <!-- ── BAR VIEW ── -->
+        <div class="view-panel active" id="view-bar">
+          <div class="amount-display">
+            <div class="amount-top">
+              <div>
+                <div class="amt-label">Zu zahlen</div>
+                <div class="amt-total">50,00 €</div>
+              </div>
+              <div class="amt-given-col">
+                <div class="amt-label">Gegeben</div>
+                <div class="amt-given" id="bar-given">—</div>
+              </div>
+            </div>
+            <div class="quick-amounts" id="bar-quick"></div>
+            <div class="change-row">
+              <span class="change-lbl">Wechselgeld</span>
+              <span class="change-val" id="bar-change">—</span>
+            </div>
+            <div class="numpad">
+              <button class="np-btn" onclick="barNum('1')">1</button>
+              <button class="np-btn" onclick="barNum('2')">2</button>
+              <button class="np-btn" onclick="barNum('3')">3</button>
+              <button class="np-btn" onclick="barNum('4')">4</button>
+              <button class="np-btn" onclick="barNum('5')">5</button>
+              <button class="np-btn" onclick="barNum('6')">6</button>
+              <button class="np-btn" onclick="barNum('7')">7</button>
+              <button class="np-btn" onclick="barNum('8')">8</button>
+              <button class="np-btn" onclick="barNum('9')">9</button>
+              <button class="np-btn span2" onclick="barNum('0')">0</button>
+              <button class="np-btn del" onclick="barNum('del')"><svg viewBox="0 0 18 18"><polyline points="7,5 2,9 7,13"/><line x1="2" y1="9" x2="16" y2="9"/></svg></button>
+            </div>
+          </div>
+          <button class="confirm-btn" id="bar-confirm" disabled>
+            <svg viewBox="0 0 18 18"><polyline points="3,9 7,13 15,5"/></svg>
+            <span id="bar-confirm-label">Betrag eingeben</span>
+          </button>
+        </div>
+
+        <!-- ── KARTE VIEW ── -->
+        <div class="view-panel" id="view-karte">
+          <div class="karte-card">
+            <div class="karte-main">
+              <div class="karte-icon"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10" stroke-width="3"/><line x1="6" y1="15" x2="10" y2="15" stroke-width="2"/></svg></div>
+              <div class="karte-amount">50,00 €</div>
+              <div class="karte-hint">Karte am Terminal vorzeigen.<br/>Zahlung wird direkt vom Terminal bestätigt.</div>
+            </div>
+            <div class="karte-status" id="karte-status">
+              <div class="karte-status-dot"></div>
+              <span class="karte-status-text">Warte auf Kartenzahlung …</span>
+            </div>
+          </div>
+          <button class="confirm-btn" id="karte-confirm" onclick="karteConfirm()">
+            <svg viewBox="0 0 18 18"><polyline points="3,9 7,13 15,5"/></svg>
+            Kartenzahlung bestätigen
+          </button>
+        </div>
+
+        <!-- ── GEMISCHT VIEW ── -->
+        <div class="view-panel" id="view-mix">
+          <div class="gemischt-card">
+            <div class="gemischt-total-row">
+              <span class="gt-label">Zu zahlen gesamt</span>
+              <span class="gt-value">50,00 €</span>
+            </div>
+            <div class="gemischt-split">
+              <div class="gs-col active-field" id="gs-bar-col">
+                <div class="gs-method">
+                  <div class="gs-method-icon"><svg viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="6.5" y1="4.5" x2="6.5" y2="8.5"/><line x1="4.5" y1="6.5" x2="8.5" y2="6.5"/></svg></div>
+                  <span class="gs-method-label">Bar</span>
+                </div>
+                <input class="gs-input" id="gs-bar-input" type="text" placeholder="0,00" oninput="mixUpdate('bar')" onfocus="setActiveField('bar')"/>
+                <div class="gs-hint" id="gs-bar-hint">Betrag eingeben</div>
+              </div>
+              <div class="gs-col" id="gs-karte-col">
+                <div class="gs-method">
+                  <div class="gs-method-icon"><svg viewBox="0 0 13 13"><rect x="1.5" y="3" width="10" height="7" rx="1"/><line x1="1.5" y1="5.5" x2="11.5" y2="5.5" stroke-width="1.5"/></svg></div>
+                  <span class="gs-method-label">Karte</span>
+                </div>
+                <input class="gs-input auto" id="gs-karte-input" type="text" placeholder="—" readonly/>
+                <div class="gs-hint auto" id="gs-karte-hint">Wird automatisch berechnet</div>
+              </div>
+            </div>
+            <!-- Aufteilungsbalken -->
+            <div class="gemischt-bar">
+              <div class="gs-bar-label">Aufteilung</div>
+              <div class="gs-bar-track"><div class="gs-bar-fill" id="mix-bar-fill" style="width:0%"></div></div>
+              <div class="gs-bar-labels">
+                <span class="gs-bar-lbl">Bar: <span id="mix-bar-pct">0 %</span></span>
+                <span class="gs-bar-lbl">Karte: <span id="mix-karte-pct">100 %</span></span>
+              </div>
+            </div>
+            <!-- Schnellaufteilungen -->
+            <div class="gemischt-quick">
+              <button class="qa-btn" onclick="mixSetBar(10)">10 € bar</button>
+              <button class="qa-btn" onclick="mixSetBar(20)">20 € bar</button>
+              <button class="qa-btn" onclick="mixSetBar(25)">25 € bar</button>
+              <button class="qa-btn" onclick="mixSetBar(30)">30 € bar</button>
+              <button class="qa-btn" onclick="mixSetBar(50)">50 € bar</button>
+            </div>
+            <!-- Numpad für gemischt -->
+            <div class="gemischt-numpad">
+              <button class="np-btn" onclick="mixNum('1')">1</button>
+              <button class="np-btn" onclick="mixNum('2')">2</button>
+              <button class="np-btn" onclick="mixNum('3')">3</button>
+              <button class="np-btn" onclick="mixNum('4')">4</button>
+              <button class="np-btn" onclick="mixNum('5')">5</button>
+              <button class="np-btn" onclick="mixNum('6')">6</button>
+              <button class="np-btn" onclick="mixNum('7')">7</button>
+              <button class="np-btn" onclick="mixNum('8')">8</button>
+              <button class="np-btn" onclick="mixNum('9')">9</button>
+              <button class="np-btn span2" onclick="mixNum('0')">0</button>
+              <button class="np-btn del" onclick="mixNum('del')"><svg viewBox="0 0 18 18"><polyline points="7,5 2,9 7,13"/><line x1="2" y1="9" x2="16" y2="9"/></svg></button>
+            </div>
+          </div>
+          <button class="confirm-btn" id="mix-confirm" disabled>
+            <svg viewBox="0 0 18 18"><polyline points="3,9 7,13 15,5"/></svg>
+            <span id="mix-confirm-label">Bar-Betrag eingeben</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TOTAL = 50.00;
+  const fmt = n => n.toFixed(2).replace('.', ',') + ' €';
+
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  /* ── METHOD SWITCH ── */
+  function switchMethod(m) {
+    ['bar','karte','mix'].forEach(id => {
+      document.getElementById('pm-' + id).classList.remove('selected');
+      document.getElementById('view-' + id).classList.remove('active');
+    });
+    document.getElementById('pm-' + m).classList.add('selected');
+    document.getElementById('view-' + m).classList.add('active');
+  }
+
+  /* ── BAR ── */
+  let barRaw = '';
+  function buildQuick() {
+    const qa = document.getElementById('bar-quick');
+    qa.innerHTML = '';
+    const suggestions = new Set([TOTAL]);
+    [Math.ceil(TOTAL/5)*5, Math.ceil(TOTAL/10)*10, Math.ceil(TOTAL/20)*20, Math.ceil(TOTAL/50)*50]
+      .filter(v => v >= TOTAL && v < TOTAL * 2.5)
+      .forEach(v => suggestions.add(v));
+    [...suggestions].sort((a,b)=>a-b).forEach(val => {
+      const btn = document.createElement('button');
+      btn.className = 'qa-btn' + (val === TOTAL ? ' exact' : '');
+      btn.textContent = val === TOTAL ? fmt(val) + ' ✓ Passend' : fmt(val);
+      btn.onclick = () => { barRaw = String(Math.round(val * 100)); updateBar(); };
+      qa.appendChild(btn);
+    });
+  }
+  function barNum(k) {
+    if (k === 'del') barRaw = barRaw.slice(0,-1);
+    else if (barRaw.length < 8) barRaw += k;
+    updateBar();
+  }
+  function updateBar() {
+    const givenEl = document.getElementById('bar-given');
+    const changeEl = document.getElementById('bar-change');
+    const btn = document.getElementById('bar-confirm');
+    const lbl = document.getElementById('bar-confirm-label');
+    if (!barRaw) {
+      givenEl.textContent = '—'; givenEl.className = 'amt-given';
+      changeEl.textContent = '—'; changeEl.className = 'change-val';
+      btn.disabled = true; lbl.textContent = 'Betrag eingeben'; return;
+    }
+    const given = parseInt(barRaw) / 100;
+    const change = given - TOTAL;
+    givenEl.textContent = fmt(given);
+    if (Math.abs(change) < 0.001) {
+      givenEl.className = 'amt-given exact';
+      changeEl.textContent = '0,00 €'; changeEl.className = 'change-val';
+      btn.disabled = false; lbl.textContent = 'Zahlung abschließen · Passend';
+    } else if (change > 0) {
+      givenEl.className = 'amt-given over';
+      changeEl.textContent = fmt(change); changeEl.className = 'change-val pos';
+      btn.disabled = false; lbl.textContent = 'Zahlung abschließen · Wechselgeld ' + fmt(change);
+    } else {
+      givenEl.className = 'amt-given under';
+      changeEl.textContent = fmt(Math.abs(change)) + ' fehlt'; changeEl.className = 'change-val neg';
+      btn.disabled = true; lbl.textContent = 'Betrag unvollständig';
+    }
+  }
+  buildQuick();
+
+  /* ── KARTE ── */
+  function karteConfirm() {
+    const s = document.getElementById('karte-status');
+    s.classList.add('done');
+    s.innerHTML = '<div class="karte-status-dot"></div><span class="karte-status-text">Zahlung vom Terminal bestätigt ✓</span>';
+    const btn = document.getElementById('karte-confirm');
+    btn.style.background = 'var(--free-t)';
+    btn.innerHTML = '<svg viewBox="0 0 18 18" width="16" height="16" style="stroke:white;fill:none;stroke-width:2.2"><polyline points="3,9 7,13 15,5"/></svg> Abschließen · 50,00 €';
+  }
+
+  /* ── GEMISCHT ── */
+  let mixRaw = '';
+  let mixActiveField = 'bar'; // bar is always the manual input
+
+  function setActiveField(f) { mixActiveField = f; }
+
+  function mixSetBar(val) {
+    if (val > TOTAL) return;
+    document.getElementById('gs-bar-input').value = fmt(val).replace(' €','');
+    updateMix(val);
+  }
+
+  function mixNum(k) {
+    if (k === 'del') mixRaw = mixRaw.slice(0,-1);
+    else if (mixRaw.length < 7) mixRaw += k;
+    const cents = mixRaw ? parseInt(mixRaw) : 0;
+    const val = cents / 100;
+    document.getElementById('gs-bar-input').value = val > 0 ? val.toFixed(2).replace('.',',') : '';
+    updateMix(val);
+  }
+
+  function mixUpdate(field) {
+    const raw = document.getElementById('gs-bar-input').value.replace(',','.');
+    const val = parseFloat(raw) || 0;
+    mixRaw = String(Math.round(val * 100));
+    updateMix(val);
+  }
+
+  function updateMix(barVal) {
+    const karteVal = TOTAL - barVal;
+    const btn = document.getElementById('mix-confirm');
+    const lbl = document.getElementById('mix-confirm-label');
+    const karteInput = document.getElementById('gs-karte-input');
+    const barHint = document.getElementById('gs-bar-hint');
+    const barPct = Math.round((barVal / TOTAL) * 100);
+    const kartePct = 100 - barPct;
+
+    if (karteVal < -0.005) {
+      karteInput.value = '—';
+      karteInput.className = 'gs-input auto';
+      barHint.textContent = 'Bar-Betrag zu hoch';
+      barHint.style.color = 'var(--dan-t)';
+      btn.disabled = true; lbl.textContent = 'Bar-Betrag zu hoch';
+      document.getElementById('mix-bar-fill').style.width = '100%';
+      document.getElementById('mix-bar-pct').textContent = '100 %';
+      document.getElementById('mix-karte-pct').textContent = '0 %';
+      return;
+    }
+
+    karteInput.value = karteVal > 0 ? fmt(karteVal).replace(' €','') : '0,00';
+    karteInput.className = 'gs-input auto';
+    barHint.textContent = barVal > 0 ? fmt(barVal) + ' bar' : 'Betrag eingeben';
+    barHint.style.color = barVal > 0 ? 'var(--acc-t)' : '';
+
+    document.getElementById('mix-bar-fill').style.width = barPct + '%';
+    document.getElementById('mix-bar-pct').textContent = barPct + ' %';
+    document.getElementById('mix-karte-pct').textContent = kartePct + ' %';
+
+    if (barVal > 0 && barVal <= TOTAL) {
+      btn.disabled = false;
+      lbl.textContent = 'Zahlung abschließen · ' + fmt(barVal) + ' bar + ' + fmt(karteVal) + ' Karte';
+    } else if (barVal === 0) {
+      btn.disabled = true; lbl.textContent = 'Bar-Betrag eingeben';
+    }
+  }
+</script>
+</body>
+</html>

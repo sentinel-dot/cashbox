@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Onboarding</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);
+  display:grid;grid-template-columns:280px 1fr;min-height:680px;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* ── LEFT: Stepper ── */
+.stepper-panel{background:var(--bg);border-right:1px solid var(--brd);display:flex;flex-direction:column;padding:32px 24px;}
+.sp-brand{display:flex;align-items:center;gap:9px;margin-bottom:40px;}
+.sp-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.sp-dot svg{width:11px;height:11px;fill:white;}
+.sp-name{font-size:14px;font-weight:600;color:var(--text);}
+.sp-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;}
+.step-list{display:flex;flex-direction:column;gap:0;flex:1;}
+.step-item{display:flex;gap:14px;padding-bottom:24px;position:relative;}
+.step-item:last-child{padding-bottom:0;}
+.step-item:not(:last-child)::after{content:'';position:absolute;left:15px;top:32px;bottom:0;width:1.5px;background:var(--brd);}
+.step-item.done:not(:last-child)::after{background:var(--acc);opacity:0.3;}
+.step-num{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:600;color:var(--text2);background:var(--sur);position:relative;z-index:1;}
+.step-item.done .step-num{background:var(--free-bg);border-color:var(--free-t);color:var(--free-t);}
+.step-item.active .step-num{background:var(--acc);border-color:var(--acc);color:white;}
+.step-check{width:14px;height:14px;stroke:var(--free-t);fill:none;stroke-width:2.5;}
+.step-info{padding-top:4px;}
+.step-name{font-size:12px;font-weight:600;color:var(--text2);}
+.step-item.active .step-name{color:var(--text);}
+.step-item.done .step-name{color:var(--free-t);}
+.step-sub{font-size:10px;color:var(--text2);margin-top:2px;line-height:1.4;}
+.sp-bottom{margin-top:auto;padding-top:24px;border-top:1px solid var(--brd);}
+.sp-help{font-size:11px;color:var(--text2);line-height:1.6;}
+.sp-help a{color:var(--acc-t);cursor:pointer;}
+.tgl-row{display:flex;align-items:center;gap:8px;margin-top:12px;}
+.tgl-lbl{font-size:11px;color:var(--text2);}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+/* ── RIGHT: Content ── */
+.content-panel{background:var(--sur);display:flex;flex-direction:column;}
+.cp-header{padding:28px 32px 20px;border-bottom:1px solid var(--brd);}
+.cp-step-label{font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:6px;font-weight:600;}
+.cp-title{font-size:20px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.cp-sub{font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5;}
+.cp-body{padding:24px 32px;flex:1;overflow:auto;}
+.cp-footer{padding:16px 32px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;}
+
+/* Step panels */
+.step-panel{display:none;}
+.step-panel.active{display:block;}
+
+/* Form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-grid.single{grid-template-columns:1fr;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field.span2{grid-column:span 2;}
+.field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);}
+.field input,.field select{height:38px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;width:100%;}
+.field input:focus,.field select:focus{border-color:var(--acc);}
+.field-hint{font-size:10px;color:var(--text2);margin-top:3px;}
+
+/* Checklist (Step 5) */
+.checklist{display:flex;flex-direction:column;gap:10px;}
+.check-item{display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--bg);border:1px solid var(--brd);border-radius:12px;cursor:pointer;}
+.check-item.done{border-color:var(--free-t);background:var(--free-bg);}
+.check-box{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.check-item.done .check-box{background:var(--free-t);border-color:var(--free-t);}
+.check-box svg{width:12px;height:12px;stroke:white;fill:none;stroke-width:2.5;opacity:0;}
+.check-item.done .check-box svg{opacity:1;}
+.check-info{flex:1;}
+.check-title{font-size:13px;font-weight:600;color:var(--text);}
+.check-item.done .check-title{color:var(--free-t);}
+.check-desc{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.5;}
+.check-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;margin-top:6px;display:inline-block;}
+.check-badge.required{background:var(--dan-bg);color:var(--dan-t);}
+.check-badge.optional{background:var(--sur2);color:var(--text2);}
+
+/* Plan cards (Step 4) */
+.plan-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.plan-card{background:var(--bg);border:1.5px solid var(--brd);border-radius:14px;padding:18px 16px;cursor:pointer;transition:all .15s;position:relative;}
+.plan-card:hover{border-color:rgba(26,111,255,0.3);}
+.plan-card.selected{border-color:var(--acc);background:var(--acc-bg);}
+.plan-card.popular::before{content:'Empfohlen';position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--acc);color:white;font-size:10px;font-weight:600;padding:3px 10px;border-radius:10px;white-space:nowrap;}
+.plan-name{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.plan-card.selected .plan-name{color:var(--acc-t);}
+.plan-price{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.plan-price span{font-size:12px;font-weight:400;color:var(--text2);}
+.plan-card.selected .plan-price{color:var(--acc-t);}
+.plan-features{margin-top:12px;display:flex;flex-direction:column;gap:5px;}
+.plan-feat{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:6px;}
+.plan-feat::before{content:'✓';color:var(--free-t);font-weight:600;font-size:11px;}
+.plan-card.selected .plan-feat{color:var(--acc-t);}
+
+/* TSE test result */
+.tse-result{background:var(--free-bg);border:1px solid rgba(26,92,48,0.2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-top:14px;}
+.app.dark .tse-result{border-color:rgba(96,208,128,0.15);}
+.tse-result-icon{width:36px;height:36px;border-radius:10px;background:var(--free-t);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.tse-result-icon svg{width:16px;height:16px;stroke:white;fill:none;stroke-width:2.2;}
+.tse-result-text{font-size:12px;font-weight:500;color:var(--free-t);}
+.tse-result-sub{font-size:10px;color:var(--free-t);opacity:0.7;margin-top:2px;}
+
+/* Navigation */
+.nav-back{font-size:12px;font-weight:600;color:var(--text2);background:transparent;border:1px solid var(--brd);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
+.nav-next{font-size:12px;font-weight:600;color:white;background:var(--acc);border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;display:flex;align-items:center;gap:7px;}
+.nav-next svg{width:13px;height:13px;stroke:white;fill:none;stroke-width:2;}
+.nav-next.finish{background:var(--free-t);}
+.step-counter{font-size:11px;color:var(--text2);}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Left: Stepper -->
+  <div class="stepper-panel">
+    <div class="sp-brand">
+      <div class="sp-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="sp-name">Kassensystem</span>
+    </div>
+    <div class="sp-title">Einrichtung</div>
+    <div class="step-list" id="step-list">
+      <div class="step-item done" data-step="1">
+        <div class="step-num"><svg class="step-check" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+        <div class="step-info"><div class="step-name">Konto erstellen</div><div class="step-sub">E-Mail & Passwort</div></div>
+      </div>
+      <div class="step-item active" data-step="2">
+        <div class="step-num">2</div>
+        <div class="step-info"><div class="step-name">Betriebsdaten</div><div class="step-sub">Name, Adresse, Steuer-Nr.</div></div>
+      </div>
+      <div class="step-item" data-step="3">
+        <div class="step-num">3</div>
+        <div class="step-info"><div class="step-name">Gerät einrichten</div><div class="step-sub">iPad & TSE konfigurieren</div></div>
+      </div>
+      <div class="step-item" data-step="4">
+        <div class="step-num">4</div>
+        <div class="step-info"><div class="step-name">Plan wählen</div><div class="step-sub">14 Tage kostenlos testen</div></div>
+      </div>
+      <div class="step-item" data-step="5">
+        <div class="step-num">5</div>
+        <div class="step-info"><div class="step-name">Pflicht-Checkliste</div><div class="step-sub">ELSTER, AVV, Verfahrensdoku</div></div>
+      </div>
+      <div class="step-item" data-step="6">
+        <div class="step-num">6</div>
+        <div class="step-info"><div class="step-name">Fertig</div><div class="step-sub">Erste Schicht starten</div></div>
+      </div>
+    </div>
+    <div class="sp-bottom">
+      <div class="sp-help">Fragen? <a>support@kassensystem.de</a></div>
+      <div class="tgl-row"><span class="tgl-lbl">Dark Mode</span><div class="tgl" id="tgl"></div></div>
+    </div>
+  </div>
+
+  <!-- Right: Content -->
+  <div class="content-panel">
+
+    <div class="cp-header">
+      <div class="cp-step-label" id="step-label">Schritt 2 von 6</div>
+      <div class="cp-title" id="step-title">Betriebsdaten</div>
+      <div class="cp-sub" id="step-sub">Diese Angaben erscheinen auf jedem Bon — sie müssen mit Ihren steuerlichen Angaben übereinstimmen.</div>
+    </div>
+
+    <div class="cp-body">
+
+      <!-- Step 2: Betriebsdaten -->
+      <div class="step-panel active" id="sp-2">
+        <div class="form-grid">
+          <div class="field span2">
+            <label>Unternehmensname</label>
+            <input type="text" placeholder="z.B. Shishabar Mustermann"/>
+            <div class="field-hint">Vollständiger Firmenname wie im Handelsregister</div>
+          </div>
+          <div class="field span2">
+            <label>Adresse</label>
+            <input type="text" placeholder="Straße, Hausnummer, PLZ, Stadt"/>
+          </div>
+          <div class="field">
+            <label>Steuernummer</label>
+            <input type="text" placeholder="14/123/45678"/>
+            <div class="field-hint">Vom Finanzamt zugewiesen</div>
+          </div>
+          <div class="field">
+            <label>USt-IdNr. (optional)</label>
+            <input type="text" placeholder="DE123456789"/>
+          </div>
+          <div class="field">
+            <label>Betriebsart</label>
+            <select><option>Shishabar</option><option>Café</option><option>Restaurant</option><option>Späti / Kiosk</option><option>Sonstiges</option></select>
+          </div>
+          <div class="field">
+            <label>Telefon (optional)</label>
+            <input type="text" placeholder="+49 69 ..."/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Gerät -->
+      <div class="step-panel" id="sp-3">
+        <div class="form-grid">
+          <div class="field">
+            <label>Gerätename</label>
+            <input type="text" value="iPad Theke"/>
+            <div class="field-hint">Erscheint auf dem Bon (§ 6 KassenSichV)</div>
+          </div>
+          <div class="field">
+            <label>Standort</label>
+            <input type="text" placeholder="z.B. Theke, Bar, Terrasse"/>
+          </div>
+        </div>
+        <div class="tse-result" style="margin-top:20px;">
+          <div class="tse-result-icon"><svg viewBox="0 0 16 16"><polyline points="2,8 6,12 14,4"/></svg></div>
+          <div>
+            <div class="tse-result-text">TSE-Verbindung erfolgreich</div>
+            <div class="tse-result-sub">Fiskaly Cloud-TSE · TSS-ID: FKL-TSE-2026-A4B7 · BSI-zertifiziert</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding:12px 14px;background:var(--pay-bg);border-radius:10px;">
+          <div style="font-size:11px;color:var(--pay-t);font-weight:600;margin-bottom:3px;">Wichtig: ELSTER-Meldung erforderlich</div>
+          <div style="font-size:11px;color:var(--pay-t);line-height:1.5;">Neue Kassensysteme müssen beim Finanzamt gemeldet werden. Dies erledigen Sie in Schritt 5 der Checkliste.</div>
+        </div>
+      </div>
+
+      <!-- Step 4: Plan -->
+      <div class="step-panel" id="sp-4">
+        <div class="plan-cards">
+          <div class="plan-card" onclick="selectPlan(this)">
+            <div class="plan-name">Starter</div>
+            <div class="plan-price">29 €<span>/Monat</span></div>
+            <div class="plan-features">
+              <div class="plan-feat">1 Gerät</div>
+              <div class="plan-feat">50 Produkte</div>
+              <div class="plan-feat">30 Tage Berichte</div>
+              <div class="plan-feat">TSE inklusive</div>
+            </div>
+          </div>
+          <div class="plan-card popular selected" onclick="selectPlan(this)">
+            <div class="plan-name">Pro</div>
+            <div class="plan-price">59 €<span>/Monat</span></div>
+            <div class="plan-features">
+              <div class="plan-feat">3 Geräte</div>
+              <div class="plan-feat">200 Produkte</div>
+              <div class="plan-feat">1 Jahr Berichte</div>
+              <div class="plan-feat">DSFinV-K Export</div>
+            </div>
+          </div>
+          <div class="plan-card" onclick="selectPlan(this)">
+            <div class="plan-name">Business</div>
+            <div class="plan-price">99 €<span>/Monat</span></div>
+            <div class="plan-features">
+              <div class="plan-feat">10 Geräte</div>
+              <div class="plan-feat">Unbegrenzt</div>
+              <div class="plan-feat">10 Jahre Berichte</div>
+              <div class="plan-feat">DATEV Export</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px;text-align:center;font-size:11px;color:var(--text2);">14 Tage kostenlos testen — keine Kreditkarte nötig. Danach automatisch zum gewählten Plan.</div>
+      </div>
+
+      <!-- Step 5: Checkliste -->
+      <div class="step-panel" id="sp-5">
+        <div class="checklist">
+          <div class="check-item done" onclick="this.classList.toggle('done')">
+            <div class="check-box"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+            <div class="check-info">
+              <div class="check-title">AVV unterzeichnen</div>
+              <div class="check-desc">Auftragsverarbeitungsvertrag gem. DSGVO Art. 28. In-App-Unterzeichnung mit Zeitstempel.</div>
+              <span class="check-badge required">Pflicht</span>
+            </div>
+          </div>
+          <div class="check-item" onclick="this.classList.toggle('done')">
+            <div class="check-box"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+            <div class="check-info">
+              <div class="check-title">ELSTER-Meldung einreichen</div>
+              <div class="check-desc">Neue Kassensysteme müssen beim zuständigen Finanzamt über ELSTER gemeldet werden.</div>
+              <span class="check-badge required">Pflicht · vor Go-live</span>
+            </div>
+          </div>
+          <div class="check-item" onclick="this.classList.toggle('done')">
+            <div class="check-box"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+            <div class="check-info">
+              <div class="check-title">Verfahrensdokumentation herunterladen</div>
+              <div class="check-desc">Auto-generiertes PDF mit Ihren Betriebsdaten. Muss aufbewahrt und dem Finanzamt auf Anfrage vorgelegt werden.</div>
+              <span class="check-badge required">Pflicht · GoBD</span>
+            </div>
+          </div>
+          <div class="check-item" onclick="this.classList.toggle('done')">
+            <div class="check-box"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+            <div class="check-info">
+              <div class="check-title">Steuerberater informieren</div>
+              <div class="check-desc">Empfohlen: Steuerberater über das neue Kassensystem und die TSE-Nutzung informieren.</div>
+              <span class="check-badge optional">Empfohlen</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 6: Fertig -->
+      <div class="step-panel" id="sp-6">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:20px 0;">
+          <div style="width:72px;height:72px;border-radius:20px;background:var(--free-bg);display:flex;align-items:center;justify-content:center;">
+            <svg width="32" height="32" viewBox="0 0 32 32" style="stroke:var(--free-t);fill:none;stroke-width:2.5;"><polyline points="4,16 12,24 28,8"/></svg>
+          </div>
+          <div style="font-size:20px;font-weight:600;color:var(--text);letter-spacing:-0.3px;text-align:center;">Einrichtung abgeschlossen!</div>
+          <div style="font-size:12px;color:var(--text2);text-align:center;line-height:1.7;max-width:400px;">Ihr Kassensystem ist betriebsbereit. Öffnen Sie die erste Kassensitzung, legen Sie Ihre Produkte an und starten Sie mit der ersten Bestellung.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:420px;margin-top:8px;">
+            <div style="background:var(--bg);border:1px solid var(--brd);border-radius:12px;padding:14px;text-align:center;">
+              <div style="font-size:22px;font-weight:600;color:var(--acc);">14</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px;">Trial-Tage verbleibend</div>
+            </div>
+            <div style="background:var(--bg);border:1px solid var(--brd);border-radius:12px;padding:14px;text-align:center;">
+              <div style="font-size:22px;font-weight:600;color:var(--text);">Pro</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px;">Gewählter Plan</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="cp-footer">
+      <button class="nav-back" id="btn-back" onclick="navigate(-1)" style="visibility:hidden;">← Zurück</button>
+      <span class="step-counter" id="step-counter">Schritt 2 von 6</span>
+      <button class="nav-next" id="btn-next" onclick="navigate(1)">
+        Weiter <svg viewBox="0 0 13 13"><polyline points="4,2 9,6.5 4,11"/></svg>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  let currentStep = 2;
+  const totalSteps = 6;
+
+  const titles = {
+    2: ['Betriebsdaten', 'Diese Angaben erscheinen auf jedem Bon — sie müssen mit Ihren steuerlichen Angaben übereinstimmen.'],
+    3: ['Gerät einrichten', 'Geben Sie Ihrem iPad einen Namen und überprüfen Sie die TSE-Verbindung.'],
+    4: ['Plan wählen', '14 Tage kostenlos testen. Kündigung jederzeit möglich.'],
+    5: ['Pflicht-Checkliste', 'Diese Schritte sind gesetzlich vorgeschrieben. Ohne Abschluss ist kein Produktivbetrieb möglich.'],
+    6: ['Fertig', 'Ihr Kassensystem ist eingerichtet und bereit.'],
+  };
+
+  function navigate(dir) {
+    const next = currentStep + dir;
+    if (next < 2 || next > totalSteps) return;
+    document.getElementById('sp-' + currentStep).classList.remove('active');
+    currentStep = next;
+    document.getElementById('sp-' + currentStep).classList.add('active');
+    updateUI();
+  }
+
+  function updateUI() {
+    const [title, sub] = titles[currentStep] || ['', ''];
+    document.getElementById('step-title').textContent = title;
+    document.getElementById('step-sub').textContent = sub;
+    document.getElementById('step-label').textContent = 'Schritt ' + currentStep + ' von ' + totalSteps;
+    document.getElementById('step-counter').textContent = 'Schritt ' + currentStep + ' von ' + totalSteps;
+    document.getElementById('btn-back').style.visibility = currentStep > 2 ? 'visible' : 'hidden';
+    const nextBtn = document.getElementById('btn-next');
+    if (currentStep === totalSteps) {
+      nextBtn.innerHTML = '🎉 Kasse starten';
+      nextBtn.classList.add('finish');
+    } else {
+      nextBtn.innerHTML = 'Weiter <svg viewBox="0 0 13 13" width="13" height="13" style="stroke:white;fill:none;stroke-width:2"><polyline points="4,2 9,6.5 4,11"/></svg>';
+      nextBtn.classList.remove('finish');
+    }
+    document.querySelectorAll('.step-item').forEach(item => {
+      const s = parseInt(item.dataset.step);
+      item.classList.remove('active','done');
+      if (s < currentStep) item.classList.add('done');
+      else if (s === currentStep) item.classList.add('active');
+    });
+  }
+
+  function selectPlan(el) {
+    document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  updateUI();
+</script>
+</body>
+</html>

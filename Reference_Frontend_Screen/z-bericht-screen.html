@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kassensystem — Z-Bericht</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#e8e8e8;display:flex;align-items:flex-start;justify-content:center;padding:32px;min-height:100vh;}
+
+.app{
+  --bg:#f5f4f1;--sur:#ffffff;--sur2:#eceae5;--text:#1a1a1f;--text2:#9a98a8;--brd:rgba(26,26,31,0.08);
+  --acc:#1a6fff;--acc-bg:#e8f0ff;--acc-t:#0a3dbf;
+  --free-bg:#e8f5ec;--free-t:#1a5c30;
+  --pay-bg:#fff8e0;--pay-t:#8a6000;
+  --dan-bg:#ffeef0;--dan-t:#c0112a;
+  width:1100px;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);display:flex;flex-direction:column;
+}
+.app.dark{
+  --bg:#13131a;--sur:#1c1c26;--sur2:#252535;--text:#eeeef8;--text2:#6a6888;--brd:rgba(238,238,248,0.07);
+  --acc:#4d8fff;--acc-bg:#0d1f50;--acc-t:#90bbff;
+  --free-bg:#0d2818;--free-t:#60d080;
+  --pay-bg:#281e08;--pay-t:#f0c060;
+  --dan-bg:#2a0a10;--dan-t:#ff7088;
+}
+
+/* Topbar */
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.wordmark{display:flex;align-items:center;gap:9px;}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;}
+.brand-dot svg{width:11px;height:11px;fill:white;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.who{font-size:12px;font-weight:500;color:var(--text2);}
+.session-chip{font-size:11px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:4px 10px;border-radius:20px;}
+.tgl{width:38px;height:22px;border-radius:11px;background:var(--sur2);border:1px solid var(--brd);cursor:pointer;position:relative;}
+.app.dark .tgl{background:var(--acc-bg);}
+.tgl::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:transform .2s,background .2s;}
+.app.dark .tgl::after{transform:translateX(16px);background:var(--acc);}
+
+.body{display:flex;flex:1;min-height:0;}
+
+/* Sidebar */
+.sidebar{width:200px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.nav-section{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text2);padding:14px 16px 4px;}
+.nav-item{font-size:12px;font-weight:500;color:var(--text2);padding:7px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.nav-item:hover{color:var(--text);}
+.nav-item.active{color:var(--acc-t);background:var(--acc-bg);font-weight:600;}
+.nav-count{font-size:10px;background:var(--sur2);color:var(--text2);padding:2px 7px;border-radius:10px;}
+.nav-sep{height:1px;background:var(--brd);margin:4px 0;}
+
+/* Content */
+.content{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto;}
+
+/* Toolbar */
+.toolbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;}
+.toolbar-left{display:flex;align-items:center;gap:8px;}
+.session-select-label{font-size:11px;color:var(--text2);white-space:nowrap;}
+.session-select{height:34px;border-radius:8px;border:1px solid var(--brd);background:var(--bg);padding:0 12px;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--text);outline:none;min-width:220px;}
+.toolbar-right{display:flex;gap:8px;}
+.action-btn-toolbar{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;}
+.btn-pdf{background:var(--acc);color:white;border:none;}
+.btn-export{background:var(--sur2);color:var(--text);border:1px solid var(--brd);}
+.action-btn-toolbar svg{width:13px;height:13px;fill:none;stroke-width:2;}
+.btn-pdf svg{stroke:white;}
+.btn-export svg{stroke:var(--text2);}
+
+/* Two-col layout */
+.two-col{display:grid;grid-template-columns:1fr 320px;flex:1;min-height:0;}
+
+/* Left: Z-Bericht preview */
+.zbericht-preview{padding:24px;overflow:auto;display:flex;justify-content:center;}
+
+/* The actual Z-Bericht "document" */
+.zbericht-doc{background:var(--sur);border:1px solid var(--brd);border-radius:14px;width:100%;max-width:520px;overflow:hidden;}
+
+.zb-header{padding:20px 24px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:flex-start;justify-content:space-between;}
+.zb-brand{font-size:14px;font-weight:600;color:var(--text);}
+.zb-brand-sub{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.5;}
+.zb-badge{font-size:10px;font-weight:600;background:var(--acc-bg);color:var(--acc-t);padding:3px 9px;border-radius:6px;white-space:nowrap;}
+
+.zb-meta{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--brd);}
+.zb-meta-cell{padding:10px 24px;border-right:1px solid var(--brd);}
+.zb-meta-cell:nth-child(2n){border-right:none;}
+.zb-meta-cell:nth-child(3),.zb-meta-cell:nth-child(4){border-top:1px solid var(--brd);}
+.zb-meta-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:3px;}
+.zb-meta-value{font-size:12px;font-weight:600;color:var(--text);}
+
+/* Section within Z-Bericht */
+.zb-section{border-bottom:1px solid var(--brd);}
+.zb-section:last-child{border-bottom:none;}
+.zb-section-title{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);padding:12px 24px 6px;font-weight:600;}
+.zb-row{display:flex;justify-content:space-between;align-items:center;padding:5px 24px;}
+.zb-row-label{font-size:12px;color:var(--text2);}
+.zb-row-label.bold{font-weight:600;color:var(--text);}
+.zb-row-value{font-size:12px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;}
+.zb-row-value.acc{color:var(--acc);}
+.zb-row-value.green{color:var(--free-t);}
+.zb-row-value.red{color:var(--dan-t);}
+.zb-divider{height:1px;background:var(--brd);margin:6px 24px;}
+.zb-total-row{display:flex;justify-content:space-between;align-items:center;padding:10px 24px;background:var(--bg);}
+.zb-total-label{font-size:13px;font-weight:600;color:var(--text);}
+.zb-total-value{font-size:16px;font-weight:600;color:var(--acc);}
+
+.zb-tse{padding:14px 24px;border-top:1px solid var(--brd);background:var(--bg);}
+.zb-tse-title{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:8px;font-weight:600;}
+.zb-tse-row{display:flex;gap:8px;margin-bottom:4px;}
+.zb-tse-key{font-size:10px;color:var(--text2);min-width:120px;flex-shrink:0;}
+.zb-tse-val{font-size:10px;color:var(--text);font-family:monospace;word-break:break-all;}
+
+.zb-footer{padding:12px 24px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;}
+.zb-footer-note{font-size:10px;color:var(--text2);line-height:1.5;}
+.zb-readonly-badge{font-size:9px;font-weight:600;background:var(--sur2);color:var(--text2);padding:3px 8px;border-radius:4px;letter-spacing:0.3px;}
+
+/* Right: session list */
+.session-list-panel{border-left:1px solid var(--brd);background:var(--bg);display:flex;flex-direction:column;overflow:auto;}
+.slp-head{padding:16px;border-bottom:1px solid var(--brd);background:var(--sur);flex-shrink:0;}
+.slp-title{font-size:12px;font-weight:600;color:var(--text);}
+.slp-sub{font-size:10px;color:var(--text2);margin-top:2px;}
+
+.slp-month{font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);padding:12px 16px 6px;font-weight:600;}
+.slp-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--brd);cursor:pointer;}
+.slp-item:last-child{border-bottom:none;}
+.slp-item:hover{background:var(--sur);}
+.slp-item.active{background:var(--sur);border-left:3px solid var(--acc);}
+.slp-icon{width:32px;height:32px;border-radius:8px;background:var(--sur2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.slp-item.active .slp-icon{background:var(--acc-bg);}
+.slp-icon svg{width:14px;height:14px;stroke:var(--text2);fill:none;stroke-width:1.8;}
+.slp-item.active .slp-icon svg{stroke:var(--acc-t);}
+.slp-info{flex:1;min-width:0;}
+.slp-date{font-size:12px;font-weight:500;color:var(--text);}
+.slp-meta{font-size:10px;color:var(--text2);margin-top:1px;}
+.slp-amount{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;}
+.slp-diff{font-size:10px;margin-top:1px;text-align:right;}
+.slp-diff.ok{color:var(--free-t);}
+.slp-diff.warn{color:var(--pay-t);}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="wordmark">
+      <div class="brand-dot"><svg viewBox="0 0 11 11"><rect x="1" y="1" width="4" height="4" rx="1"/><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="6" width="4" height="4" rx="1"/><rect x="6" y="6" width="4" height="4" rx="1"/></svg></div>
+      <span class="brand-name">Kassensystem</span>
+    </div>
+    <div class="topright">
+      <span class="who">Niko</span>
+      <span class="session-chip">Schicht offen · 08:00</span>
+      <div class="tgl" id="tgl"></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">Übersicht</div>
+      <div class="nav-item">Tische <span class="nav-count">8</span></div>
+      <div class="nav-item">Produkte <span class="nav-count">24</span></div>
+      <div class="nav-item">Kategorien <span class="nav-count">5</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Abrechnung</div>
+      <div class="nav-item">Kassensitzung</div>
+      <div class="nav-item">Berichte</div>
+      <div class="nav-item active">Z-Bericht</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">System</div>
+      <div class="nav-item">Einstellungen</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="session-select-label">Schicht:</span>
+          <select class="session-select">
+            <option>Heute, 18. März 2026 · 08:00 – 11:42</option>
+            <option>17. März 2026 · 09:00 – 22:30</option>
+            <option>16. März 2026 · 10:00 – 23:15</option>
+          </select>
+        </div>
+        <div class="toolbar-right">
+          <button class="action-btn-toolbar btn-pdf">
+            <svg viewBox="0 0 13 13"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/><line x1="5" y1="8" x2="9" y2="8"/><line x1="5" y1="10" x2="7" y2="10"/></svg>
+            PDF exportieren
+          </button>
+          <button class="action-btn-toolbar btn-export">
+            <svg viewBox="0 0 13 13"><path d="M6.5 2v7M4 7l2.5 2.5L9 7"/><rect x="2" y="10" width="9" height="1.5" rx="0.5"/></svg>
+            DSFinV-K
+          </button>
+        </div>
+      </div>
+
+      <!-- Two-col -->
+      <div class="two-col">
+
+        <!-- Left: Z-Bericht document -->
+        <div class="zbericht-preview">
+          <div class="zbericht-doc">
+
+            <!-- Header -->
+            <div class="zb-header">
+              <div>
+                <div class="zb-brand">Shishabar Mustermann</div>
+                <div class="zb-brand-sub">
+                  Musterstraße 12 · 60311 Frankfurt am Main<br/>
+                  St.-Nr.: 14/123/45678 · USt-IdNr.: DE123456789
+                </div>
+              </div>
+              <span class="zb-badge">Z-Bericht</span>
+            </div>
+
+            <!-- Meta -->
+            <div class="zb-meta">
+              <div class="zb-meta-cell">
+                <div class="zb-meta-label">Datum</div>
+                <div class="zb-meta-value">18.03.2026</div>
+              </div>
+              <div class="zb-meta-cell">
+                <div class="zb-meta-label">Bon-Nr. Bereich</div>
+                <div class="zb-meta-value">0041 – 0058</div>
+              </div>
+              <div class="zb-meta-cell">
+                <div class="zb-meta-label">Schicht</div>
+                <div class="zb-meta-value">08:00 – 11:42 Uhr</div>
+              </div>
+              <div class="zb-meta-cell">
+                <div class="zb-meta-label">Gerät</div>
+                <div class="zb-meta-value">iPad Theke</div>
+              </div>
+            </div>
+
+            <!-- Umsatz -->
+            <div class="zb-section">
+              <div class="zb-section-title">Umsatz</div>
+              <div class="zb-row"><span class="zb-row-label">Bruttoumsatz 19 %</span><span class="zb-row-value">210,00 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Bruttoumsatz 7 %</span><span class="zb-row-value">19,00 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Stornos</span><span class="zb-row-value red">− 19,00 €</span></div>
+              <div class="zb-divider"></div>
+              <div class="zb-total-row">
+                <span class="zb-total-label">Nettoumsatz gesamt</span>
+                <span class="zb-total-value">229,00 €</span>
+              </div>
+            </div>
+
+            <!-- MwSt -->
+            <div class="zb-section">
+              <div class="zb-section-title">Mehrwertsteuer</div>
+              <div class="zb-row"><span class="zb-row-label">Netto 19 %</span><span class="zb-row-value">176,47 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">MwSt 19 %</span><span class="zb-row-value">33,53 €</span></div>
+              <div class="zb-divider"></div>
+              <div class="zb-row"><span class="zb-row-label">Netto 7 %</span><span class="zb-row-value">17,76 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">MwSt 7 %</span><span class="zb-row-value">1,24 €</span></div>
+              <div class="zb-divider"></div>
+              <div class="zb-row" style="padding-bottom:10px"><span class="zb-row-label bold">MwSt gesamt</span><span class="zb-row-value acc">34,77 €</span></div>
+            </div>
+
+            <!-- Zahlungsarten -->
+            <div class="zb-section">
+              <div class="zb-section-title">Zahlungsarten</div>
+              <div class="zb-row"><span class="zb-row-label">Barzahlung</span><span class="zb-row-value">142,50 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Kartenzahlung</span><span class="zb-row-value">86,50 €</span></div>
+              <div class="zb-divider"></div>
+              <div class="zb-row" style="padding-bottom:10px"><span class="zb-row-label bold">Gesamt</span><span class="zb-row-value acc">229,00 €</span></div>
+            </div>
+
+            <!-- Kassenstand -->
+            <div class="zb-section">
+              <div class="zb-section-title">Kassenstand</div>
+              <div class="zb-row"><span class="zb-row-label">Anfangsbestand</span><span class="zb-row-value">50,00 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Einlagen</span><span class="zb-row-value">70,00 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Entnahmen</span><span class="zb-row-value red">− 12,00 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Erwarteter Endbestand</span><span class="zb-row-value">250,50 €</span></div>
+              <div class="zb-row"><span class="zb-row-label">Gezählter Endbestand</span><span class="zb-row-value">250,50 €</span></div>
+              <div class="zb-divider"></div>
+              <div class="zb-row" style="padding-bottom:10px"><span class="zb-row-label bold">Differenz</span><span class="zb-row-value green">± 0,00 €</span></div>
+            </div>
+
+            <!-- Transaktionen -->
+            <div class="zb-section">
+              <div class="zb-section-title">Transaktionen</div>
+              <div class="zb-row"><span class="zb-row-label">Bons gesamt</span><span class="zb-row-value">18</span></div>
+              <div class="zb-row"><span class="zb-row-label">Stornobons</span><span class="zb-row-value">1</span></div>
+              <div class="zb-row" style="padding-bottom:10px"><span class="zb-row-label">Erste Bon-Nr.</span><span class="zb-row-value">0041</span></div>
+              <div class="zb-row" style="padding-bottom:10px"><span class="zb-row-label">Letzte Bon-Nr.</span><span class="zb-row-value">0058</span></div>
+            </div>
+
+            <!-- TSE-Daten -->
+            <div class="zb-tse">
+              <div class="zb-tse-title">TSE-Signatur (Fiskaly)</div>
+              <div class="zb-tse-row">
+                <span class="zb-tse-key">TSE-Seriennummer</span>
+                <span class="zb-tse-val">FKL-TSE-2025-A4B7-9C21</span>
+              </div>
+              <div class="zb-tse-row">
+                <span class="zb-tse-key">TX-Counter</span>
+                <span class="zb-tse-val">2847</span>
+              </div>
+              <div class="zb-tse-row">
+                <span class="zb-tse-key">Signatur (gekürzt)</span>
+                <span class="zb-tse-val">MEQCIBx9Y3...k2p9aQ==</span>
+              </div>
+              <div class="zb-tse-row">
+                <span class="zb-tse-key">Erstellt am</span>
+                <span class="zb-tse-val">18.03.2026 · 11:42:07 UTC</span>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="zb-footer">
+              <div class="zb-footer-note">
+                Dieser Z-Bericht ist unveränderlich (GoBD).<br/>
+                Aufbewahrungspflicht: 10 Jahre bis 31.12.2036.
+              </div>
+              <span class="zb-readonly-badge">READ ONLY</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right: session list -->
+        <div class="session-list-panel">
+          <div class="slp-head">
+            <div class="slp-title">Alle Z-Berichte</div>
+            <div class="slp-sub">Unveränderlich · GoBD-konform</div>
+          </div>
+
+          <div class="slp-month">März 2026</div>
+
+          <div class="slp-item active">
+            <div class="slp-icon"><svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg></div>
+            <div class="slp-info">
+              <div class="slp-date">18. März 2026</div>
+              <div class="slp-meta">08:00 – 11:42 · 18 Bons</div>
+            </div>
+            <div style="text-align:right">
+              <div class="slp-amount">229,00 €</div>
+              <div class="slp-diff ok">± 0,00 €</div>
+            </div>
+          </div>
+
+          <div class="slp-item">
+            <div class="slp-icon"><svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg></div>
+            <div class="slp-info">
+              <div class="slp-date">17. März 2026</div>
+              <div class="slp-meta">09:00 – 22:30 · 24 Bons</div>
+            </div>
+            <div style="text-align:right">
+              <div class="slp-amount">318,50 €</div>
+              <div class="slp-diff ok">± 0,00 €</div>
+            </div>
+          </div>
+
+          <div class="slp-item">
+            <div class="slp-icon"><svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg></div>
+            <div class="slp-info">
+              <div class="slp-date">16. März 2026</div>
+              <div class="slp-meta">10:00 – 23:15 · 31 Bons</div>
+            </div>
+            <div style="text-align:right">
+              <div class="slp-amount">435,00 €</div>
+              <div class="slp-diff ok">± 0,00 €</div>
+            </div>
+          </div>
+
+          <div class="slp-item">
+            <div class="slp-icon"><svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg></div>
+            <div class="slp-info">
+              <div class="slp-date">15. März 2026</div>
+              <div class="slp-meta">09:30 – 22:00 · 34 Bons</div>
+            </div>
+            <div style="text-align:right">
+              <div class="slp-amount">475,00 €</div>
+              <div class="slp-diff warn">− 2,50 €</div>
+            </div>
+          </div>
+
+          <div class="slp-item">
+            <div class="slp-icon"><svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg></div>
+            <div class="slp-info">
+              <div class="slp-date">14. März 2026</div>
+              <div class="slp-meta">10:00 – 22:45 · 22 Bons</div>
+            </div>
+            <div style="text-align:right">
+              <div class="slp-amount">318,00 €</div>
+              <div class="slp-diff ok">± 0,00 €</div>
+            </div>
+          </div>
+
+          <div class="slp-month">Februar 2026</div>
+
+          <div class="slp-item">
+            <div class="slp-icon"><svg viewBox="0 0 14 14"><path d="M3 2h5l3 3v7H3V2z"/><polyline points="8,2 8,5 11,5"/></svg></div>
+            <div class="slp-info">
+              <div class="slp-date">28. Februar 2026</div>
+              <div class="slp-meta">09:00 – 23:00 · 29 Bons</div>
+            </div>
+            <div style="text-align:right">
+              <div class="slp-amount">392,00 €</div>
+              <div class="slp-diff ok">± 0,00 €</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('tgl').addEventListener('click', () => document.getElementById('app').classList.toggle('dark'));
+
+  document.querySelectorAll('.slp-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.slp-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
