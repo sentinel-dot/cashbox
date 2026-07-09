@@ -238,3 +238,56 @@ describe('POST /orders/:id/pay', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ─── Race: addItem parallel zu payOrder ───────────────────────────────────────
+// Invariante: Es darf nie passieren, dass die Zahlung durchgeht UND gleichzeitig
+// ein parallel hinzugefügtes Item auf der bezahlten Order landet, ohne auf dem
+// Bon zu sein. addItem/payOrder serialisieren über FOR UPDATE auf der Order;
+// payOrder re-validiert die Items nach dem Lock.
+
+describe('POST /orders/:id/pay — Race-Schutz gegen paralleles addItem', () => {
+  let token: string; let productId: number;
+
+  beforeEach(async () => { ({ token, productId } = await setup(db)); });
+  afterEach(() => { /* cleanup in setup.ts */ });
+
+  it('paralleles addItem + pay: nie beides erfolgreich mit Item ohne Bon', async () => {
+    for (let round = 0; round < 5; round++) {
+      const { orderId, totalCents } = await setupOrder(token, productId, 1);
+
+      const [payRes, addRes] = await Promise.all([
+        request(app)
+          .post(`/orders/${orderId}/pay`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ method: 'cash', amount_cents: totalCents }),
+        request(app)
+          .post(`/orders/${orderId}/items`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ product_id: productId, quantity: 1 }),
+      ]);
+
+      if (payRes.status === 201) {
+        // Zahlung durch → das parallele addItem darf NICHT ebenfalls durchgegangen sein
+        expect(addRes.status).toBe(409);
+        // Bon deckt exakt die bezahlten Items ab
+        expect(payRes.body.total_gross_cents).toBe(totalCents);
+        const [itemRows] = await db.execute<any[]>(
+          `SELECT COALESCE(SUM(oi.subtotal_cents), 0) AS total
+           FROM order_items oi
+           WHERE oi.order_id = ?
+             AND NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)`,
+          [orderId]
+        );
+        expect(Number(itemRows[0].total)).toBe(totalCents);
+      } else {
+        // Zahlung abgelehnt (409/422 je nach Timing) → Order bleibt offen, addItem war ok
+        expect([409, 422]).toContain(payRes.status);
+        expect(addRes.status).toBe(201);
+        const [orderRows] = await db.execute<any[]>(
+          `SELECT status FROM orders WHERE id = ?`, [orderId]
+        );
+        expect(orderRows[0].status).toBe('open');
+      }
+    }
+  });
+});

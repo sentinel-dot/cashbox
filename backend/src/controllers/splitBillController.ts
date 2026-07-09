@@ -162,6 +162,25 @@ export async function splitBill(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Items nach dem Lock erneut laden — die Splits müssen exakt den aktuellen
+    // Items entsprechen (paralleler addItem/removeItem zwischen Vor-Prüfung und Lock)
+    const [lockedItems] = await conn.execute<any[]>(
+      `SELECT oi.id, oi.subtotal_cents
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE oi.order_id = ? AND o.tenant_id = ?
+         AND NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)`,
+      [orderId, tenantId]
+    );
+    const itemsUnchanged = lockedItems.length === allItems.length
+      && lockedItems.every((li: any) =>
+           allItems.some((i: any) => i.id === li.id && i.subtotal_cents === li.subtotal_cents));
+    if (!itemsUnchanged) {
+      await conn.rollback();
+      res.status(409).json({ error: 'Bestellung wurde zwischenzeitlich geändert — bitte Warenkorb prüfen und erneut bezahlen.' });
+      return;
+    }
+
     const splitGroupId = orderId; // orderId als gemeinsame Gruppen-ID aller Split-Bons
     const now = new Date().toISOString();
 

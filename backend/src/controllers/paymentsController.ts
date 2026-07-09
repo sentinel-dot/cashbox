@@ -160,6 +160,26 @@ export async function payOrder(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Items nach dem Lock erneut laden — zwischen Vor-Prüfung und Lock kann ein
+    // paralleler Request Items hinzugefügt/entfernt haben. addItem/removeItem
+    // sperren die Order ebenfalls (FOR UPDATE) und warten hier, danach 409.
+    const [lockedItems] = await conn.execute<any[]>(
+      `SELECT oi.id, oi.subtotal_cents
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE oi.order_id = ? AND o.tenant_id = ?
+         AND NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)`,
+      [orderId, tenantId]
+    );
+    const itemsUnchanged = lockedItems.length === items.length
+      && lockedItems.every((li: any) =>
+           items.some((i: any) => i.id === li.id && i.subtotal_cents === li.subtotal_cents));
+    if (!itemsUnchanged) {
+      await conn.rollback();
+      res.status(409).json({ error: 'Bestellung wurde zwischenzeitlich geändert — bitte Warenkorb prüfen und erneut bezahlen.' });
+      return;
+    }
+
     // Bon-Nummer atomar vergeben (KassenSichV: fortlaufend, keine Lücken)
     receiptNumber = await nextReceiptNumber(tenantId, conn);
 

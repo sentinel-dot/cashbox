@@ -251,19 +251,42 @@ export async function addItem(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // order_items INSERT (GoBD: Snapshots)
-  const [itemResult] = await db.execute<any>(
-    `INSERT INTO order_items
-       (order_id, product_id, product_name, product_price_cents, vat_rate,
-        quantity, subtotal_cents, discount_cents, discount_reason, added_by_user_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      orderId, product.id, product.name, product.price_cents,
-      product.vat_rate_inhouse, quantity, subtotal_cents,
-      discountCents, discount_reason ?? null, userId,
-    ]
-  );
-  const itemId = itemResult.insertId as number;
+  // order_items INSERT (GoBD: Snapshots) — in TX mit Order-Lock:
+  // serialisiert gegen payOrder/splitBill (FOR UPDATE), damit kein Item mehr
+  // hinzukommt, während die Zahlung den Bon-Snapshot erstellt.
+  const conn = await db.getConnection();
+  let itemId!: number;
+  try {
+    await conn.beginTransaction();
+    const [lockedOrder] = await conn.execute<any[]>(
+      `SELECT id, status FROM orders WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [orderId, tenantId]
+    );
+    if (lockedOrder.length === 0 || lockedOrder[0].status !== 'open') {
+      await conn.rollback();
+      res.status(409).json({ error: 'Bestellung ist nicht mehr offen.' });
+      return;
+    }
+
+    const [itemResult] = await conn.execute<any>(
+      `INSERT INTO order_items
+         (order_id, product_id, product_name, product_price_cents, vat_rate,
+          quantity, subtotal_cents, discount_cents, discount_reason, added_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        orderId, product.id, product.name, product.price_cents,
+        product.vat_rate_inhouse, quantity, subtotal_cents,
+        discountCents, discount_reason ?? null, userId,
+      ]
+    );
+    itemId = itemResult.insertId as number;
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 
   // order_item_modifiers via auditDb (INSERT-only per DB-User)
   for (const opt of optRows) {
@@ -299,7 +322,7 @@ export async function removeItem(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Order prüfen
+  // Order prüfen (Vorprüfung für saubere 404-Unterscheidung)
   const [orderRows] = await db.execute<any[]>(
     'SELECT id, status FROM orders WHERE id = ? AND tenant_id = ?',
     [orderId, tenantId]
@@ -317,21 +340,44 @@ export async function removeItem(req: Request, res: Response): Promise<void> {
   );
   if (itemRows.length === 0) { res.status(404).json({ error: 'Position nicht gefunden.' }); return; }
 
-  // Bereits bezahlt? (receipts mit status='active' verhindern Löschen)
-  const [receiptRows] = await db.execute<any[]>(
-    `SELECT r.id FROM receipts r WHERE r.order_id = ? AND r.status = 'active' LIMIT 1`,
-    [orderId]
-  );
-  if (receiptRows.length > 0) {
-    res.status(409).json({ error: 'Bestellung hat bereits einen aktiven Bon — Storno über /cancel.' });
-    return;
-  }
+  // Entfernung in TX mit Order-Lock — serialisiert gegen payOrder/splitBill,
+  // damit kein Item verschwindet, während die Zahlung den Bon-Snapshot erstellt
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [lockedOrder] = await conn.execute<any[]>(
+      `SELECT id, status FROM orders WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [orderId, tenantId]
+    );
+    if (lockedOrder.length === 0 || lockedOrder[0].status !== 'open') {
+      await conn.rollback();
+      res.status(409).json({ error: 'Bestellung ist nicht mehr offen — Storno über /cancel.' });
+      return;
+    }
 
-  // GoBD: kein DELETE — Entfernung wird in order_item_removals dokumentiert (INSERT-only, append-only)
-  await db.execute(
-    'INSERT INTO order_item_removals (order_item_id, removed_by_user_id) VALUES (?, ?)',
-    [itemId, userId]
-  );
+    // Bereits bezahlt? (receipts mit status='active' verhindern Löschen)
+    const [receiptRows] = await conn.execute<any[]>(
+      `SELECT r.id FROM receipts r WHERE r.order_id = ? AND r.status = 'active' LIMIT 1`,
+      [orderId]
+    );
+    if (receiptRows.length > 0) {
+      await conn.rollback();
+      res.status(409).json({ error: 'Bestellung hat bereits einen aktiven Bon — Storno über /cancel.' });
+      return;
+    }
+
+    // GoBD: kein DELETE — Entfernung wird in order_item_removals dokumentiert (INSERT-only, append-only)
+    await conn.execute(
+      'INSERT INTO order_item_removals (order_item_id, removed_by_user_id) VALUES (?, ?)',
+      [itemId, userId]
+    );
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 
   await writeAuditLog({
     tenantId, userId, action: 'order.item_removed',
