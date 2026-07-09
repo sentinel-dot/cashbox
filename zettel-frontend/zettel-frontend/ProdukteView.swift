@@ -1020,7 +1020,8 @@ fileprivate struct ProduktFormSheet: View {
             .replacingOccurrences(of: ",", with: ".")
             .replacingOccurrences(of: "€", with: "")
             .trimmingCharacters(in: .whitespaces)
-        return Int((Double(c) ?? 0) * 100)
+        // .rounded() ist Pflicht: 19.99 * 100 = 1998.99… → Int() würde 1998 abschneiden
+        return Int(((Double(c) ?? 0) * 100).rounded())
     }
 
     private func formatCreatedAt(_ iso: String?) -> String {

@@ -1157,16 +1157,6 @@ private func pFmt(_ cents: Int) -> String {
     return (_pFmt.string(from: val) ?? "0,00") + " €"
 }
 
-private func parseCents(_ text: String) -> Int {
-    let cleaned = text
-        .replacingOccurrences(of: "€", with: "")
-        .replacingOccurrences(of: " ", with: "")
-        .replacingOccurrences(of: ",", with: ".")
-        .trimmingCharacters(in: .whitespaces)
-    guard let value = Double(cleaned) else { return 0 }
-    return Int((value * 100).rounded())
-}
-
 // MARK: - Preview Factory
 
 private extension OrderDetail {
