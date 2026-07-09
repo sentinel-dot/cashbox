@@ -144,11 +144,14 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
       },
       device:     { id: device.id, name: device.name },
       items:      originalJson?.items ?? [],
-      vat_7_net_cents:   original.vat_7_net_cents,
-      vat_7_tax_cents:   original.vat_7_tax_cents,
-      vat_19_net_cents:  original.vat_19_net_cents,
-      vat_19_tax_cents:  original.vat_19_tax_cents,
-      total_gross_cents: original.total_gross_cents,
+      // Gegenbuchung: Beträge negiert — SUM()-Aggregationen (Berichte, Z-Bericht,
+      // Kassenbestand) netten Original + Storno automatisch auf 0.
+      // Items bleiben der positive Original-Snapshot (Dokumentation was storniert wurde).
+      vat_7_net_cents:   -original.vat_7_net_cents,
+      vat_7_tax_cents:   -original.vat_7_tax_cents,
+      vat_19_net_cents:  -original.vat_19_net_cents,
+      vat_19_tax_cents:  -original.vat_19_tax_cents,
+      total_gross_cents: -original.total_gross_cents,
       tse_pending:       tseResult.pending,
       tse_transaction_id: tseResult.tseTransactionId ?? null,
     };
@@ -167,9 +170,9 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
       [
         tenantId, original.order_id, sessionId, cancellationReceiptNumber,
         device.id, device.name,
-        original.vat_7_net_cents,  original.vat_7_tax_cents,
-        original.vat_19_net_cents, original.vat_19_tax_cents,
-        original.total_gross_cents, original.is_takeaway,
+        -original.vat_7_net_cents,  -original.vat_7_tax_cents,
+        -original.vat_19_net_cents, -original.vat_19_tax_cents,
+        -original.total_gross_cents, original.is_takeaway,
         tseResult.pending ? 1 : 0,
         tseResult.tseTransactionId    ?? null,
         tseResult.tseSerialNumber     ?? null,
@@ -189,6 +192,16 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
        VALUES (?, ?, ?, ?, ?)`,
       [receiptId, original.receipt_number, cancellationReceiptId, userId, reason]
     );
+
+    // Negative payments-Zeilen (Rückerstattung je Original-Zahlungsmittel) —
+    // damit netten Kassenbestand (cash) und Zahlungsart-Summen automatisch aus.
+    for (const p of tsePayments) {
+      await conn.execute(
+        `INSERT INTO payments (order_id, receipt_id, method, amount_cents, tip_cents, paid_by_user_id)
+         VALUES (?, ?, ?, ?, 0, ?)`,
+        [original.order_id, cancellationReceiptId, p.method, -p.amount_cents, userId]
+      );
+    }
 
     await conn.commit();
   } catch (err) {
@@ -239,7 +252,8 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
     cancellation_receipt_number: cancellationReceiptNumber!,
     original_receipt_id:         receiptId,
     original_receipt_number:     original.receipt_number,
-    total_gross_cents:            original.total_gross_cents,
+    // Betrag des Storno-Bons (Gegenbuchung) — negativ
+    total_gross_cents:            -original.total_gross_cents,
     tse_pending:                  tseResult.pending,
     tse_transaction_id:           tseResult.tseTransactionId  ?? null,
   });

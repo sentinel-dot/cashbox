@@ -253,6 +253,37 @@ describe('validateReceiptFields — GoBD Rabatte + Storno', () => {
     const result = validateReceiptFields(r);
     expect(result.valid).toBe(true);
   });
+
+  it('Storno-Bon als negative Gegenbuchung: Invarianten gelten mit Negativbeträgen', () => {
+    // Storno von 2500 Cent: alle Beträge + payments negiert, Items bleiben Original-Snapshot
+    const r = makeReceipt({
+      is_cancellation:         true,
+      original_receipt_number: 1,
+      cancellation_reason:     'Reklamation, bar erstattet',
+      vat_19_net_cents:  -2101,
+      vat_19_tax_cents:  -399,
+      total_gross_cents: -2500,
+      payments: [{ method: 'cash', amount_cents: -2500 }],
+    });
+    const result = validateReceiptFields(r);
+    expect(result.valid).toBe(true);
+    expect(result.missingFields).toHaveLength(0);
+  });
+
+  it('Storno-Bon: verletzte MwSt-Invariante wird auch bei Negativbeträgen erkannt', () => {
+    const r = makeReceipt({
+      is_cancellation:         true,
+      original_receipt_number: 1,
+      cancellation_reason:     'Reklamation',
+      vat_19_net_cents:  -2000,  // falsch: -2000 + -399 ≠ -2500
+      vat_19_tax_cents:  -399,
+      total_gross_cents: -2500,
+      payments: [{ method: 'cash', amount_cents: -2500 }],
+    });
+    const result = validateReceiptFields(r);
+    expect(result.valid).toBe(false);
+    expect(result.missingFields.some(f => f.includes('MwSt-Invariante'))).toBe(true);
+  });
 });
 
 // ─── MwSt-Invariante ─────────────────────────────────────────────────────────

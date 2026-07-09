@@ -87,8 +87,64 @@ describe('POST /receipts/:id/cancel', () => {
     expect(res.body.original_receipt_id).toBe(receiptId);
     expect(res.body.cancellation_receipt_id).toBeGreaterThan(receiptId);
     expect(res.body.cancellation_receipt_number).toBe(2); // receipt 1 = original
-    expect(res.body.total_gross_cents).toBe(2500);
+    expect(res.body.total_gross_cents).toBe(-2500); // Gegenbuchung: negativ
     expect(res.body.tse_pending).toBe(true); // kein TSS konfiguriert in Tests
+  });
+
+  it('Storno-Bon trägt negative Beträge + negative payments (Gegenbuchung)', async () => {
+    const receiptId = await setupPaidOrder(token, productId);
+    const cancelRes = await request(app)
+      .post(`/receipts/${receiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Reklamation' });
+    const cancelReceiptId = cancelRes.body.cancellation_receipt_id as number;
+
+    const res = await request(app)
+      .get(`/receipts/${cancelReceiptId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.total_gross_cents).toBe(-2500);
+    expect(res.body.vat_19_net_cents + res.body.vat_19_tax_cents).toBe(-2500);
+    expect(res.body.payments.length).toBe(1);
+    expect(res.body.payments[0].method).toBe('cash');
+    expect(res.body.payments[0].amount_cents).toBe(-2500);
+  });
+
+  it('Storno nettet Tagesbericht auf 0 (Umsatz + Zahlarten)', async () => {
+    const receiptId = await setupPaidOrder(token, productId);
+    await request(app)
+      .post(`/receipts/${receiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Reklamation' });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await request(app)
+      .get(`/reports/daily?date=${today}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.total_gross_cents).toBe(0);
+    expect(res.body.payments_cash_cents).toBe(0);
+    expect(res.body.vat_19_net_cents).toBe(0);
+    expect(res.body.vat_19_tax_cents).toBe(0);
+    expect(res.body.cancellation_count).toBe(1);
+  });
+
+  it('Storno reduziert erwarteten Kassenbestand beim Schichtabschluss', async () => {
+    const receiptId = await setupPaidOrder(token, productId); // +2500 cash
+    await request(app)
+      .post(`/receipts/${receiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Bar zurückerstattet' });
+
+    // Eröffnungsbestand 10000 (setup) + 2500 Umsatz − 2500 Storno = 10000
+    const res = await request(app)
+      .post('/sessions/close')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ closing_cash_cents: 10000 });
+    expect(res.status).toBe(200);
+    expect(res.body.expected_cash_cents).toBe(10000);
+    expect(res.body.difference_cents).toBe(0);
+    expect(res.body.total_revenue_cents).toBe(0); // Z-Bericht: Umsatz genettet
   });
 
   it('Storno-Bon hat korrekte raw_receipt_json', async () => {

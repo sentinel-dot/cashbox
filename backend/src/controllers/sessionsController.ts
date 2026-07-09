@@ -26,29 +26,40 @@ export const movementSchema = z.object({
  * Wird bei session.close() generiert und unveränderlich in z_reports gespeichert.
  */
 async function buildZReportData(sessionId: number, tenantId: number) {
-  // Zahlungen der Session aggregiert nach Methode und MwSt-Satz
+  // Zahlungen der Session aggregiert nach Methode.
+  // Join über receipts.session_id (nicht orders.session_id): ein Storno am Folgetag
+  // gehört in die Kassenlade der Session, in der er durchgeführt wurde.
+  // Negative Storno-payments netten automatisch aus.
   const [payments] = await db.execute<any[]>(
     `SELECT
        p.method,
        SUM(p.amount_cents)  AS total_amount_cents,
        COUNT(DISTINCT p.order_id) AS order_count
      FROM payments p
-     JOIN orders o ON o.id = p.order_id
-     WHERE o.session_id = ? AND o.tenant_id = ?
+     JOIN receipts r ON r.id = p.receipt_id
+     WHERE r.session_id = ? AND r.tenant_id = ? AND r.status = 'active'
      GROUP BY p.method`,
     [sessionId, tenantId]
   );
 
-  // MwSt-Aufschlüsselung aus order_items
+  // Bezahlte Bestellungen der Session (DISTINCT über alle Methoden —
+  // Mixed-Payment-Orders sonst doppelt gezählt)
+  const [orderCountRow] = await db.execute<any[]>(
+    `SELECT COUNT(DISTINCT p.order_id) AS total_orders
+     FROM payments p
+     JOIN receipts r ON r.id = p.receipt_id
+     WHERE r.session_id = ? AND r.tenant_id = ? AND r.status = 'active'
+       AND p.amount_cents > 0`,
+    [sessionId, tenantId]
+  );
+
+  // MwSt-Aufschlüsselung aus receipts (Storno-Bons mit negativen Beträgen netten aus)
   const [vatRows] = await db.execute<any[]>(
     `SELECT
-       oi.vat_rate,
-       SUM(oi.subtotal_cents) AS net_plus_vat_cents
-     FROM order_items oi
-     JOIN orders o ON o.id = oi.order_id
-     WHERE o.session_id = ? AND o.tenant_id = ? AND o.status = 'paid'
-       AND NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)
-     GROUP BY oi.vat_rate`,
+       COALESCE(SUM(vat_7_net_cents  + vat_7_tax_cents),  0) AS vat_7_gross_cents,
+       COALESCE(SUM(vat_19_net_cents + vat_19_tax_cents), 0) AS vat_19_gross_cents
+     FROM receipts
+     WHERE session_id = ? AND tenant_id = ? AND status = 'active'`,
     [sessionId, tenantId]
   );
 
@@ -81,13 +92,20 @@ async function buildZReportData(sessionId: number, tenantId: number) {
     [sessionId, tenantId]
   );
 
-  // Gesamtumsatz
+  // Gesamtumsatz (Storno-payments negativ → nettet automatisch)
   const totalRevenue = payments.reduce((s: number, p: any) => s + Number(p.total_amount_cents), 0);
-  const totalOrders  = payments.reduce((s: number, p: any) => s + Number(p.order_count), 0);
+  const totalOrders  = Number(orderCountRow[0]?.total_orders ?? 0);
+
+  // vat_breakdown-Shape beibehalten (iOS/Tests): ein Eintrag je Steuersatz
+  const vat7Gross  = Number(vatRows[0]?.vat_7_gross_cents  ?? 0);
+  const vat19Gross = Number(vatRows[0]?.vat_19_gross_cents ?? 0);
+  const vatBreakdown: Array<{ vat_rate: string; net_plus_vat_cents: number }> = [];
+  if (vat7Gross  !== 0) vatBreakdown.push({ vat_rate: '7',  net_plus_vat_cents: vat7Gross });
+  if (vat19Gross !== 0) vatBreakdown.push({ vat_rate: '19', net_plus_vat_cents: vat19Gross });
 
   return {
     payments:           payments.map(p => ({ method: p.method, total_amount_cents: Number(p.total_amount_cents), order_count: Number(p.order_count) })),
-    vat_breakdown:      vatRows.map(v => ({ vat_rate: v.vat_rate, net_plus_vat_cents: Number(v.net_plus_vat_cents) })),
+    vat_breakdown:      vatBreakdown,
     total_revenue_cents: totalRevenue,
     total_orders:        totalOrders,
     total_discount_cents: Number(discountRow[0]?.total_discount_cents ?? 0),
@@ -197,12 +215,13 @@ export async function closeSession(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Einnahmen aus Zahlungen
+  // Bar-Einnahmen der Session — via receipts.session_id (Storno in dieser Session
+  // erzeugt negative payments und reduziert den erwarteten Kassenbestand)
   const [revenueRow] = await db.execute<any[]>(
     `SELECT COALESCE(SUM(p.amount_cents), 0) AS cash_revenue_cents
      FROM payments p
-     JOIN orders o ON o.id = p.order_id
-     WHERE o.session_id = ? AND o.tenant_id = ? AND p.method = 'cash'`,
+     JOIN receipts r ON r.id = p.receipt_id
+     WHERE r.session_id = ? AND r.tenant_id = ? AND r.status = 'active' AND p.method = 'cash'`,
     [sessionId, tenantId]
   );
 
