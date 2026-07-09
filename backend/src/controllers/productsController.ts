@@ -346,9 +346,12 @@ export async function updateProduct(req: Request, res: Response): Promise<void> 
 }
 
 // ─── POST /products/:id/price ────────────────────────────────────────────────
-// GoBD: price_cents ist IMMUTABLE — Änderungen NUR via product_price_history.
-// products.price_cents bleibt unverändert; Kassierer-App liest aktuellen Preis
-// aus product_price_history (letzter Eintrag per valid_from DESC).
+// GoBD: jede Preisänderung wird zuerst lückenlos in product_price_history
+// dokumentiert (INSERT-only via auditDb), danach wird products.price_cents als
+// operativer aktueller Preis aktualisiert — addItem/listProducts lesen diese
+// Spalte. Direkte Änderungen via PATCH /products/:id bleiben verboten.
+// Reihenfolge Historie → UPDATE: schlägt das UPDATE fehl, existiert nur ein
+// zusätzlicher Historien-Eintrag (append-only, unschädlich).
 
 export async function changePrice(req: Request, res: Response): Promise<void> {
   const tenantId = req.auth!.tenantId;
@@ -375,7 +378,7 @@ export async function changePrice(req: Request, res: Response): Promise<void> {
   const newVatInhouse  = vat_rate_inhouse  ?? current.vat_rate_inhouse;
   const newVatTakeaway = vat_rate_takeaway ?? current.vat_rate_takeaway;
 
-  // GoBD: NUR INSERT in product_price_history — kein UPDATE auf products.price_cents
+  // GoBD: Historie zuerst (INSERT-only via auditDb) …
   await writePriceHistory({
     productId:       targetId,
     tenantId,
@@ -384,6 +387,14 @@ export async function changePrice(req: Request, res: Response): Promise<void> {
     vatRateTakeaway: newVatTakeaway,
     changedByUserId: userId,
   });
+
+  // … dann den operativen Preis aktualisieren — addItem/listProducts lesen products.price_cents
+  await db.execute(
+    `UPDATE products
+     SET price_cents = ?, vat_rate_inhouse = ?, vat_rate_takeaway = ?, updated_at = NOW()
+     WHERE id = ? AND tenant_id = ?`,
+    [price_cents, newVatInhouse, newVatTakeaway, targetId, tenantId]
+  );
 
   await writeAuditLog({
     tenantId, userId, action: 'product.price_changed',

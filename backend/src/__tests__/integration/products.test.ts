@@ -308,8 +308,8 @@ describe('POST /products/:id/price', () => {
     expect(prices).toContain(2500);
   });
 
-  // b) products.price_cents bleibt UNVERÄNDERT (GoBD: immutable)
-  it('b) ändert products.price_cents nicht (GoBD: immutable)', async () => {
+  // b) products.price_cents wird aktualisiert — Katalog + Bestellungen nutzen den neuen Preis
+  it('b) aktualisiert products.price_cents (operativer Preis)', async () => {
     await request(app)
       .post(`/products/${productId}/price`)
       .set('Authorization', `Bearer ${token}`)
@@ -319,7 +319,62 @@ describe('POST /products/:id/price', () => {
       `SELECT price_cents FROM products WHERE id = ? AND tenant_id = ?`,
       [productId, tenantId]
     );
-    expect(rows[0].price_cents).toBe(2000); // Original-Preis unverändert
+    expect(rows[0].price_cents).toBe(3000);
+  });
+
+  // b2) GET /products liefert nach Preisänderung den neuen Preis
+  it('b2) GET /products zeigt neuen Preis nach Preisänderung', async () => {
+    await request(app)
+      .post(`/products/${productId}/price`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ price_cents: 2750 });
+
+    const res = await request(app).get('/products').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const product = res.body.find((p: any) => p.id === productId);
+    expect(product.price_cents).toBe(2750);
+  });
+
+  // b3) Bestellung nach Preisänderung kassiert den neuen Preis
+  it('b3) addItem nutzt neuen Preis nach Preisänderung', async () => {
+    await request(app)
+      .post(`/products/${productId}/price`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ price_cents: 3333 });
+
+    // Kassensitzung + Order anlegen (sessionMiddleware verlangt offene Session)
+    await request(app)
+      .post('/sessions/open')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ opening_cash_cents: 0 });
+    const orderRes = await request(app)
+      .post('/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(orderRes.status).toBe(201);
+
+    const itemRes = await request(app)
+      .post(`/orders/${orderRes.body.id}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 1 });
+    expect(itemRes.status).toBe(201);
+    expect(itemRes.body.subtotal_cents).toBe(3333);
+  });
+
+  // b4) Historie enthält beide Preise (GoBD: lückenlos)
+  it('b4) product_price_history enthält alten und neuen Preis', async () => {
+    await request(app)
+      .post(`/products/${productId}/price`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ price_cents: 3000 });
+
+    const [rows] = await db.execute<any[]>(
+      `SELECT price_cents FROM product_price_history WHERE product_id = ? AND tenant_id = ?`,
+      [productId, tenantId]
+    );
+    // Hinweis: der Seed in beforeEach schreibt keine Historie (direkter INSERT),
+    // daher hier nur der Änderungs-Eintrag; via API angelegte Produkte haben den Initial-Eintrag.
+    expect(rows.map(r => r.price_cents)).toContain(3000);
   });
 
   // c) PATCH mit price_cents wird abgewiesen (guard in Route)
