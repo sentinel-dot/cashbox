@@ -1,5 +1,6 @@
 // KategorienView.swift
-// cashbox — Kategorienverwaltung: 2-Spalten-Layout nach Referenz-Design
+// cashbox — Kategorienverwaltung: Liste links + Detail-Panel rechts
+// Design v3: keine toten Drag-Affordanzen, 44pt-Aktionen, DS-Komponenten.
 
 import SwiftUI
 
@@ -8,7 +9,6 @@ import SwiftUI
 struct KategorienView: View {
     @EnvironmentObject var productStore:   ProductStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedId:   Int?               = nil
     @State private var showAddModal  = false
@@ -37,10 +37,15 @@ struct KategorienView: View {
                     ProgressView().progressViewStyle(.circular)
                     Spacer()
                 } else if productStore.allCategories.isEmpty {
-                    EmptyKategorien()
+                    DSEmptyState(
+                        icon: "folder.badge.plus",
+                        title: "Keine Kategorien",
+                        message: "Erstelle Kategorien, um Produkte zu gruppieren.",
+                        actionLabel: "Kategorie hinzufügen",
+                        action: { showAddModal = true }
+                    )
                 } else {
                     HStack(spacing: 0) {
-                        // Links: Kategorienliste
                         KategorienListe(
                             categories:       productStore.allCategories,
                             products:         productStore.products,
@@ -48,7 +53,6 @@ struct KategorienView: View {
                             onDelete:         { deleteTarget = $0 }
                         )
 
-                        // Rechts: Detail-Panel (340px)
                         KategorienDetailPanel(
                             category:       selectedCategory,
                             products:       productStore.products,
@@ -58,13 +62,13 @@ struct KategorienView: View {
                             },
                             onDeselect:     { selectedId = nil }
                         )
-                        .frame(width: 340)
-                        .overlay(Rectangle().frame(width: 1).foregroundColor(DS.C.brdLight), alignment: .leading)
+                        .frame(width: 360)
+                        .overlay(Rectangle().frame(width: 1).foregroundColor(DS.C.brdAdaptive), alignment: .leading)
                     }
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
         .task { await productStore.loadCategories() }
         .sheet(isPresented: $showAddModal) {
             NeueKategorieSheet { name, color, sortOrder in
@@ -123,38 +127,31 @@ struct KategorienView: View {
 private struct KategorienToolbar: View {
     let count: Int
     let onAdd: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Kategorien")
-                    .font(.jakarta(13, weight: .semibold))
+                    .font(DS.F.heading)
                     .foregroundColor(DS.C.text)
-                Text("Reihenfolge per Drag & Drop änderbar")
-                    .font(.jakarta(11, weight: .regular))
+                Text("\(count) Kategorie\(count == 1 ? "" : "n") · Reihenfolge bestimmt die Anzeige an der Kasse")
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             Button(action: onAdd) {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                     Text("Kategorie hinzufügen")
-                        .font(.jakarta(DS.T.loginFooter + 1, weight: .semibold))
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 34)
             }
-            .background(DS.C.acc)
-            .cornerRadius(DS.R.button)
-            .buttonStyle(.plain)
+            .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
         }
-        .padding(.horizontal, 20)
-        .frame(height: DS.S.topbarHeight)
+        .padding(.horizontal, DS.S.pagePad)
+        .frame(height: DS.S.topbarHeight + 8)
         .background(DS.C.sur)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 }
 
@@ -169,17 +166,6 @@ private struct KategorienListe: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
-                // Sort-Hint
-                HStack(spacing: 5) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 10))
-                        .foregroundColor(DS.C.text2)
-                    Text("Reihenfolge bestimmt die Anzeige im Kassensystem")
-                        .font(.jakarta(10, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                }
-                .padding(.bottom, 2)
-
                 ForEach(Array(categories.enumerated()), id: \.element.id) { index, cat in
                     let prodCount = products.filter { $0.category?.id == cat.id }.count
                     KategorieCard(
@@ -192,7 +178,7 @@ private struct KategorienListe: View {
                     )
                 }
             }
-            .padding(20)
+            .padding(DS.S.pagePad)
         }
         .background(DS.C.bg)
     }
@@ -208,9 +194,6 @@ private struct KategorieCard: View {
     let onSelect:   () -> Void
     let onDelete:   () -> Void
 
-    @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
-
     var accentColor: Color {
         Color(hex: category.color ?? "#888888")
     }
@@ -222,98 +205,52 @@ private struct KategorieCard: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(accentColor)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                     Image(systemName: "tag.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .foregroundColor(.white.opacity(0.9))
                 }
 
-                // Name + Meta
                 VStack(alignment: .leading, spacing: 2) {
                     Text(category.name)
-                        .font(.jakarta(14, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(isSelected ? DS.C.accT : DS.C.text)
-                    Text("\(prodCount) Produkt\(prodCount == 1 ? "" : "e") · Sortierung: \(sortOrder)")
-                        .font(.jakarta(11, weight: .regular))
+                    Text("\(prodCount) Produkt\(prodCount == 1 ? "" : "e") · Sortierung \(sortOrder)")
+                        .font(DS.F.caption)
+                        .monospacedDigit()
                         .foregroundColor(DS.C.text2)
                 }
 
                 Spacer()
 
-                // Active badge (immer aktiv, da kein isActive-Feld im Modell)
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(DS.C.freeText)
-                        .frame(width: 5, height: 5)
-                    Text("Aktiv")
-                        .font(.jakarta(10, weight: .semibold))
-                        .foregroundColor(DS.C.freeText)
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(DS.C.dangerText)
+                        .frame(width: 40, height: 40)
+                        .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.dangerBg.opacity(0.6)))
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(DS.C.freeBg)
-                .cornerRadius(20)
+                .buttonStyle(.plain)
 
-                // Action-Buttons
-                HStack(spacing: 6) {
-                    CardActionBtn(icon: "pencil",   isDanger: false) { onSelect() }
-                    CardActionBtn(icon: "trash",    isDanger: true)  { onDelete() }
-                }
-
-                // Drag-Handle
-                VStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Rectangle()
-                            .fill(isHovered ? DS.C.text2 : DS.C.brdLight)
-                            .frame(width: 16, height: 2)
-                            .cornerRadius(1)
-                    }
-                }
-                .frame(width: 20)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(DS.C.text2.opacity(0.6))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(isSelected ? DS.C.accBg : DS.C.sur)
-            .cornerRadius(14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(
-                        isSelected
-                            ? DS.C.acc
-                            : (isHovered ? DS.C.acc.opacity(0.2) : DS.C.brd(colorScheme)),
-                        lineWidth: isSelected ? 1.5 : 1
-                    )
+            .background(
+                RoundedRectangle(cornerRadius: DS.R.card)
+                    .fill(isSelected ? DS.C.accBg : DS.C.sur)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.R.card)
+                    .strokeBorder(isSelected ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isSelected ? 1.5 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: DS.R.card))
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.12), value: isSelected)
-        .animation(.easeInOut(duration: 0.1), value: isHovered)
-    }
-}
-
-private struct CardActionBtn: View {
-    let icon:     String
-    let isDanger: Bool
-    let action:   () -> Void
-    @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isHovered ? (isDanger ? DS.C.dangerText : DS.C.text) : DS.C.text2)
-                .frame(width: 28, height: 28)
-                .background(isHovered ? (isDanger ? DS.C.dangerBg : DS.C.sur2) : Color.clear)
-                .cornerRadius(7)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(isHovered ? (isDanger ? DS.C.dangerText.opacity(0.4) : DS.C.brd(colorScheme)) : DS.C.brd(colorScheme), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.1), value: isHovered)
+        .animation(DS.M.fast, value: isSelected)
     }
 }
 
@@ -338,34 +275,13 @@ private struct KategorienDetailPanel: View {
             .id(cat.id)  // Reset form state when selection changes
             .background(DS.C.sur)
         } else {
-            DetailEmpty()
-                .background(DS.C.sur)
+            DSEmptyState(
+                icon: "square.grid.2x2",
+                title: "Kategorie auswählen",
+                message: "Tippe links auf eine Kategorie, um sie zu bearbeiten."
+            )
+            .background(DS.C.sur)
         }
-    }
-}
-
-private struct DetailEmpty: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(DS.C.sur2)
-                    .frame(width: 48, height: 48)
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 20, weight: .light))
-                    .foregroundColor(DS.C.text2)
-            }
-            Text("Kategorie auswählen")
-                .font(.jakarta(13, weight: .medium))
-                .foregroundColor(DS.C.text2)
-                .multilineTextAlignment(.center)
-            Text("Tippe auf eine Kategorie um sie zu bearbeiten.")
-                .font(.jakarta(11, weight: .regular))
-                .foregroundColor(DS.C.text2)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -375,8 +291,6 @@ private struct DetailContent: View {
     let allCategories: [ProductCategoryRef]
     let onSave:        (Int, String, String?, Int?) -> Void
     let onCancel:      () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var name       = ""
     @State private var colorHex   = ""
@@ -389,10 +303,6 @@ private struct DetailContent: View {
         products.filter { $0.category?.id == category.id }
     }
 
-    private var sortIndex: Int {
-        (allCategories.firstIndex(where: { $0.id == category.id }) ?? 0) + 1
-    }
-
     var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
@@ -401,49 +311,49 @@ private struct DetailContent: View {
             HStack(spacing: 12) {
                 RoundedRectangle(cornerRadius: 9)
                     .fill(Color(hex: colorHex.isEmpty ? (category.color ?? "888888") : colorHex))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name.isEmpty ? category.name : name)
-                        .font(.jakarta(15, weight: .semibold))
+                        .font(DS.F.heading)
                         .foregroundColor(DS.C.text)
                     Text("\(assignedProducts.count) Produkt\(assignedProducts.count == 1 ? "" : "e") zugewiesen")
-                        .font(.jakarta(11, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 18)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+            .padding(.vertical, 16)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
 
             // Body
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 20) {
 
                     // Name
                     DetailField(label: "Name") {
                         NoAssistantTextField(
                             placeholder: "z.B. Getränke",
                             text:        $name,
-                            uiFont:      UIFont.systemFont(ofSize: 13),
+                            uiFont:      UIFont.systemFont(ofSize: 16),
                             uiTextColor: UIColor(DS.C.text),
                             isFocused:   $nameFocused
                         )
-                        .padding(.horizontal, 12)
-                        .frame(height: 36)
-                        .background(DS.C.bg)
-                        .cornerRadius(DS.R.input)
+                        .padding(.horizontal, 14)
+                        .frame(height: DS.S.inputHeight)
+                        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.R.input)
-                                .strokeBorder(nameFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                                .strokeBorder(nameFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: nameFocused ? 1.5 : 1)
                         )
+                        .animation(DS.M.fast, value: nameFocused)
                     }
 
                     // Farbe
                     DetailField(label: "Farbe") {
                         LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 6),
-                            spacing: 7
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6),
+                            spacing: 8
                         ) {
                             ForEach(colorPresets, id: \.self) { hex in
                                 DetailColorSwatch(hex: hex, isSelected: colorHex.lowercased().trimmingCharacters(in: .init(charactersIn: "#")) == hex.lowercased()) {
@@ -451,23 +361,25 @@ private struct DetailContent: View {
                                 }
                             }
                         }
-                        // HEX-Eingabe
+                        // HEX-Anzeige
                         HStack(spacing: 8) {
                             if !colorHex.isEmpty {
                                 RoundedRectangle(cornerRadius: 5)
                                     .fill(Color(hex: colorHex))
-                                    .frame(width: 20, height: 20)
-                                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+                                    .frame(width: 22, height: 22)
+                                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
                             }
                             Text(colorHex.isEmpty ? "Eigener HEX-Wert" : colorHex.uppercased())
-                                .font(.jakarta(11, weight: .regular))
+                                .font(.system(size: 13, design: .monospaced))
                                 .foregroundColor(colorHex.isEmpty ? DS.C.text2 : DS.C.text)
                             Spacer()
                             if !colorHex.isEmpty {
                                 Button { colorHex = "" } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 13))
+                                        .font(.system(size: 15))
                                         .foregroundColor(DS.C.text2)
+                                        .frame(width: 32, height: 32)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -483,19 +395,17 @@ private struct DetailContent: View {
                             FlexWrap(spacing: 6) {
                                 ForEach(shown) { p in
                                     Text(p.name)
-                                        .font(.jakarta(11, weight: .medium))
-                                        .foregroundColor(DS.C.text2)
-                                        .padding(.horizontal, 10).padding(.vertical, 4)
-                                        .background(DS.C.sur2)
-                                        .cornerRadius(20)
+                                        .font(DS.F.caption)
+                                        .foregroundColor(DS.C.text)
+                                        .padding(.horizontal, 12).padding(.vertical, 6)
+                                        .background(Capsule().fill(DS.C.sur2))
                                 }
                                 if rest > 0 {
                                     Text("+ \(rest) weitere")
-                                        .font(.jakarta(11, weight: .medium))
+                                        .font(DS.F.caption)
                                         .foregroundColor(DS.C.text2)
-                                        .padding(.horizontal, 10).padding(.vertical, 4)
-                                        .background(DS.C.sur2)
-                                        .cornerRadius(20)
+                                        .padding(.horizontal, 12).padding(.vertical, 6)
+                                        .background(Capsule().fill(DS.C.sur2))
                                 }
                             }
                         }
@@ -505,13 +415,9 @@ private struct DetailContent: View {
             }
 
             // Footer
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button("Abbrechen") { onCancel() }
-                    .font(.jakarta(12, weight: .semibold))
-                    .foregroundColor(DS.C.text2)
-                    .padding(.horizontal, 16).frame(height: 38)
-                    .overlay(RoundedRectangle(cornerRadius: DS.R.button).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
-                    .buttonStyle(.plain)
+                    .buttonStyle(DSSecondaryButton(height: 48, fullWidth: false))
 
                 Spacer()
 
@@ -521,19 +427,14 @@ private struct DetailContent: View {
                     let sortArg:  Int?    = Int(sortText)
                     onSave(category.id, trimName, colorArg, sortArg)
                 } label: {
-                    Text("Änderungen speichern")
-                        .font(.jakarta(12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16).frame(height: 38)
+                    Text("Speichern")
                 }
-                .background(canSave ? DS.C.acc : DS.C.acc.opacity(0.35))
-                .cornerRadius(DS.R.button)
+                .buttonStyle(DSPrimaryButton(height: 48, fullWidth: false))
                 .disabled(!canSave)
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .top)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .top)
         }
         .onAppear {
             name     = category.name
@@ -547,10 +448,8 @@ private struct DetailField<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(label.uppercased())
-                .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                .foregroundColor(DS.C.text2)
+        VStack(alignment: .leading, spacing: 8) {
+            DSSectionLabel(text: label)
             content
         }
     }
@@ -569,18 +468,18 @@ private struct DetailColorSwatch: View {
                     .aspectRatio(1, contentMode: .fit)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(isSelected ? Color.white.opacity(0.8) : Color.clear, lineWidth: 2)
+                            .strokeBorder(isSelected ? Color.white.opacity(0.9) : Color.clear, lineWidth: 2)
                     )
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
         }
         .buttonStyle(.plain)
         .scaleEffect(isSelected ? 1.07 : 1.0)
-        .animation(.easeInOut(duration: 0.1), value: isSelected)
+        .animation(DS.M.fast, value: isSelected)
     }
 }
 
@@ -623,7 +522,6 @@ private struct NeueKategorieSheet: View {
     let onSave: (String, String?, Int) async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var name       = ""
     @State private var colorHex   = ""
@@ -639,54 +537,49 @@ private struct NeueKategorieSheet: View {
             // Header
             HStack {
                 Text("Neue Kategorie")
-                    .font(.jakarta(15, weight: .semibold))
+                    .font(DS.F.heading)
                     .foregroundColor(DS.C.text)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(DS.C.text2)
-                        .frame(width: 26, height: 26)
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(DS.C.sur2))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 18)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+            .padding(.vertical, 16)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
 
             // Body
-            VStack(alignment: .leading, spacing: 16) {
-                // Name
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("NAME")
-                        .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                        .foregroundColor(DS.C.text2)
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Name")
                     NoAssistantTextField(
                         placeholder: "z.B. Heißgetränke",
                         text:        $name,
-                        uiFont:      UIFont.systemFont(ofSize: 13),
+                        uiFont:      UIFont.systemFont(ofSize: 16),
                         uiTextColor: UIColor(DS.C.text),
                         isFocused:   $nameFocused
                     )
-                    .padding(.horizontal, 12)
-                    .frame(height: 36)
-                    .background(DS.C.bg)
-                    .cornerRadius(DS.R.input)
+                    .padding(.horizontal, 14)
+                    .frame(height: DS.S.inputHeight)
+                    .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.R.input)
-                            .strokeBorder(nameFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                            .strokeBorder(nameFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: nameFocused ? 1.5 : 1)
                     )
+                    .animation(DS.M.fast, value: nameFocused)
                 }
 
-                // Farbe
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("FARBE")
-                        .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                        .foregroundColor(DS.C.text2)
+                    DSSectionLabel(text: "Farbe")
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 8),
-                        spacing: 7
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 8),
+                        spacing: 8
                     ) {
                         ForEach(colorPresets, id: \.self) { hex in
                             DetailColorSwatch(
@@ -702,13 +595,9 @@ private struct NeueKategorieSheet: View {
             .padding(20)
 
             // Footer
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button("Abbrechen") { dismiss() }
-                    .font(.jakarta(12, weight: .semibold))
-                    .foregroundColor(DS.C.text2)
-                    .padding(.horizontal, 16).frame(height: 38)
-                    .overlay(RoundedRectangle(cornerRadius: DS.R.button).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
-                    .buttonStyle(.plain)
+                    .buttonStyle(DSSecondaryButton(height: 48, fullWidth: false))
 
                 Spacer()
 
@@ -724,48 +613,22 @@ private struct NeueKategorieSheet: View {
                 } label: {
                     Group {
                         if isSaving {
-                            ProgressView().progressViewStyle(.circular).scaleEffect(0.7)
+                            ProgressView().progressViewStyle(.circular).tint(.white)
                         } else {
                             Text("Kategorie speichern")
-                                .font(.jakarta(12, weight: .semibold))
-                                .foregroundColor(.white)
                         }
                     }
-                    .padding(.horizontal, 16).frame(height: 38)
                 }
-                .background(canSave ? DS.C.acc : DS.C.acc.opacity(0.35))
-                .cornerRadius(DS.R.button)
+                .buttonStyle(DSPrimaryButton(height: 48, fullWidth: false))
                 .disabled(!canSave || isSaving)
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .top)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .top)
         }
         .background(DS.C.sur)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
-    }
-}
-
-// MARK: - Empty State
-
-private struct EmptyKategorien: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 36, weight: .light))
-                .foregroundColor(DS.C.text2)
-            Text("Keine Kategorien")
-                .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                .foregroundColor(DS.C.text)
-            Text("Erstelle Kategorien um Produkte zu gruppieren.")
-                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                .foregroundColor(DS.C.text2)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

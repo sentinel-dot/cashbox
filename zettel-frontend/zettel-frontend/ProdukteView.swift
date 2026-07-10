@@ -1,5 +1,6 @@
 // ProdukteView.swift
-// cashbox — Produktverwaltung: Tabellen-Layout + Tab-Modal nach Referenz-Design
+// cashbox — Produktverwaltung: Tabellen-Layout + Tab-Modal
+// Design v3: keine Farbstreifen, 44pt-Aktionen, zentrale Geld-Formatierung.
 
 import SwiftUI
 
@@ -8,7 +9,6 @@ import SwiftUI
 struct ProdukteView: View {
     @EnvironmentObject var productStore:   ProductStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showAddSheet        = false
     @State private var editingProduct:     Product?
@@ -58,7 +58,15 @@ struct ProdukteView: View {
                     ProgressView().progressViewStyle(.circular)
                     Spacer()
                 } else if filtered.isEmpty {
-                    EmptyProdukte(hasSearch: !searchText.isEmpty)
+                    DSEmptyState(
+                        icon: searchText.isEmpty ? "tag.slash" : "magnifyingglass",
+                        title: searchText.isEmpty ? "Noch keine Produkte" : "Keine Produkte gefunden",
+                        message: searchText.isEmpty
+                            ? "Tippe auf „Produkt hinzufügen“, um das erste Produkt anzulegen."
+                            : "Andere Suchbegriffe probieren.",
+                        actionLabel: searchText.isEmpty ? "Produkt hinzufügen" : nil,
+                        action: searchText.isEmpty ? { showAddSheet = true } : nil
+                    )
                 } else {
                     ProdukteTable(
                         products: filtered,
@@ -75,7 +83,7 @@ struct ProdukteView: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
         .task { await productStore.loadProducts() }
         // Neues Produkt anlegen
         .sheet(isPresented: $showAddSheet) {
@@ -193,46 +201,46 @@ private struct ProdukteToolbar: View {
     @Binding var selectedCategoryId: Int?
     let onAdd:                       () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var searchFocused = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             // Suchfeld
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
+                    .font(.system(size: 14))
                     .foregroundColor(DS.C.text2)
                 NoAssistantTextField(
                     placeholder: "Produkt suchen …",
                     text:        $searchText,
-                    uiFont:      UIFont.systemFont(ofSize: 13),
+                    uiFont:      UIFont.systemFont(ofSize: 15),
                     uiTextColor: UIColor(DS.C.text),
                     isFocused:   $searchFocused
                 )
                 if !searchText.isEmpty {
                     Button { searchText = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.system(size: 15))
                             .foregroundColor(DS.C.text2)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 34)
-            .frame(width: 200)
-            .background(DS.C.bg)
-            .cornerRadius(DS.R.button)
+            .padding(.horizontal, 12)
+            .frame(height: 42)
+            .frame(width: 240)
+            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.R.button)
-                    .strokeBorder(searchFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .strokeBorder(searchFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: searchFocused ? 1.5 : 1)
             )
-            .animation(.easeInOut(duration: 0.15), value: searchFocused)
+            .animation(DS.M.fast, value: searchFocused)
 
             // Kategorie-Filter-Pills
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     ToolbarFilterPill(label: "Alle", color: nil, isActive: selectedCategoryId == nil) {
                         selectedCategoryId = nil
                     }
@@ -247,24 +255,18 @@ private struct ProdukteToolbar: View {
             Spacer()
 
             Button(action: onAdd) {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                     Text("Produkt hinzufügen")
-                        .font(.jakarta(DS.T.loginFooter + 1, weight: .semibold))
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 34)
             }
-            .background(DS.C.acc)
-            .cornerRadius(DS.R.button)
-            .buttonStyle(.plain)
+            .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
         }
-        .padding(.horizontal, 20)
-        .frame(height: DS.S.topbarHeight)
+        .padding(.horizontal, DS.S.pagePad)
+        .frame(height: DS.S.topbarHeight + 8)
         .background(DS.C.sur)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 }
 
@@ -273,27 +275,22 @@ private struct ToolbarFilterPill: View {
     let color:    String?
     let isActive: Bool
     let onTap:    () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 5) {
-                if let hex = color { Circle().fill(Color(hex: hex)).frame(width: 6, height: 6) }
+            HStack(spacing: 6) {
+                if let hex = color { Circle().fill(Color(hex: hex)).frame(width: 8, height: 8) }
                 Text(label)
-                    .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                    .foregroundColor(isActive ? .white : DS.C.text2)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isActive ? .white : DS.C.text)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(isActive ? DS.C.acc : Color.clear)
-            .cornerRadius(DS.R.badge)
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.badge)
-                    .strokeBorder(isActive ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
-            )
+            .padding(.horizontal, 14)
+            .frame(height: 38)
+            .background(Capsule().fill(isActive ? DS.C.acc : DS.C.sur2))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: isActive)
+        .animation(DS.M.fast, value: isActive)
     }
 }
 
@@ -314,7 +311,7 @@ private struct ProdukteStatsBar: View {
             Spacer()
         }
         .background(DS.C.sur)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 }
 
@@ -325,15 +322,13 @@ private struct StatCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased())
-                .font(.jakarta(9, weight: .semibold))
-                .kerning(0.5)
-                .foregroundColor(DS.C.text2)
+            DSSectionLabel(text: label)
             Text(value)
-                .font(.jakarta(17, weight: .semibold))
-                .foregroundColor(isAccent ? DS.C.acc : DS.C.text)
+                .font(.system(size: 19, weight: .bold))
+                .monospacedDigit()
+                .foregroundColor(isAccent ? DS.C.accT : DS.C.text)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, DS.S.pagePad)
         .padding(.vertical, 10)
     }
 }
@@ -359,7 +354,7 @@ private struct ProdukteTable: View {
                             onToggle: { onToggle(product) }
                         )
                         Rectangle()
-                            .fill(DS.C.brdLight)
+                            .fill(DS.C.brdAdaptive)
                             .frame(height: 1)
                     }
                 }
@@ -372,26 +367,27 @@ private struct ProdukteTable: View {
 private struct ProdukteTableHeader: View {
     var body: some View {
         HStack(spacing: 0) {
-            Text("PRODUKT")
+            Text("Produkt")
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 20)
-            Text("KATEGORIE")
-                .frame(width: 150, alignment: .leading)
-            Text("PREIS")
+                .padding(.leading, DS.S.pagePad)
+            Text("Kategorie")
+                .frame(width: 160, alignment: .leading)
+            Text("Preis")
                 .frame(width: 110, alignment: .trailing)
-            Text("MWST")
-                .frame(width: 86, alignment: .center)
-            Text("STATUS")
+            Text("MwSt")
+                .frame(width: 90, alignment: .center)
+            Text("Status")
                 .frame(width: 116, alignment: .center)
             Text("")
-                .frame(width: 96)
+                .frame(width: 140)
         }
-        .font(.jakarta(9, weight: .semibold))
-        .kerning(0.5)
+        .font(DS.F.label)
+        .textCase(.uppercase)
+        .kerning(0.7)
         .foregroundColor(DS.C.text2)
-        .frame(height: 38)
+        .frame(height: 40)
         .background(DS.C.sur)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 }
 
@@ -401,65 +397,67 @@ private struct ProdukteTableRow: View {
     let onPrice:  () -> Void
     let onToggle: () -> Void
 
-    @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         HStack(spacing: 0) {
-            // Kategorie-Farbstreifen
-            Rectangle()
-                .fill(product.category.flatMap { Color(hex: $0.color ?? "") } ?? Color.clear)
-                .frame(width: 3)
-
             // Produktname
             Text(product.name)
-                .font(.jakarta(14, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(product.isActive ? DS.C.text : DS.C.text2)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 14)
+                .padding(.leading, DS.S.pagePad)
 
             // Kategorie
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 if let hex = product.category?.color {
-                    Circle().fill(Color(hex: hex)).frame(width: 7, height: 7)
+                    Circle().fill(Color(hex: hex)).frame(width: 8, height: 8)
                 }
                 Text(product.category?.name ?? "—")
-                    .font(.jakarta(12, weight: .regular))
+                    .font(DS.F.sub)
                     .foregroundColor(DS.C.text2)
                     .lineLimit(1)
             }
-            .frame(width: 150, alignment: .leading)
+            .frame(width: 160, alignment: .leading)
 
             // Preis
-            Text(formatCents(product.priceCents))
-                .font(.jakarta(14, weight: .semibold))
+            Text(euroString(product.priceCents))
+                .font(DS.F.money(16, weight: .semibold))
+                .monospacedDigit()
                 .foregroundColor(DS.C.text)
                 .frame(width: 110, alignment: .trailing)
 
-            // MwSt-Badge
-            MwStBadge(rate: product.vatRateInhouse)
-                .frame(width: 86, alignment: .center)
+            // MwSt
+            Text("\(product.vatRateInhouse) %")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundColor(DS.C.text2)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(DS.C.sur2))
+                .frame(width: 90, alignment: .center)
 
-            // Status-Badge
-            StatusBadge(isActive: product.isActive)
-                .frame(width: 116, alignment: .center)
+            // Status
+            Group {
+                if product.isActive {
+                    DSPill(label: "Aktiv", fg: DS.C.accT, bg: DS.C.accBg)
+                } else {
+                    DSPill(label: "Inaktiv", fg: DS.C.text2, bg: DS.C.sur2)
+                }
+            }
+            .frame(width: 116, alignment: .center)
 
-            // Action-Buttons
-            HStack(spacing: 6) {
-                RowActionButton(icon: "pencil",        title: "Bearbeiten",    isDanger: false,               action: onEdit)
-                RowActionButton(icon: "eurosign",      title: "Preis ändern",  isDanger: false,               action: onPrice)
+            // Aktionen
+            HStack(spacing: 4) {
+                RowActionButton(icon: "pencil",   title: "Bearbeiten",   isDanger: false, action: onEdit)
+                RowActionButton(icon: "eurosign", title: "Preis ändern", isDanger: false, action: onPrice)
                 RowActionButton(icon: product.isActive ? "xmark" : "checkmark",
                                 title: product.isActive ? "Deaktivieren" : "Aktivieren",
                                 isDanger: product.isActive,
                                 action: onToggle)
             }
-            .frame(width: 96, alignment: .center)
+            .frame(width: 140, alignment: .center)
         }
         .frame(height: 60)
-        .background(isHovered ? DS.C.bg : Color.clear)
         .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
         .onTapGesture { onEdit() }
         .contextMenu {
             Button { onEdit()  } label: { Label("Bearbeiten",   systemImage: "pencil") }
@@ -470,37 +468,7 @@ private struct ProdukteTableRow: View {
                       systemImage: product.isActive ? "xmark.circle" : "checkmark.circle")
             }
         }
-        .opacity(product.isActive ? 1 : 0.6)
-    }
-}
-
-private struct MwStBadge: View {
-    let rate: String
-    var is7: Bool { rate == "7" }
-    var body: some View {
-        Text("\(rate) %")
-            .font(.jakarta(10, weight: .semibold))
-            .foregroundColor(is7 ? DS.C.freeText : DS.C.warnText)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(is7 ? DS.C.freeBg : DS.C.warnBg)
-            .cornerRadius(6)
-    }
-}
-
-private struct StatusBadge: View {
-    let isActive: Bool
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(isActive ? DS.C.freeText : DS.C.text2)
-                .frame(width: 5, height: 5)
-            Text(isActive ? "Aktiv" : "Inaktiv")
-                .font(.jakarta(10, weight: .semibold))
-                .foregroundColor(isActive ? DS.C.freeText : DS.C.text2)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(isActive ? DS.C.freeBg : DS.C.sur2)
-        .cornerRadius(20)
+        .opacity(product.isActive ? 1 : 0.55)
     }
 }
 
@@ -509,50 +477,18 @@ private struct RowActionButton: View {
     let title:    String
     let isDanger: Bool
     let action:   () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isHovered
-                                 ? (isDanger ? DS.C.dangerText : DS.C.text)
-                                 : DS.C.text2)
-                .frame(width: 28, height: 28)
-                .background(isHovered ? (isDanger ? DS.C.dangerBg : DS.C.sur2) : Color.clear)
-                .cornerRadius(7)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(isHovered
-                                      ? (isDanger ? DS.C.dangerText.opacity(0.4) : DS.C.brd(colorScheme))
-                                      : DS.C.brd(colorScheme), lineWidth: 1)
-                )
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(isDanger ? DS.C.dangerText : DS.C.text2)
+                .frame(width: 40, height: 40)
+                .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.sur2.opacity(0.7)))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
         .help(title)
-    }
-}
-
-// MARK: - Leer-Zustand
-
-private struct EmptyProdukte: View {
-    let hasSearch: Bool
-    var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: hasSearch ? "magnifyingglass" : "tag.slash")
-                .font(.system(size: 32, weight: .light))
-                .foregroundColor(DS.C.text2)
-            Text(hasSearch ? "Keine Produkte gefunden" : "Noch keine Produkte")
-                .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                .foregroundColor(DS.C.text)
-            Text(hasSearch ? "Andere Suchbegriffe probieren." : "Tippe auf \"Produkt hinzufügen\" um das erste Produkt anzulegen.")
-                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                .foregroundColor(DS.C.text2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -582,7 +518,6 @@ fileprivate struct ProduktFormSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var activeTab:      ModalTab = .allgemein
 
@@ -635,24 +570,24 @@ fileprivate struct ProduktFormSheet: View {
     // MARK: Head
 
     private var modalHead: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(DS.C.accBg)
-                    .frame(width: 36, height: 36)
-                Image(systemName: "pencil")
-                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 40, height: 40)
+                Image(systemName: isEdit ? "pencil" : "plus")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(DS.C.accT)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(isEdit ? (product?.name ?? "Produkt") : "Neues Produkt")
-                    .font(.jakarta(15, weight: .semibold))
+                    .font(DS.F.heading)
                     .foregroundColor(DS.C.text)
                 Text(isEdit
                      ? "Produkt bearbeiten · Erstellt \(formatCreatedAt(product?.createdAt))"
                      : "Produkt anlegen")
-                    .font(.jakarta(11, weight: .regular))
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
 
@@ -660,16 +595,17 @@ fileprivate struct ProduktFormSheet: View {
 
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(DS.C.text2)
-                    .frame(width: 28, height: 28)
-                    .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(DS.C.sur2))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 18)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .padding(.vertical, 16)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 
     // MARK: Tab Bar
@@ -678,27 +614,28 @@ fileprivate struct ProduktFormSheet: View {
         HStack(spacing: 0) {
             ForEach(ModalTab.allCases, id: \.self) { tab in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { activeTab = tab }
+                    withAnimation(DS.M.base) { activeTab = tab }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.jakarta(12, weight: activeTab == tab ? .semibold : .medium))
+                        .font(.system(size: 15, weight: activeTab == tab ? .semibold : .medium))
                         .foregroundColor(activeTab == tab ? DS.C.accT : DS.C.text2)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .frame(height: 46)
                         .overlay(
                             Rectangle()
                                 .frame(height: 2)
                                 .foregroundColor(activeTab == tab ? DS.C.acc : Color.clear),
                             alignment: .bottom
                         )
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.15), value: activeTab)
+                .animation(DS.M.fast, value: activeTab)
             }
             Spacer()
         }
         .padding(.leading, 6)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 
     // MARK: Scroll Content
@@ -721,16 +658,14 @@ fileprivate struct ProduktFormSheet: View {
     // MARK: Tab: Allgemein
 
     private var allgemeinTab: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             PFField(label: "Produktname", placeholder: "z.B. Shisha Standard", text: $name)
 
             if !categories.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("KATEGORIE")
-                        .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                        .foregroundColor(DS.C.text2)
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Kategorie")
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             CatChip(label: "Keine", color: nil, isActive: selectedCat == nil) { selectedCat = nil }
                             ForEach(categories) { cat in
                                 CatChip(label: cat.name, color: cat.color, isActive: selectedCat == cat.id) {
@@ -742,25 +677,23 @@ fileprivate struct ProduktFormSheet: View {
                 }
             }
 
-            // Active toggle — styled wie Referenz
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Produkt aktiv")
-                        .font(.jakarta(12, weight: .medium))
+                        .font(DS.F.subBold)
                         .foregroundColor(DS.C.text)
-                    Text("Inaktive Produkte erscheinen nicht im Kassensystem")
-                        .font(.jakarta(10, weight: .regular))
+                    Text("Inaktive Produkte erscheinen nicht im Kassenbetrieb")
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 Spacer()
                 Toggle("", isOn: $isActive)
                     .labelsHidden()
-                    .tint(DS.C.freeText)
+                    .tint(DS.C.acc)
             }
-            .padding(14)
-            .background(DS.C.bg)
-            .cornerRadius(10)
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
+            .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
         }
         .padding(20)
     }
@@ -768,48 +701,46 @@ fileprivate struct ProduktFormSheet: View {
     // MARK: Tab: Preis & Steuer
 
     private var preisTab: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             // GoBD-Hinweis
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 13))
-                    .foregroundColor(DS.C.warnText)
+                    .font(.system(size: 14))
+                    .foregroundColor(DS.C.brassText)
                     .padding(.top, 1)
                 Text("Preisänderungen werden als neue Einträge in der Preishistorie gespeichert (GoBD). Bestehende Bons bleiben unverändert.")
-                    .font(.jakarta(11, weight: .regular))
-                    .foregroundColor(DS.C.warnText)
+                    .font(DS.F.caption)
+                    .foregroundColor(DS.C.brassText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(12)
-            .background(DS.C.warnBg)
-            .cornerRadius(8)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.brassBg))
 
             // 2 Spalten: Neuer Preis + MwSt
             HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     PFField(label: "Neuer Preis (€)", placeholder: "0,00", text: $newPriceText, keyboardType: .decimalPad)
                     Text("Änderung erzeugt neuen Historieneintrag")
-                        .font(.jakarta(10, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 .frame(maxWidth: .infinity)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("MWST. INHAUS")
-                        .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                        .foregroundColor(DS.C.text2)
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "MwSt. Inhaus")
+                    HStack(spacing: 8) {
                         ForEach(["7", "19"], id: \.self) { rate in
                             Button {
-                                withAnimation(.easeInOut(duration: 0.1)) { vatRateInhouse = rate }
+                                withAnimation(DS.M.fast) { vatRateInhouse = rate }
                             } label: {
                                 Text("\(rate) %")
-                                    .font(.jakarta(12, weight: .semibold))
-                                    .foregroundColor(vatRateInhouse == rate ? .white : DS.C.text2)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 36)
-                                    .background(vatRateInhouse == rate ? DS.C.acc : DS.C.sur2)
-                                    .cornerRadius(DS.R.button)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .monospacedDigit()
+                                    .foregroundColor(vatRateInhouse == rate ? .white : DS.C.text)
+                                    .padding(.horizontal, 18)
+                                    .frame(height: 44)
+                                    .background(RoundedRectangle(cornerRadius: DS.R.button).fill(vatRateInhouse == rate ? DS.C.acc : DS.C.sur2))
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -820,51 +751,34 @@ fileprivate struct ProduktFormSheet: View {
 
             PFField(label: "Grund der Preisänderung (GoBD-Pflicht)", placeholder: "z.B. Lieferantenpreiserhöhung", text: $priceReason)
 
-            // Preis speichern
             Button {
                 onChangePrice?(changePriceCents, priceReason)
             } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "lock.doc").font(.system(size: 12))
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.doc").font(.system(size: 14))
                     Text("Preis speichern")
-                        .font(.jakarta(12, weight: .semibold))
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 38)
             }
-            .background(canSavePrice ? DS.C.acc : DS.C.acc.opacity(0.35))
-            .cornerRadius(DS.R.button)
+            .buttonStyle(DSPrimaryButton(height: 48))
             .disabled(!canSavePrice)
-            .buttonStyle(.plain)
 
             // Preishistorie
-            VStack(alignment: .leading, spacing: 0) {
-                Text("PREISHISTORIE")
-                    .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                    .foregroundColor(DS.C.text2)
-                    .padding(.bottom, 10)
+            VStack(alignment: .leading, spacing: 10) {
+                DSSectionLabel(text: "Preishistorie")
 
                 if let p = product {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(formatCents(p.priceCents))
-                                .font(.jakarta(13, weight: .semibold))
-                                .foregroundColor(DS.C.acc)
+                            MoneyText(cents: p.priceCents, size: 16, weight: .bold, color: DS.C.accT)
                             Text("Aktueller Preis")
-                                .font(.jakarta(11, weight: .regular))
+                                .font(DS.F.caption)
                                 .foregroundColor(DS.C.text2)
                         }
                         Spacer()
-                        Text("Aktuell")
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(DS.C.freeText)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(DS.C.freeBg)
-                            .cornerRadius(20)
+                        DSPill(label: "Aktuell", fg: DS.C.accT, bg: DS.C.accBg, showDot: false)
                     }
                     .padding(.vertical, 12)
-                    .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+                    .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
                 }
             }
         }
@@ -880,20 +794,12 @@ fileprivate struct ProduktFormSheet: View {
                     ModifierGroupCard(group: group)
                 }
             } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 30, weight: .light))
-                        .foregroundColor(DS.C.text2)
-                    Text("Keine Modifikatoren")
-                        .font(.jakarta(14, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                    Text("Dieses Produkt hat noch keine Modifier-Gruppen.")
-                        .font(.jakarta(12, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 40)
+                DSEmptyState(
+                    icon: "slider.horizontal.3",
+                    title: "Keine Modifikatoren",
+                    message: "Dieses Produkt hat noch keine Modifier-Gruppen."
+                )
+                .padding(.top, 30)
             }
         }
         .padding(20)
@@ -902,26 +808,25 @@ fileprivate struct ProduktFormSheet: View {
     // MARK: Neues Produkt Form
 
     private var newProductForm: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             PFField(label: "Produktname", placeholder: "z.B. Shisha Standard", text: $name)
             PFField(label: "Preis (€)", placeholder: "0,00", text: $newProdPriceText, keyboardType: .decimalPad)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("MWST. INHAUS")
-                    .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                    .foregroundColor(DS.C.text2)
+            VStack(alignment: .leading, spacing: 8) {
+                DSSectionLabel(text: "MwSt. Inhaus")
                 HStack(spacing: 8) {
                     ForEach(["7", "19"], id: \.self) { rate in
                         Button {
-                            withAnimation(.easeInOut(duration: 0.1)) { vatRateInhouse = rate }
+                            withAnimation(DS.M.fast) { vatRateInhouse = rate }
                         } label: {
                             Text("\(rate) %")
-                                .font(.jakarta(13, weight: .semibold))
-                                .foregroundColor(vatRateInhouse == rate ? .white : DS.C.text2)
-                                .padding(.horizontal, 20)
-                                .frame(height: 34)
-                                .background(vatRateInhouse == rate ? DS.C.acc : DS.C.sur2)
-                                .cornerRadius(DS.R.button)
+                                .font(.system(size: 15, weight: .semibold))
+                                .monospacedDigit()
+                                .foregroundColor(vatRateInhouse == rate ? .white : DS.C.text)
+                                .padding(.horizontal, 22)
+                                .frame(height: 44)
+                                .background(RoundedRectangle(cornerRadius: DS.R.button).fill(vatRateInhouse == rate ? DS.C.acc : DS.C.sur2))
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -929,12 +834,10 @@ fileprivate struct ProduktFormSheet: View {
             }
 
             if !categories.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("KATEGORIE")
-                        .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                        .foregroundColor(DS.C.text2)
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Kategorie")
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             CatChip(label: "Keine", color: nil, isActive: selectedCat == nil) { selectedCat = nil }
                             ForEach(categories) { cat in
                                 CatChip(label: cat.name, color: cat.color, isActive: selectedCat == cat.id) {
@@ -952,39 +855,26 @@ fileprivate struct ProduktFormSheet: View {
     // MARK: Footer
 
     private var modalFooter: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             if isEdit {
                 Button {
                     onDeactivate?()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 7) {
                         Image(systemName: product?.isActive == true ? "xmark.circle" : "checkmark.circle")
-                            .font(.system(size: 12))
+                            .font(.system(size: 14))
                         Text(product?.isActive == true ? "Deaktivieren" : "Aktivieren")
-                            .font(.jakarta(12, weight: .semibold))
                     }
-                    .foregroundColor(product?.isActive == true ? DS.C.dangerText : DS.C.freeText)
-                    .padding(.horizontal, 14)
-                    .frame(height: 38)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.R.button)
-                            .strokeBorder(product?.isActive == true ? DS.C.dangerText : DS.C.freeText, lineWidth: 1)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSDestructiveButton(height: 48, fullWidth: false))
             }
 
             Spacer()
 
             Button("Abbrechen") { dismiss() }
-                .font(.jakarta(12, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .padding(.horizontal, 16)
-                .frame(height: 38)
-                .overlay(RoundedRectangle(cornerRadius: DS.R.button).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
-                .buttonStyle(.plain)
+                .buttonStyle(DSSecondaryButton(height: 48, fullWidth: false))
 
-            // Haupt-Speichern-Button (versteckt wenn wir auf Preis-Tab sind beim Edit)
+            // Haupt-Speichern (versteckt auf Preis-Tab beim Edit)
             if !isEdit || activeTab != .preis {
                 Button {
                     onSave(ProduktFormData(
@@ -997,20 +887,14 @@ fileprivate struct ProduktFormSheet: View {
                     ))
                 } label: {
                     Text(isEdit ? "Änderungen speichern" : "Produkt speichern")
-                        .font(.jakarta(12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .frame(height: 38)
                 }
-                .background(canSaveMain ? DS.C.acc : DS.C.acc.opacity(0.35))
-                .cornerRadius(DS.R.button)
+                .buttonStyle(DSPrimaryButton(height: 48, fullWidth: false))
                 .disabled(!canSaveMain)
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .top)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .top)
     }
 
     // MARK: Helpers
@@ -1044,7 +928,6 @@ fileprivate struct ProduktFormSheet: View {
 
 private struct ModifierGroupCard: View {
     let group: ModifierGroup
-    @Environment(\.colorScheme) private var colorScheme
 
     var metaText: String {
         let req = group.isRequired ? "Pflichtauswahl" : "Optional"
@@ -1059,49 +942,49 @@ private struct ModifierGroupCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.name)
-                        .font(.jakarta(12, weight: .semibold))
+                        .font(DS.F.subBold)
                         .foregroundColor(DS.C.text)
                     Text(metaText)
-                        .font(.jakarta(10, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 Spacer()
-                Text(group.isRequired ? "Pflicht" : "Optional")
-                    .font(.jakarta(10, weight: .semibold))
-                    .foregroundColor(group.isRequired ? DS.C.accT : DS.C.text2)
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(group.isRequired ? DS.C.accBg : DS.C.sur2)
-                    .cornerRadius(20)
+                DSPill(
+                    label: group.isRequired ? "Pflicht" : "Optional",
+                    fg: group.isRequired ? DS.C.brassText : DS.C.text2,
+                    bg: group.isRequired ? DS.C.brassBg : DS.C.sur2,
+                    showDot: false
+                )
             }
             .padding(14)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
 
             // Optionen-Chips
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     ForEach(group.options) { opt in
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Text(opt.name)
-                                .font(.jakarta(11, weight: .medium))
+                                .font(DS.F.caption)
                                 .foregroundColor(DS.C.text)
                             if opt.priceDeltaCents != 0 {
-                                Text("+\(formatCents(opt.priceDeltaCents))")
-                                    .font(.jakarta(10, weight: .medium))
+                                Text("+ \(euroString(opt.priceDeltaCents))")
+                                    .font(DS.F.money(12, weight: .medium))
+                                    .monospacedDigit()
                                     .foregroundColor(DS.C.accT)
                             }
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(DS.C.sur)
-                        .cornerRadius(20)
-                        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(DS.C.sur))
+                        .overlay(Capsule().strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
                     }
                 }
                 .padding(14)
             }
         }
-        .background(DS.C.bg)
-        .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
+        .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
     }
 }
 
@@ -1112,31 +995,27 @@ private struct PFField: View {
     let placeholder: String
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isFocused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
-                .font(.jakarta(9, weight: .semibold)).kerning(0.5)
-                .foregroundColor(DS.C.text2)
+        VStack(alignment: .leading, spacing: 8) {
+            DSSectionLabel(text: label)
             NoAssistantTextField(
                 placeholder:  placeholder,
                 text:         $text,
                 keyboardType: keyboardType,
-                uiFont:       UIFont.systemFont(ofSize: 13),
+                uiFont:       UIFont.systemFont(ofSize: 16),
                 uiTextColor:  UIColor(DS.C.text),
                 isFocused:    $isFocused
             )
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(DS.C.bg)
-            .cornerRadius(DS.R.input)
+            .padding(.horizontal, 14)
+            .frame(height: DS.S.inputHeight)
+            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
             )
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
+            .animation(DS.M.fast, value: isFocused)
         }
     }
 }
@@ -1146,29 +1025,22 @@ private struct CatChip: View {
     let color:    String?
     let isActive: Bool
     let onTap:    () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 5) {
-                if let hex = color { Circle().fill(Color(hex: hex)).frame(width: 6, height: 6) }
+            HStack(spacing: 6) {
+                if let hex = color { Circle().fill(Color(hex: hex)).frame(width: 8, height: 8) }
                 Text(label)
-                    .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                    .foregroundColor(isActive ? .white : DS.C.text2)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isActive ? .white : DS.C.text)
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(isActive ? DS.C.acc : Color.clear)
-            .cornerRadius(DS.R.badge)
-            .overlay(RoundedRectangle(cornerRadius: DS.R.badge).strokeBorder(isActive ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1))
+            .padding(.horizontal, 14)
+            .frame(height: 38)
+            .background(Capsule().fill(isActive ? DS.C.acc : DS.C.sur2))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }
-}
-
-// MARK: - Helpers
-
-private func formatCents(_ cents: Int) -> String {
-    String(format: "%.2f €", Double(cents) / 100)
 }
 
 // MARK: - Previews

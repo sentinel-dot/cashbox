@@ -1,5 +1,7 @@
 // BerichteView.swift
-// cashbox — Berichte: Umsatz, Zahlungsarten, MwSt nach Referenz-Design
+// cashbox — Berichte: Umsatz, Zahlungsarten, MwSt
+// Design v3: Ledger Green für Bar, Brass für Karte, Tabellenziffern,
+// keine Hover-Zustände (Touch-Gerät).
 
 import SwiftUI
 
@@ -41,7 +43,7 @@ struct BerichteView: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
         .task(id: range)      { await loadData() }
         .task(id: customFrom) { if range == .custom { await loadData() } }
         .task(id: customTo)   { if range == .custom { await loadData() } }
@@ -80,22 +82,20 @@ private struct BToolbar: View {
     @Binding var customTo:   Date
 
     var body: some View {
-        HStack(spacing: 6) {
-            // Range pills
+        HStack(spacing: 8) {
             ForEach(BRange.allCases, id: \.self) { r in
                 RangePill(label: r.rawValue, isActive: range == r) {
-                    withAnimation(.easeInOut(duration: 0.15)) { range = r }
+                    withAnimation(DS.M.base) { range = r }
                 }
             }
             Spacer()
-            // Date display / custom pickers
             if range == .custom {
                 HStack(spacing: 6) {
                     DatePicker("", selection: $customFrom, in: ...customTo, displayedComponents: .date)
                         .labelsHidden()
                         .datePickerStyle(.compact)
                     Text("–")
-                        .font(.jakarta(12, weight: .regular))
+                        .font(DS.F.sub)
                         .foregroundColor(DS.C.text2)
                     DatePicker("", selection: $customTo, in: customFrom...Date(), displayedComponents: .date)
                         .labelsHidden()
@@ -104,45 +104,27 @@ private struct BToolbar: View {
                 .transition(.opacity)
             } else {
                 Text(toolbarDateLabel)
-                    .font(.jakarta(12, weight: .regular))
+                    .font(DS.F.caption)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text2)
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(DS.C.bg)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(DS.C.brdLight, lineWidth: 1)
-                    )
             }
-            // Export button (Phase 5)
+            // Export (Phase 5)
             Button {
                 // DSFinV-K export — Phase 5
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(DS.C.text2)
+                        .font(.system(size: 13, weight: .semibold))
                     Text("Exportieren")
-                        .font(.jakarta(12, weight: .semibold))
-                        .foregroundColor(DS.C.text)
                 }
-                .padding(.horizontal, 14)
-                .frame(height: 34)
-                .background(DS.C.sur2)
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(DS.C.brdLight, lineWidth: 1)
-                )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSSecondaryButton(height: 42, fullWidth: false))
         }
-        .padding(.horizontal, 20)
-        .frame(height: DS.S.topbarHeight)
+        .padding(.horizontal, DS.S.pagePad)
+        .frame(height: DS.S.topbarHeight + 8)
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -181,19 +163,15 @@ private struct RangePill: View {
     var body: some View {
         Button(action: onTap) {
             Text(label)
-                .font(.jakarta(11, weight: .semibold))
-                .foregroundColor(isActive ? .white : DS.C.text2)
-                .padding(.horizontal, 13)
-                .frame(height: 28)
-                .background(isActive ? DS.C.acc : Color.clear)
-                .cornerRadius(20)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .strokeBorder(isActive ? DS.C.acc : DS.C.brdLight, lineWidth: 1)
-                )
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isActive ? .white : DS.C.text)
+                .padding(.horizontal, 14)
+                .frame(height: 38)
+                .background(Capsule().fill(isActive ? DS.C.acc : DS.C.sur2))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: isActive)
+        .animation(DS.M.fast, value: isActive)
     }
 }
 
@@ -221,7 +199,7 @@ private struct BContent: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                // 5 KPI cards
+                // KPI-Reihe
                 BKPIRow(
                     totalGross: totalGross,
                     receiptCnt: receiptCnt,
@@ -229,12 +207,11 @@ private struct BContent: View {
                     cancelCnt:  cancelCnt,
                     vatTotal:   vatTotal
                 )
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
+                .padding(.horizontal, DS.S.pagePad)
+                .padding(.top, DS.S.pagePad)
 
-                // Main 2-column grid
+                // Zwei Spalten
                 HStack(alignment: .top, spacing: 16) {
-                    // Left column
                     VStack(spacing: 16) {
                         if !hasData {
                             BReportEmpty()
@@ -250,7 +227,6 @@ private struct BContent: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    // Right column (340px)
                     VStack(spacing: 16) {
                         ZahlungsartenCard(cashCents: cashCents, cardCents: cardCents)
                         MwStCard(
@@ -264,9 +240,9 @@ private struct BContent: View {
                     }
                     .frame(width: 340)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, DS.S.pagePad)
                 .padding(.top, 16)
-                .padding(.bottom, 24)
+                .padding(.bottom, DS.S.pagePad)
             }
         }
     }
@@ -283,11 +259,11 @@ private struct BKPIRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            BKPICard(label: "Umsatz (brutto)",  value: bFmtCents(totalGross), color: DS.C.acc,                                 delta: nil)
-            BKPICard(label: "Transaktionen",    value: "\(receiptCnt)",        color: DS.C.text,                                delta: nil)
-            BKPICard(label: "Ø Bon-Wert",       value: bFmtCents(avgBon),     color: DS.C.text,                                delta: nil)
-            BKPICard(label: "Stornos",          value: "\(cancelCnt)",         color: cancelCnt > 0 ? DS.C.dangerText : DS.C.text, delta: nil)
-            BKPICard(label: "MwSt gesamt",      value: bFmtCents(vatTotal),   color: DS.C.text,                                delta: "19 % + 7 %")
+            BKPICard(label: "Umsatz (brutto)", value: euroString(totalGross), color: DS.C.accT, sub: nil)
+            BKPICard(label: "Transaktionen",   value: "\(receiptCnt)",        color: DS.C.text, sub: nil)
+            BKPICard(label: "Ø Bon-Wert",      value: euroString(avgBon),     color: DS.C.text, sub: nil)
+            BKPICard(label: "Stornos",         value: "\(cancelCnt)",         color: cancelCnt > 0 ? DS.C.dangerText : DS.C.text, sub: nil)
+            BKPICard(label: "MwSt gesamt",     value: euroString(vatTotal),   color: DS.C.text, sub: "19 % + 7 %")
         }
     }
 }
@@ -296,41 +272,24 @@ private struct BKPICard: View {
     let label: String
     let value: String
     let color: Color
-    let delta: String?
-    @Environment(\.colorScheme) private var colorScheme
+    let sub:   String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(label.uppercased())
-                .font(.jakarta(9, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.6)
+        VStack(alignment: .leading, spacing: 6) {
+            DSSectionLabel(text: label)
                 .lineLimit(1)
             Text(value)
-                .font(.jakarta(19, weight: .semibold))
+                .font(DS.F.money(22, weight: .bold))
+                .monospacedDigit()
                 .foregroundColor(color)
-                .tracking(-0.3)
                 .minimumScaleFactor(0.65)
                 .lineLimit(1)
-            if let d = delta {
-                Text(d)
-                    .font(.jakarta(10, weight: .regular))
-                    .foregroundColor(DS.C.text2)
-            } else {
-                // Reserve space so all cards have same height
-                Text(" ")
-                    .font(.jakarta(10, weight: .regular))
-            }
+            Text(sub ?? " ")
+                .font(DS.F.caption)
+                .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(DS.C.sur)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-        )
+        .dsCard(padding: 16)
     }
 }
 
@@ -338,12 +297,11 @@ private struct BKPICard: View {
 
 private struct BarChartCard: View {
     let days: [DaySummary]
-    @Environment(\.colorScheme) private var colorScheme
     private var maxVal: Int { days.map(\.totalGrossCents).max() ?? 1 }
 
     var body: some View {
         BSecCard {
-            BSecHead(title: "Umsatz letzte 7 Tage", sub: "Tagesansicht")
+            BSecHead(title: "Umsatzverlauf", sub: "\(days.count) Tage")
             VStack(spacing: 0) {
                 GeometryReader { geo in
                     HStack(alignment: .bottom, spacing: 6) {
@@ -354,12 +312,12 @@ private struct BarChartCard: View {
                         }
                     }
                 }
-                .frame(height: 120)
+                .frame(height: 140)
                 .padding(.bottom, 6)
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundColor(DS.C.brdLight),
+                        .foregroundColor(DS.C.brdAdaptive),
                     alignment: .bottom
                 )
             }
@@ -375,7 +333,6 @@ private struct BBarCol: View {
     let frac:    CGFloat
     let isToday: Bool
     let maxH:    CGFloat
-    @State private var hovered = false
 
     private var label: String {
         let f = DateFormatter()
@@ -390,24 +347,24 @@ private struct BBarCol: View {
     }
 
     var body: some View {
-        VStack(alignment: .center, spacing: 4) {
+        VStack(alignment: .center, spacing: 5) {
             Spacer(minLength: 0)
             RoundedRectangle(cornerRadius: 4)
                 .fill(DS.C.acc)
-                .opacity(isToday ? 1.0 : (hovered ? 0.65 : 0.18))
+                .opacity(isToday ? 1.0 : 0.35)
                 .frame(maxWidth: .infinity)
                 .frame(height: max(4, frac * maxH))
-                .animation(.easeOut(duration: 0.1), value: hovered)
             Text(bFmtShortCents(day.totalGrossCents))
-                .font(.jakarta(9, weight: .semibold))
-                .foregroundColor(isToday ? DS.C.acc : DS.C.text2)
+                .font(.system(size: 11, weight: .semibold))
+                .monospacedDigit()
+                .foregroundColor(isToday ? DS.C.accT : DS.C.text2)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(label)
-                .font(.jakarta(9, weight: isToday ? .semibold : .regular))
+                .font(.system(size: 11, weight: isToday ? .semibold : .regular))
                 .foregroundColor(isToday ? DS.C.accT : DS.C.text2)
         }
         .frame(maxWidth: .infinity)
-        .onHover { hovered = $0 }
     }
 }
 
@@ -427,7 +384,7 @@ private struct DayTableCard: View {
                     BDayRow(day: day, isToday: isToday, frac: frac)
                     if idx < days.count - 1 {
                         Divider()
-                            .overlay(DS.C.brdLight)
+                            .overlay(DS.C.brdAdaptive)
                             .padding(.horizontal, 16)
                     }
                 }
@@ -440,7 +397,6 @@ private struct BDayRow: View {
     let day:     DaySummary
     let isToday: Bool
     let frac:    CGFloat
-    @State private var hovered = false
 
     private var dayName: String {
         let f = DateFormatter()
@@ -470,65 +426,64 @@ private struct BDayRow: View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(dayName)
-                    .font(.jakarta(12, weight: .medium))
+                    .font(DS.F.subMed)
                     .foregroundColor(isToday ? DS.C.accT : DS.C.text)
                 Text(dayDateStr)
-                    .font(.jakarta(10, weight: .regular))
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             HStack(spacing: 16) {
                 Text("\(day.receiptCount) Tx")
-                    .font(.jakarta(11, weight: .regular))
+                    .font(DS.F.caption)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text2)
-                    .frame(width: 44, alignment: .trailing)
+                    .frame(width: 50, alignment: .trailing)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(DS.C.sur2)
-                            .frame(height: 4)
+                            .frame(height: 5)
                         RoundedRectangle(cornerRadius: 2)
                             .fill(DS.C.acc)
                             .opacity(isToday ? 1.0 : 0.5)
-                            .frame(width: geo.size.width * frac, height: 4)
+                            .frame(width: geo.size.width * frac, height: 5)
                     }
-                    .frame(height: 4)
+                    .frame(height: 5)
                     .frame(maxHeight: .infinity, alignment: .center)
                 }
-                .frame(width: 80)
-                Text(bFmtCents(day.totalGrossCents))
-                    .font(.jakarta(13, weight: .semibold))
-                    .foregroundColor(isToday ? DS.C.acc : DS.C.text)
-                    .frame(width: 80, alignment: .trailing)
+                .frame(width: 90)
+                Text(euroString(day.totalGrossCents))
+                    .font(DS.F.money(15, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundColor(isToday ? DS.C.accT : DS.C.text)
+                    .frame(width: 96, alignment: .trailing)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .background(hovered ? DS.C.bg : Color.clear)
-        .onHover { hovered = $0 }
+        .padding(.vertical, 11)
     }
 }
 
-// MARK: - Today Card (Heute mode, no byDay available)
+// MARK: - Today Card (Heute-Modus, kein byDay)
 
 private struct TodayCard: View {
     let report: DailyReport
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         BSecCard {
             BSecHead(title: "Tagesumsatz", sub: bFmtLongDate(report.date))
             HStack(spacing: 0) {
-                TodayStat(label: "Bar",   value: bFmtCents(report.paymentsCashCents))
-                Rectangle().fill(DS.C.brdLight).frame(width: 1, height: 40)
-                TodayStat(label: "Karte", value: bFmtCents(report.paymentsCardCents))
-                Rectangle().fill(DS.C.brdLight).frame(width: 1, height: 40)
+                TodayStat(label: "Bar",   value: euroString(report.paymentsCashCents))
+                Rectangle().fill(DS.C.brdAdaptive).frame(width: 1, height: 44)
+                TodayStat(label: "Karte", value: euroString(report.paymentsCardCents))
+                Rectangle().fill(DS.C.brdAdaptive).frame(width: 1, height: 44)
                 TodayStat(label: "Bons",  value: "\(report.receiptCount)")
-                Rectangle().fill(DS.C.brdLight).frame(width: 1, height: 40)
+                Rectangle().fill(DS.C.brdAdaptive).frame(width: 1, height: 44)
                 TodayStat(label: "Stornos", value: "\(report.cancellationCount)",
                           danger: report.cancellationCount > 0)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, 18)
         }
     }
 }
@@ -541,12 +496,13 @@ private struct TodayStat: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.jakarta(15, weight: .semibold))
+                .font(DS.F.money(18, weight: .bold))
+                .monospacedDigit()
                 .foregroundColor(danger ? DS.C.dangerText : DS.C.text)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
-                .font(.jakarta(10, weight: .regular))
+                .font(DS.F.caption)
                 .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity)
@@ -557,7 +513,6 @@ private struct TodayStat: View {
 
 private struct BSessionsCard: View {
     let sessions: [ReportSession]
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         BSecCard {
@@ -567,7 +522,7 @@ private struct BSessionsCard: View {
                     BSessionRow(session: s)
                     if s.id != sessions.last?.id {
                         Divider()
-                            .overlay(DS.C.brdLight)
+                            .overlay(DS.C.brdAdaptive)
                             .padding(.horizontal, 16)
                     }
                 }
@@ -593,33 +548,34 @@ private struct BSessionRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Sitzung #\(session.id)")
-                    .font(.jakarta(12, weight: .semibold))
+                    .font(DS.F.subBold)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text)
                 Text("Geöffnet \(openedTime) Uhr")
-                    .font(.jakarta(10, weight: .regular))
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             if let diff = session.differenceCents {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(diff == 0 ? "±0,00 €" : (diff > 0 ? "+" : "") + bFmtCents(diff))
-                        .font(.jakarta(12, weight: .semibold))
+                    Text(diff == 0 ? "± 0,00 €" : (diff > 0 ? "+ " : "") + euroString(diff))
+                        .font(DS.F.money(14, weight: .semibold))
+                        .monospacedDigit()
                         .foregroundColor(diff == 0 ? DS.C.successText : DS.C.dangerText)
                     Text("Kassendifferenz")
-                        .font(.jakarta(10, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
             }
-            Text(session.status == "closed" ? "Geschlossen" : "Offen")
-                .font(.jakarta(10, weight: .semibold))
-                .foregroundColor(session.status == "closed" ? DS.C.text2 : DS.C.acc)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(session.status == "closed" ? DS.C.sur2 : DS.C.accBg)
-                .cornerRadius(10)
+            DSPill(
+                label: session.status == "closed" ? "Geschlossen" : "Offen",
+                fg: session.status == "closed" ? DS.C.text2 : DS.C.accT,
+                bg: session.status == "closed" ? DS.C.sur2 : DS.C.accBg,
+                showDot: session.status != "closed"
+            )
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 11)
     }
 }
 
@@ -636,8 +592,8 @@ private struct ZahlungsartenCard: View {
     var body: some View {
         BSecCard {
             BSecHead(title: "Zahlungsarten", sub: nil)
-            VStack(spacing: 12) {
-                // Segmented bar
+            VStack(spacing: 14) {
+                // Segmentierter Balken: Bar = Ledger Green, Karte = Brass
                 if total > 0 {
                     GeometryReader { geo in
                         HStack(spacing: 2) {
@@ -648,7 +604,7 @@ private struct ZahlungsartenCard: View {
                             }
                             if cardPct > 0.01 {
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(DS.C.warnText)
+                                    .fill(DS.C.brass)
                                     .frame(maxWidth: .infinity)
                             }
                         }
@@ -660,8 +616,7 @@ private struct ZahlungsartenCard: View {
                         .fill(DS.C.sur2)
                         .frame(height: 10)
                 }
-                // Legend
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     PaySplitRow(
                         color:  DS.C.acc,
                         label:  "Barzahlung",
@@ -669,7 +624,7 @@ private struct ZahlungsartenCard: View {
                         cents:  cashCents
                     )
                     PaySplitRow(
-                        color:  DS.C.warnText,
+                        color:  DS.C.brass,
                         label:  "Kartenzahlung",
                         pct:    Int((cardPct * 100).rounded()),
                         cents:  cardCents
@@ -688,20 +643,22 @@ private struct PaySplitRow: View {
     let cents: Int
 
     var body: some View {
-        HStack(spacing: 7) {
-            Circle().fill(color).frame(width: 8, height: 8)
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 9, height: 9)
             Text(label)
-                .font(.jakarta(12, weight: .regular))
+                .font(DS.F.sub)
                 .foregroundColor(DS.C.text)
             Spacer()
             Text("\(pct) %")
-                .font(.jakarta(10, weight: .regular))
+                .font(DS.F.caption)
+                .monospacedDigit()
                 .foregroundColor(DS.C.text2)
-                .frame(width: 34, alignment: .trailing)
-            Text(bFmtCents(cents))
-                .font(.jakarta(12, weight: .semibold))
+                .frame(width: 42, alignment: .trailing)
+            Text(euroString(cents))
+                .font(DS.F.money(14, weight: .semibold))
+                .monospacedDigit()
                 .foregroundColor(DS.C.text)
-                .frame(width: 74, alignment: .trailing)
+                .frame(width: 86, alignment: .trailing)
         }
     }
 }
@@ -726,7 +683,7 @@ private struct MwStCard: View {
                         net:   vat19Net,
                         tax:   vat19Tax
                     )
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                         .padding(.horizontal, 16)
                 }
                 if vat7Net + vat7Tax > 0 {
@@ -738,22 +695,24 @@ private struct MwStCard: View {
                     )
                 }
                 if vatTotal > 0 {
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     HStack {
                         Text("MwSt gesamt")
-                            .font(.jakarta(12, weight: .semibold))
+                            .font(DS.F.subBold)
                             .foregroundColor(DS.C.text)
                         Spacer()
-                        Text(bFmtCents(vatTotal))
-                            .font(.jakarta(14, weight: .semibold))
-                            .foregroundColor(DS.C.acc)
+                        Text(euroString(vatTotal))
+                            .font(DS.F.money(16, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundColor(DS.C.accT)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
+                    .background(DS.C.sur2.opacity(0.5))
                 }
                 if vatTotal == 0 {
                     Text("Keine Steuerdaten")
-                        .font(.jakarta(12, weight: .regular))
+                        .font(DS.F.sub)
                         .foregroundColor(DS.C.text2)
                         .padding(16)
                 }
@@ -771,20 +730,22 @@ private struct BVatRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.jakarta(12, weight: .regular))
+                .font(DS.F.sub)
                 .foregroundColor(DS.C.text)
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
-                Text(bFmtCents(gross))
-                    .font(.jakarta(13, weight: .semibold))
+                Text(euroString(gross))
+                    .font(DS.F.money(15, weight: .semibold))
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text)
-                Text("Netto \(bFmtCents(net)) · MwSt \(bFmtCents(tax))")
-                    .font(.jakarta(10, weight: .regular))
+                Text("Netto \(euroString(net)) · MwSt \(euroString(tax))")
+                    .font(DS.F.caption)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text2)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
     }
 }
 
@@ -796,20 +757,15 @@ private struct StornosCard: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 14))
+                .font(.system(size: 16))
                 .foregroundColor(DS.C.dangerText)
             Text("\(count) Stornierung\(count == 1 ? "" : "en") heute")
-                .font(.jakarta(13, weight: .semibold))
+                .font(DS.F.subBold)
                 .foregroundColor(DS.C.dangerText)
             Spacer()
         }
-        .padding(14)
-        .background(DS.C.dangerBg)
-        .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(DS.C.dangerText.opacity(0.2), lineWidth: 1)
-        )
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: DS.R.card).fill(DS.C.dangerBg))
     }
 }
 
@@ -817,20 +773,17 @@ private struct StornosCard: View {
 
 private struct BReportEmpty: View {
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "chart.bar")
-                .font(.system(size: 36, weight: .light))
-                .foregroundColor(DS.C.text2)
-            Text("Keine Daten für diesen Zeitraum")
-                .font(.jakarta(14, weight: .regular))
-                .foregroundColor(DS.C.text2)
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        DSEmptyState(
+            icon: "chart.bar",
+            title: "Keine Daten",
+            message: "Für diesen Zeitraum liegen keine Umsätze vor."
+        )
+        .frame(maxWidth: .infinity, minHeight: 260)
         .background(DS.C.sur)
-        .cornerRadius(14)
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(DS.C.brdLight, lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.R.card)
+                .strokeBorder(DS.C.brdAdaptive, lineWidth: 1)
         )
     }
 }
@@ -839,15 +792,14 @@ private struct BReportEmpty: View {
 
 private struct BSecCard<Content: View>: View {
     @ViewBuilder let content: Content
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) { content }
             .background(DS.C.sur)
-            .cornerRadius(14)
+            .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.R.card)
+                    .strokeBorder(DS.C.brdAdaptive, lineWidth: 1)
             )
     }
 }
@@ -859,34 +811,25 @@ private struct BSecHead: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.jakarta(13, weight: .semibold))
+                .font(DS.F.bodyBold)
                 .foregroundColor(DS.C.text)
             Spacer()
             if let s = sub {
                 Text(s)
-                    .font(.jakarta(11, weight: .regular))
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
 }
 
 // MARK: - Helpers
-
-private func bFmtCents(_ cents: Int) -> String {
-    let fmt = NumberFormatter()
-    fmt.locale           = Locale(identifier: "de_DE")
-    fmt.numberStyle      = .decimal
-    fmt.minimumFractionDigits = 2
-    fmt.maximumFractionDigits = 2
-    return (fmt.string(from: NSNumber(value: Double(cents) / 100)) ?? "0,00") + " €"
-}
 
 private func bFmtShortCents(_ cents: Int) -> String {
     let euros = Double(cents) / 100

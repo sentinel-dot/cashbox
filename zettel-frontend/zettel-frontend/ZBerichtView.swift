@@ -1,5 +1,7 @@
 // ZBerichtView.swift
-// cashbox — Z-Bericht: Schichtabschluss-Dokument nach Referenz-Design
+// cashbox — Z-Bericht: Schichtabschluss-Dokument
+// Design v3: Dokument mit Beleg-Charakter (Monospace-Ziffern), keine
+// Seitenstreifen, zentrale Geld-Formatierung.
 
 import SwiftUI
 
@@ -27,11 +29,15 @@ struct ZBerichtView: View {
                 } else if let r = report {
                     ZTwoCol(report: r)
                 } else {
-                    ZEmptyState()
+                    DSEmptyState(
+                        icon: "doc.text.magnifyingglass",
+                        title: "Kein Z-Bericht vorhanden",
+                        message: "Schließe eine Kassensitzung ab, um den Z-Bericht hier zu sehen."
+                    )
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
     }
 }
 
@@ -42,84 +48,54 @@ private struct ZToolbar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Left: report label
-            HStack(spacing: 8) {
-                Text("Schicht:")
-                    .font(.jakarta(11, weight: .regular))
-                    .foregroundColor(DS.C.text2)
-                if let r = report {
-                    HStack(spacing: 6) {
-                        Image(systemName: "doc.text")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(DS.C.text2)
-                        Text("Z-Bericht #\(r.zReportId) · Session #\(r.sessionId)")
-                            .font(.jakarta(12, weight: .semibold))
-                            .foregroundColor(DS.C.text)
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(height: 34)
-                    .background(DS.C.bg)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(DS.C.brdLight, lineWidth: 1)
-                    )
-                } else {
-                    Text("Kein Z-Bericht")
-                        .font(.jakarta(12, weight: .regular))
+            if let r = report {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(DS.C.text2)
+                    Text("Z-Bericht #\(r.zReportId) · Session #\(r.sessionId)")
+                        .font(DS.F.subBold)
+                        .monospacedDigit()
+                        .foregroundColor(DS.C.text)
                 }
+            } else {
+                Text("Kein Z-Bericht")
+                    .font(DS.F.sub)
+                    .foregroundColor(DS.C.text2)
             }
             Spacer()
-            // Right: action buttons (Phase 5)
+            // Aktionen (Phase 5)
             HStack(spacing: 8) {
                 Button {
                     // PDF export — Phase 5
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "doc.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                    HStack(spacing: 7) {
+                        Image(systemName: "doc")
+                            .font(.system(size: 13, weight: .semibold))
                         Text("PDF exportieren")
-                            .font(.jakarta(12, weight: .semibold))
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(DS.C.acc.opacity(report == nil ? 0.4 : 1))
-                    .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
                 .disabled(report == nil)
 
                 Button {
                     // DSFinV-K export — Phase 5
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 7) {
                         Image(systemName: "arrow.down.to.line")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
+                            .font(.system(size: 13, weight: .semibold))
                         Text("DSFinV-K")
-                            .font(.jakarta(12, weight: .semibold))
-                            .foregroundColor(DS.C.text)
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(DS.C.sur2)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(DS.C.brdLight, lineWidth: 1)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSSecondaryButton(height: 42, fullWidth: false))
                 .disabled(report == nil)
             }
         }
-        .padding(.horizontal, 20)
-        .frame(height: DS.S.topbarHeight)
+        .padding(.horizontal, DS.S.pagePad)
+        .frame(height: DS.S.topbarHeight + 8)
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -132,21 +108,19 @@ private struct ZTwoCol: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: Z-Bericht document
             ZDocumentPanel(report: report)
                 .frame(maxWidth: .infinity)
 
-            Rectangle().fill(DS.C.brdLight).frame(width: 1)
+            Rectangle().fill(DS.C.brdAdaptive).frame(width: 1)
 
-            // Right: session list (320px)
             ZSessionListPanel(report: report)
-                .frame(width: 320)
+                .frame(width: 340)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Document Panel (left)
+// MARK: - Document Panel (links)
 
 private struct ZDocumentPanel: View {
     let report: CloseSessionResult
@@ -156,10 +130,10 @@ private struct ZDocumentPanel: View {
             HStack {
                 Spacer(minLength: 0)
                 ZDocument(report: report)
-                    .frame(maxWidth: 520)
+                    .frame(maxWidth: 540)
                 Spacer(minLength: 0)
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
         .background(DS.C.bg)
     }
@@ -169,32 +143,28 @@ private struct ZDocumentPanel: View {
 
 private struct ZDocument: View {
     let report: CloseSessionResult
-    @Environment(\.colorScheme) private var colorScheme
 
     private var diffColor: Color {
         report.differenceCents == 0
             ? DS.C.successText
-            : (report.differenceCents > 0 ? DS.C.acc : DS.C.dangerText)
+            : (report.differenceCents > 0 ? DS.C.accT : DS.C.dangerText)
     }
 
     private var diffLabel: String {
-        if report.differenceCents == 0 { return "± " + zbFmt(0) }
-        return (report.differenceCents > 0 ? "+ " : "− ") + zbFmt(abs(report.differenceCents))
+        if report.differenceCents == 0 { return "± " + euroString(0) }
+        return (report.differenceCents > 0 ? "+ " : "− ") + euroString(abs(report.differenceCents))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             ZDocHeader(report: report)
-
-            // Meta 2×2
             ZDocMeta(report: report)
 
             // Umsatz
             ZDocSection(title: "Umsatz") {
-                ZDocRow(label: "Bruttoumsatz gesamt",  value: zbFmt(report.totalRevenueCents))
+                ZDocRow(label: "Bruttoumsatz gesamt",  value: euroString(report.totalRevenueCents))
                 if report.totalDiscountCents > 0 {
-                    ZDocRow(label: "Rabatte", value: "− " + zbFmt(report.totalDiscountCents),
+                    ZDocRow(label: "Rabatte", value: "− " + euroString(report.totalDiscountCents),
                             valueColor: DS.C.dangerText)
                 }
                 if report.cancellationCount > 0 {
@@ -203,13 +173,13 @@ private struct ZDocument: View {
                             valueColor: DS.C.dangerText)
                 }
                 ZDocDivider()
-                ZDocTotalRow(label: "Nettoumsatz gesamt", value: zbFmt(report.totalRevenueCents))
+                ZDocTotalRow(label: "Umsatz gesamt", value: euroString(report.totalRevenueCents))
             }
 
             // Kassenstand
             ZDocSection(title: "Kassenstand") {
-                ZDocRow(label: "Ist-Bestand (gezählt)",  value: zbFmt(report.closingCashCents))
-                ZDocRow(label: "Soll-Bestand (erwartet)", value: zbFmt(report.expectedCashCents))
+                ZDocRow(label: "Ist-Bestand (gezählt)",  value: euroString(report.closingCashCents))
+                ZDocRow(label: "Soll-Bestand (erwartet)", value: euroString(report.expectedCashCents))
                 ZDocDivider()
                 ZDocRow(label: "Differenz", value: diffLabel,
                         valueColor: diffColor, bold: true)
@@ -228,14 +198,13 @@ private struct ZDocument: View {
             // TSE (Phase 1 placeholder)
             ZDocTSESection()
 
-            // Footer
             ZDocFooter()
         }
         .background(DS.C.sur)
-        .cornerRadius(14)
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.R.card)
+                .strokeBorder(DS.C.brdAdaptive, lineWidth: 1)
         )
     }
 }
@@ -248,28 +217,21 @@ private struct ZDocHeader: View {
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Kassensystem")
-                    .font(.jakarta(14, weight: .semibold))
+                Text("cashbox")
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundColor(DS.C.text)
                 Text("Z-Bericht #\(report.zReportId) · Session #\(report.sessionId)")
-                    .font(.jakarta(11, weight: .regular))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(DS.C.text2)
-                    .lineSpacing(2)
             }
             Spacer()
-            Text("Z-Bericht")
-                .font(.jakarta(10, weight: .semibold))
-                .foregroundColor(DS.C.accT)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(DS.C.accBg)
-                .cornerRadius(6)
+            DSPill(label: "Z-Bericht", fg: DS.C.accT, bg: DS.C.accBg, showDot: false)
         }
         .padding(.horizontal, 24)
-        .padding(.top, 20)
+        .padding(.top, 22)
         .padding(.bottom, 16)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -289,7 +251,7 @@ private struct ZDocMeta: View {
             ZDocMetaCell(label: "Stornos",       value: "\(report.cancellationCount)", rightBorder: false, bottomBorder: false)
         }
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -303,27 +265,26 @@ private struct ZDocMetaCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased())
-                .font(.jakarta(9, weight: .semibold))
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(DS.C.text2)
-                .tracking(0.5)
             Text(value)
-                .font(.jakarta(12, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(DS.C.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
-        .padding(.vertical, 10)
+        .padding(.vertical, 11)
         .overlay(
             Rectangle()
                 .frame(width: rightBorder ? 1 : 0)
-                .foregroundColor(DS.C.brdLight),
+                .foregroundColor(DS.C.brdAdaptive),
             alignment: .trailing
         )
         .overlay(
             Rectangle()
                 .frame(height: bottomBorder ? 1 : 0)
-                .foregroundColor(DS.C.brdLight),
+                .foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -340,17 +301,14 @@ private struct ZDocSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title.uppercased())
-                .font(.jakarta(9, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.6)
+            DSSectionLabel(text: title)
                 .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
             content
         }
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -365,15 +323,15 @@ private struct ZDocRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.jakarta(12, weight: bold ? .semibold : .regular))
+                .font(.system(size: 14, weight: bold ? .semibold : .regular))
                 .foregroundColor(bold ? DS.C.text : DS.C.text2)
             Spacer()
             Text(value)
-                .font(.jakarta(12, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(valueColor ?? DS.C.text)
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
     }
 }
 
@@ -384,23 +342,23 @@ private struct ZDocTotalRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.jakarta(13, weight: .semibold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundColor(DS.C.text)
             Spacer()
             Text(value)
-                .font(.jakarta(16, weight: .semibold))
-                .foregroundColor(DS.C.acc)
+                .font(.system(size: 17, weight: .bold, design: .monospaced))
+                .foregroundColor(DS.C.accT)
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 10)
-        .background(DS.C.bg)
+        .padding(.vertical, 11)
+        .background(DS.C.sur2.opacity(0.5))
     }
 }
 
 private struct ZDocDivider: View {
     var body: some View {
         Rectangle()
-            .fill(DS.C.brdLight)
+            .fill(DS.C.brdAdaptive)
             .frame(height: 1)
             .padding(.horizontal, 24)
             .padding(.vertical, 6)
@@ -410,27 +368,23 @@ private struct ZDocDivider: View {
 private struct ZDocTSESection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TSE-Signatur (Fiskaly)")
-                .font(.jakarta(9, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.6)
-                .textCase(.uppercase)
+            DSSectionLabel(text: "TSE-Signatur (Fiskaly)")
             HStack(spacing: 8) {
                 Image(systemName: "clock")
-                    .font(.system(size: 11))
-                    .foregroundColor(DS.C.text2)
+                    .font(.system(size: 13))
+                    .foregroundColor(DS.C.brassText)
                 Text("TSE-Aktivierung ausstehend — Signatur nach Fiskaly-Inbetriebnahme verfügbar.")
-                    .font(.jakarta(10, weight: .regular))
-                    .foregroundColor(DS.C.text2)
+                    .font(DS.F.caption)
+                    .foregroundColor(DS.C.brassText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.C.bg)
+        .background(DS.C.brassBg.opacity(0.5))
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -438,85 +392,75 @@ private struct ZDocTSESection: View {
 
 private struct ZDocFooter: View {
     var body: some View {
-        HStack(alignment: .top) {
-            Text("Dieser Z-Bericht ist unveränderlich (GoBD).\nAufbewahrungspflicht: 10 Jahre.")
-                .font(.jakarta(10, weight: .regular))
+        HStack(alignment: .center) {
+            Text("Dieser Z-Bericht ist unveränderlich (GoBD). Aufbewahrungspflicht: 10 Jahre.")
+                .font(DS.F.caption)
                 .foregroundColor(DS.C.text2)
-                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Text("READ ONLY")
-                .font(.jakarta(9, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.3)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(DS.C.sur2)
-                .cornerRadius(4)
+            HStack(spacing: 5) {
+                Image(systemName: "lock")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("Unveränderlich")
+                    .font(DS.F.label)
+            }
+            .foregroundColor(DS.C.text2)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(DS.C.sur2))
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
 }
 
-// MARK: - Session List Panel (right)
+// MARK: - Session List Panel (rechts)
 
 private struct ZSessionListPanel: View {
     let report: CloseSessionResult
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             VStack(alignment: .leading, spacing: 2) {
                 Text("Alle Z-Berichte")
-                    .font(.jakarta(12, weight: .semibold))
+                    .font(DS.F.bodyBold)
                     .foregroundColor(DS.C.text)
                 Text("Unveränderlich · GoBD-konform")
-                    .font(.jakarta(10, weight: .regular))
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DS.C.sur)
             .overlay(
-                Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+                Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
                 alignment: .bottom
             )
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Month label
-                    Text("Aktuelle Sitzung")
-                        .font(.jakarta(9, weight: .semibold))
-                        .foregroundColor(DS.C.text2)
-                        .tracking(0.6)
-                        .textCase(.uppercase)
+                    DSSectionLabel(text: "Aktuelle Sitzung")
                         .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, 6)
+                        .padding(.top, 14)
+                        .padding(.bottom, 8)
 
-                    // Selected item
-                    ZSlpItem(
-                        report:   report,
-                        isActive: true
-                    )
+                    ZSlpItem(report: report, isActive: true)
+                        .padding(.horizontal, 12)
 
-                    // History hint
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 22, weight: .light))
+                            .font(.system(size: 22, weight: .medium))
                             .foregroundColor(DS.C.text2)
                         Text("Ältere Z-Berichte")
-                            .font(.jakarta(12, weight: .semibold))
+                            .font(DS.F.subBold)
                             .foregroundColor(DS.C.text)
-                        Text("Über den Berichte-Screen\nabrufbar.")
-                            .font(.jakarta(11, weight: .regular))
+                        Text("Über den Berichte-Screen abrufbar.")
+                            .font(DS.F.caption)
                             .foregroundColor(DS.C.text2)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 32)
+                    .padding(.top, 36)
                     .padding(.bottom, 24)
                 }
             }
@@ -528,93 +472,59 @@ private struct ZSessionListPanel: View {
 private struct ZSlpItem: View {
     let report:   CloseSessionResult
     let isActive: Bool
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 10) {
-            // File icon
+        HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(isActive ? DS.C.accBg : DS.C.sur2)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 36, height: 36)
                 Image(systemName: "doc.text")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
             }
 
-            // Info
             VStack(alignment: .leading, spacing: 1) {
                 Text("Z-Bericht #\(report.zReportId)")
-                    .font(.jakarta(12, weight: .medium))
+                    .font(DS.F.subBold)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text)
                 Text("Session #\(report.sessionId) · \(report.totalOrders) Bons")
-                    .font(.jakarta(10, weight: .regular))
+                    .font(DS.F.caption)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Amount + diff
             VStack(alignment: .trailing, spacing: 1) {
-                Text(zbFmt(report.totalRevenueCents))
-                    .font(.jakarta(12, weight: .semibold))
+                Text(euroString(report.totalRevenueCents))
+                    .font(DS.F.money(14, weight: .semibold))
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text)
                 let diffText = report.differenceCents == 0
                     ? "± 0,00 €"
-                    : (report.differenceCents > 0 ? "+ " : "− ") + zbFmt(abs(report.differenceCents))
+                    : (report.differenceCents > 0 ? "+ " : "− ") + euroString(abs(report.differenceCents))
                 Text(diffText)
-                    .font(.jakarta(10, weight: .regular))
+                    .font(DS.F.caption)
+                    .monospacedDigit()
                     .foregroundColor(
                         report.differenceCents == 0
                             ? DS.C.successText
-                            : DS.C.warnText
+                            : DS.C.brassText
                     )
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(isActive ? DS.C.sur : Color.clear)
-        .overlay(
-            Rectangle()
-                .frame(width: isActive ? 3 : 0)
-                .foregroundColor(DS.C.acc),
-            alignment: .leading
+        .background(
+            RoundedRectangle(cornerRadius: DS.R.input)
+                .fill(isActive ? DS.C.sur : Color.clear)
         )
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
-            alignment: .bottom
+            RoundedRectangle(cornerRadius: DS.R.input)
+                .strokeBorder(isActive ? DS.C.brdAdaptive : Color.clear, lineWidth: 1)
         )
     }
-}
-
-// MARK: - Empty State
-
-private struct ZEmptyState: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 40, weight: .light))
-                .foregroundColor(DS.C.text2)
-            Text("Kein Z-Bericht vorhanden")
-                .font(.jakarta(18, weight: .semibold))
-                .foregroundColor(DS.C.text)
-            Text("Schließe eine Kassensitzung ab\num den Z-Bericht hier zu sehen.")
-                .font(.jakarta(14, weight: .regular))
-                .foregroundColor(DS.C.text2)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-// MARK: - Helpers
-
-private func zbFmt(_ cents: Int) -> String {
-    let fmt = NumberFormatter()
-    fmt.locale                = Locale(identifier: "de_DE")
-    fmt.numberStyle           = .decimal
-    fmt.minimumFractionDigits = 2
-    fmt.maximumFractionDigits = 2
-    return (fmt.string(from: NSNumber(value: Double(cents) / 100)) ?? "0,00") + " €"
 }
 
 // MARK: - Previews

@@ -1,5 +1,6 @@
 // EinstellungenView.swift
-// cashbox — Einstellungen: Sub-Nav + Betrieb/Benutzer/Geräte/Kasse/TSE/Abo nach Referenz-Design
+// cashbox — Einstellungen: Sub-Nav + Betrieb/Benutzer/Geräte/Kasse/TSE/Abo
+// Design v3: native Controls (Toggle), keine Seitenstreifen/Hover, DS-Komponenten.
 
 import SwiftUI
 
@@ -56,13 +57,13 @@ struct EinstellungenView: View {
                 ETopBar()
                 HStack(spacing: 0) {
                     ESettingsNav(activeTab: $activeTab)
-                    Rectangle().fill(DS.C.brdLight).frame(width: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(width: 1)
                     ESettingsMain(activeTab: $activeTab)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
     }
 }
 
@@ -72,15 +73,15 @@ private struct ETopBar: View {
     var body: some View {
         HStack {
             Text("Einstellungen")
-                .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                .font(DS.F.heading)
                 .foregroundColor(DS.C.text)
             Spacer()
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, DS.S.pagePad)
         .frame(height: DS.S.topbarHeight)
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -94,29 +95,27 @@ private struct ESettingsNav: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(ETab.sections, id: \.0) { section, tabs in
-                        Text(section.uppercased())
-                            .font(.jakarta(9, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
-                            .tracking(0.8)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 14)
-                            .padding(.bottom, 4)
+                        DSSectionLabel(text: section)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 18)
+                            .padding(.bottom, 6)
                         ForEach(tabs, id: \.self) { tab in
                             ENavItem(
                                 tab:      tab,
                                 isActive: activeTab == tab,
-                                onTap:    { activeTab = tab }
+                                onTap:    { withAnimation(DS.M.fast) { activeTab = tab } }
                             )
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
         }
-        .frame(width: 200)
-        .background(DS.C.bg)
+        .frame(width: 230)
+        .background(DS.C.sur)
     }
 }
 
@@ -124,32 +123,29 @@ private struct ENavItem: View {
     let tab:      ETab
     let isActive: Bool
     let onTap:    () -> Void
-    @State private var hovered = false
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 9) {
+            HStack(spacing: 10) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 13, weight: .regular))
-                    .frame(width: 16)
+                    .font(.system(size: 15, weight: isActive ? .semibold : .regular))
+                    .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
+                    .frame(width: 22)
                 Text(tab.rawValue)
-                    .font(.jakarta(12, weight: isActive ? .semibold : .medium))
+                    .font(.system(size: 15, weight: isActive ? .semibold : .medium))
+                    .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
                 Spacer()
             }
-            .foregroundColor(isActive ? DS.C.text : (hovered ? DS.C.text : DS.C.text2))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(isActive ? DS.C.sur : Color.clear)
-            .overlay(
-                Rectangle()
-                    .frame(width: isActive ? 2 : 0)
-                    .foregroundColor(DS.C.acc),
-                alignment: .leading
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: DS.R.button)
+                    .fill(isActive ? DS.C.accBg : Color.clear)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 }
-        .animation(.easeInOut(duration: 0.1), value: isActive)
+        .animation(DS.M.fast, value: isActive)
     }
 }
 
@@ -194,7 +190,6 @@ private struct EBetriebsdatenTab: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
-                // Betriebsdaten card
                 ESettingsSectionHeader(
                     title: "Betriebsdaten",
                     sub:   "Pflichtfelder für den Bon — müssen mit Ihren steuerlichen Angaben übereinstimmen."
@@ -206,21 +201,21 @@ private struct EBetriebsdatenTab: View {
                         placeholder: "Mein Café GmbH",
                         text: $name
                     )
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     EInputRow(
                         label: "Adresse",
                         sub:   "Vollständige Betriebsadresse",
                         placeholder: "Musterstr. 1, 10115 Berlin",
                         text: $address
                     )
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     EInputRow(
                         label: "Steuernummer",
                         sub:   "Vom Finanzamt zugewiesene Steuernummer",
                         placeholder: "12/345/67890",
                         text: $taxNumber
                     )
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     EInputRow(
                         label: "USt-IdNr.",
                         sub:   "Optional, aber empfohlen (§ 14 UStG)",
@@ -230,7 +225,6 @@ private struct EBetriebsdatenTab: View {
                     )
                 }
 
-                // Bon-Einstellungen card
                 ESettingsSectionHeader(
                     title: "Bon-Einstellungen",
                     sub:   "Wie Bons angezeigt und verteilt werden."
@@ -238,15 +232,10 @@ private struct EBetriebsdatenTab: View {
                 ECard {
                     ERow("Bon per E-Mail versenden",
                          sub: "Kunde kann nach Zahlung eine Bon-PDF anfordern") {
-                        Text("Phase 5")
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(DS.C.sur2).cornerRadius(10)
+                        DSPill(label: "Phase 5", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                 }
 
-                // Save button
                 HStack {
                     Spacer()
                     Button {
@@ -255,24 +244,17 @@ private struct EBetriebsdatenTab: View {
                         Group {
                             if isSaving {
                                 ProgressView().progressViewStyle(.circular).tint(.white)
-                                    .frame(width: 60)
                             } else {
                                 Text(showSaved ? "Gespeichert ✓" : "Änderungen speichern")
-                                    .font(.jakarta(11, weight: .semibold))
                             }
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .frame(height: 34)
                     }
-                    .background(showSaved ? DS.C.successText : (name.isEmpty || address.isEmpty ? DS.C.acc.opacity(0.4) : DS.C.acc))
-                    .cornerRadius(8)
+                    .buttonStyle(DSPrimaryButton(height: 46, fullWidth: false))
                     .disabled(isSaving || name.isEmpty || address.isEmpty)
-                    .buttonStyle(.plain)
-                    .animation(.easeInOut(duration: 0.2), value: showSaved)
+                    .animation(DS.M.base, value: showSaved)
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
         .task { await loadTenant() }
         .alert("Fehler", isPresented: $showError) {
@@ -340,10 +322,23 @@ private struct EBenutzerTab: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
-                ESettingsSectionHeader(
-                    title: "Benutzer",
-                    sub:   "Mitarbeiter mit Zugang zum Kassensystem. PIN ermöglicht schnellen Gerätewechsel."
-                )
+                HStack(alignment: .top) {
+                    ESettingsSectionHeader(
+                        title: "Benutzer",
+                        sub:   "Mitarbeiter mit Zugang zum Kassensystem. PIN ermöglicht schnellen Gerätewechsel."
+                    )
+                    Spacer()
+                    if canManage {
+                        Button { showAddSheet = true } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 13, weight: .bold))
+                                Text("Benutzer hinzufügen")
+                            }
+                        }
+                        .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
+                    }
+                }
 
                 if usersStore.isLoading {
                     ProgressView().progressViewStyle(.circular).frame(maxWidth: .infinity)
@@ -361,28 +356,8 @@ private struct EBenutzerTab: View {
                         }
                     }
                 }
-
-                if canManage {
-                    HStack {
-                        Spacer()
-                        Button { showAddSheet = true } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 10, weight: .bold))
-                                Text("Benutzer hinzufügen")
-                                    .font(.jakarta(11, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .frame(height: 34)
-                            .background(DS.C.acc)
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
         .task {
             await usersStore.loadUsers()
@@ -441,63 +416,54 @@ private struct EUserRow: View {
 
     private var roleColor: Color {
         switch user.role {
-        case .owner:   return DS.C.acc
-        case .manager: return DS.C.warnText
+        case .owner:   return DS.C.accT
+        case .manager: return DS.C.brassText
         case .staff:   return DS.C.text2
         }
     }
 
-    private var avatarBg: Color {
+    private var roleBg: Color {
         switch user.role {
         case .owner:   return DS.C.accBg
-        case .manager: return DS.C.warnBg
+        case .manager: return DS.C.brassBg
         case .staff:   return DS.C.sur2
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                // Avatar
+            HStack(spacing: 14) {
                 ZStack {
-                    Circle().fill(avatarBg).frame(width: 34, height: 34)
+                    Circle().fill(roleBg).frame(width: 40, height: 40)
                     Text(String(user.name.prefix(1)).uppercased())
-                        .font(.jakarta(12, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(roleColor)
                 }
 
-                // Info
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 5) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
                         Text(user.name)
-                            .font(.jakarta(13, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(DS.C.text)
-                        Text(user.role.displayName)
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(roleColor)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(roleColor.opacity(0.12))
-                            .cornerRadius(20)
+                        DSPill(label: user.role.displayName, fg: roleColor, bg: roleBg, showDot: false)
                         if isSelf {
                             Text("Ich")
-                                .font(.jakarta(9, weight: .semibold))
+                                .font(DS.F.label)
                                 .foregroundColor(DS.C.accT)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(DS.C.accBg)
-                                .cornerRadius(4)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(DS.C.accBg))
                         }
                     }
                     Text("\(user.email) · PIN: ••••")
-                        .font(.jakarta(11, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
 
                 Spacer()
 
                 if canManage {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         ESmallBtn(label: "Bearbeiten", danger: false, action: onEdit)
                         if !isSelf {
                             ESmallBtn(label: "Entfernen", danger: true, action: onDelete)
@@ -509,7 +475,8 @@ private struct EUserRow: View {
             .padding(.vertical, 12)
 
             if !isLast {
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
+                    .padding(.leading, 70)
             }
         }
     }
@@ -527,28 +494,17 @@ private struct EGeraeteTab: View {
                 )
                 ECard {
                     ERow("Dieses Gerät", sub: "Aktuell eingeloggt · TSE-Client wird mit Fiskaly aktiviert") {
-                        HStack(spacing: 4) {
-                            Circle().fill(DS.C.successText).frame(width: 5, height: 5)
-                            Text("Online")
-                                .font(.jakarta(10, weight: .semibold))
-                                .foregroundColor(DS.C.successText)
-                        }
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(DS.C.successBg).cornerRadius(20)
+                        DSPill(label: "Online", fg: DS.C.successText, bg: DS.C.successBg)
                     }
                 }
                 ECard {
                     ERow("Weitere Geräte verwalten",
                          sub: "Geräteregistrierung und TSE-Client-Verwaltung über das Admin-Panel") {
-                        Text("Phase 5")
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(DS.C.sur2).cornerRadius(10)
+                        DSPill(label: "Phase 5", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
     }
 }
@@ -570,28 +526,34 @@ private struct EKassensystemTab: View {
                 ECard {
                     ERow("Tische verwenden",
                          sub: "Deaktivieren für reinen Schnellkassenbetrieb (z. B. Späti)") {
-                        EToggle(isOn: $tischeVerwenden)
+                        Toggle("", isOn: $tischeVerwenden)
+                            .labelsHidden()
+                            .tint(DS.C.acc)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Tägliche Schicht-Erinnerung",
                          sub: "Warnung wenn Sitzung länger als 24 Stunden offen (GoBD)") {
-                        EToggle(isOn: $schichtErinnerung)
+                        Toggle("", isOn: $schichtErinnerung)
+                            .labelsHidden()
+                            .tint(DS.C.acc)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Stornobegründung erzwingen",
                          sub: "Storno ohne Pflichtfeld-Begründung nicht möglich") {
-                        EToggle(isOn: $stornoBegruendung)
+                        Toggle("", isOn: $stornoBegruendung)
+                            .labelsHidden()
+                            .tint(DS.C.acc)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Mindest-App-Version",
                          sub: "Ältere App-Versionen werden blockiert (426)") {
                         Text("1.0.0")
-                            .font(.jakarta(12, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
                             .foregroundColor(DS.C.text)
                     }
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
     }
 }
@@ -608,57 +570,41 @@ private struct ETSETab: View {
                 )
                 ECard {
                     ERow("TSS-Status", sub: "Fiskaly Cloud-TSE") {
-                        HStack(spacing: 4) {
-                            Circle().fill(DS.C.warnText).frame(width: 5, height: 5)
-                            Text("Phase 1 — ausstehend")
-                                .font(.jakarta(10, weight: .semibold))
-                                .foregroundColor(DS.C.warnText)
-                        }
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(DS.C.warnBg).cornerRadius(20)
+                        DSPill(label: "Phase 1 — ausstehend", fg: DS.C.brassText, bg: DS.C.brassBg)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("TSS-ID", sub: "Wird nach Fiskaly-Aktivierung vergeben") {
                         Text("—")
-                            .font(.jakarta(12, weight: .regular))
+                            .font(DS.F.sub)
                             .foregroundColor(DS.C.text2)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Offline-Betrieb",
                          sub: "Transaktionen werden lokal gespeichert und bei Reconnect signiert") {
-                        Text("Phase 3")
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(DS.C.sur2).cornerRadius(10)
+                        DSPill(label: "Phase 3", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("ELSTER-Meldung",
                          sub: "Kasse beim Finanzamt melden (einmalig, nach Fiskaly-Aktivierung)") {
-                        Text("Phase 2")
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(DS.C.sur2).cornerRadius(10)
+                        DSPill(label: "Phase 2", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                 }
 
                 // Info box
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 13))
+                        .font(.system(size: 15))
                         .foregroundColor(DS.C.accT)
                         .padding(.top, 1)
                     Text("TSE-Aktivierung erfolgt vor dem Go-Live. Phase 1 (Pilot-Betrieb) ist gesetzlich zulässig, muss aber vor dem regulären Betrieb umgestellt werden.")
-                        .font(.jakarta(11, weight: .regular))
+                        .font(DS.F.sub)
                         .foregroundColor(DS.C.accT)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(12)
-                .background(DS.C.accBg)
-                .cornerRadius(10)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.accBg))
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
     }
 }
@@ -692,10 +638,20 @@ private struct EAbonnementTab: View {
     private var statusColor: Color {
         switch tenant?.subscriptionStatus {
         case .active:    return DS.C.successText
-        case .trial:     return DS.C.warnText
+        case .trial:     return DS.C.brassText
         case .pastDue:   return DS.C.dangerText
         case .cancelled: return DS.C.text2
         case nil:        return DS.C.text2
+        }
+    }
+
+    private var statusBg: Color {
+        switch tenant?.subscriptionStatus {
+        case .active:    return DS.C.successBg
+        case .trial:     return DS.C.brassBg
+        case .pastDue:   return DS.C.dangerBg
+        case .cancelled: return DS.C.sur2
+        case nil:        return DS.C.sur2
         }
     }
 
@@ -722,20 +678,16 @@ private struct EAbonnementTab: View {
                     // Plan highlight
                     HStack(alignment: .center) {
                         VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 10) {
                                 Text(planLabel)
-                                    .font(.jakarta(15, weight: .semibold))
+                                    .font(DS.F.heading)
                                     .foregroundColor(DS.C.accT)
-                                Text(statusLabel)
-                                    .font(.jakarta(11, weight: .semibold))
-                                    .foregroundColor(statusColor)
-                                    .padding(.horizontal, 10).padding(.vertical, 3)
-                                    .background(statusColor.opacity(0.12)).cornerRadius(20)
+                                DSPill(label: statusLabel, fg: statusColor, bg: statusBg)
                             }
                             if tenant?.subscriptionStatus == .trial {
                                 Text("14-Tage-Testphase läuft")
-                                    .font(.jakarta(11, weight: .regular))
-                                    .foregroundColor(DS.C.accT.opacity(0.7))
+                                    .font(DS.F.caption)
+                                    .foregroundColor(DS.C.accT.opacity(0.75))
                             }
                         }
                         Spacer()
@@ -744,46 +696,37 @@ private struct EAbonnementTab: View {
                                 // Stripe upgrade — Phase 3
                             } label: {
                                 Text("Auf Pro upgraden")
-                                    .font(.jakarta(11, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .frame(height: 34)
-                                    .background(DS.C.acc)
-                                    .cornerRadius(8)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
                         }
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 16)
-                    .background(DS.C.accBg)
-                    .cornerRadius(14)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(DS.C.acc.opacity(0.15), lineWidth: 1)
-                    )
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                    .background(RoundedRectangle(cornerRadius: DS.R.card).fill(DS.C.accBg))
 
                     // Plan limits
                     ECard {
                         ERow("Geräte", sub: "Starter: max. 1 Gerät") {
                             Text("1 / 1")
-                                .font(.jakarta(12, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold, design: .monospaced))
                                 .foregroundColor(DS.C.text)
                         }
-                        Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                        Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                         ERow("Berichts-Zeitraum", sub: "Verfügbare Historien-Tiefe") {
                             Text(reportDays)
-                                .font(.jakarta(12, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(DS.C.text)
                         }
-                        Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                        Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                         ERow("Stripe-Kundennummer", sub: "Für Rechnungen und Zahlungsmethoden") {
                             Button {
                                 // Stripe portal — Phase 3
                             } label: {
                                 Text("Stripe-Portal öffnen →")
-                                    .font(.jakarta(12, weight: .semibold))
+                                    .font(DS.F.subBold)
                                     .foregroundColor(DS.C.accT)
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -804,7 +747,7 @@ private struct EAbonnementTab: View {
                     }
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
         .task { await loadTenant() }
     }
@@ -830,38 +773,38 @@ private struct EDatenschutzTab: View {
                 ECard {
                     ERow("AVV unterzeichnet",
                          sub: "Auftragsverarbeitungsvertrag (DSGVO-Pflicht)") {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Text("✓ Erstellt")
-                                .font(.jakarta(12, weight: .semibold))
+                                .font(DS.F.subBold)
                                 .foregroundColor(DS.C.successText)
                             ESmallBtn(label: "Herunterladen", danger: false) {}
                         }
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Verfahrensdokumentation",
                          sub: "Pflicht vor produktivem Einsatz (GoBD)") {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Text("✓ Erstellt")
-                                .font(.jakarta(12, weight: .semibold))
+                                .font(DS.F.subBold)
                                 .foregroundColor(DS.C.successText)
                             ESmallBtn(label: "PDF herunterladen", danger: false) {}
                         }
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Datenspeicherung",
                          sub: "Hetzner Frankfurt · DSGVO-konform") {
                         Text("EU · DE")
-                            .font(.jakarta(12, weight: .regular))
+                            .font(DS.F.sub)
                             .foregroundColor(DS.C.text2)
                     }
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Daten exportieren",
                          sub: "ZIP-Export aller Betriebsdaten (30 Tage nach Kündigung)") {
                         ESmallBtn(label: "Export anfordern", danger: false) {}
                     }
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
     }
 }
@@ -875,11 +818,10 @@ private struct ESettingsSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.jakarta(14, weight: .semibold))
+                .font(DS.F.heading)
                 .foregroundColor(DS.C.text)
-                .tracking(-0.2)
             Text(sub)
-                .font(.jakarta(11, weight: .regular))
+                .font(DS.F.sub)
                 .foregroundColor(DS.C.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -888,15 +830,14 @@ private struct ESettingsSectionHeader: View {
 
 private struct ECard<C: View>: View {
     @ViewBuilder let content: C
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) { content }
             .background(DS.C.sur)
-            .cornerRadius(14)
+            .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.R.card)
+                    .strokeBorder(DS.C.brdAdaptive, lineWidth: 1)
             )
     }
 }
@@ -916,11 +857,11 @@ private struct ERow<R: View>: View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.jakarta(13, weight: .medium))
+                    .font(DS.F.bodyMed)
                     .foregroundColor(DS.C.text)
                 if let s = sub {
                     Text(s)
-                        .font(.jakarta(11, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -939,7 +880,6 @@ private struct EInputRow: View {
     let placeholder: String
     @Binding var text: String
     var showBorder: Bool = true
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isFocused = false
 
     var body: some View {
@@ -947,11 +887,11 @@ private struct EInputRow: View {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
-                        .font(.jakarta(13, weight: .medium))
+                        .font(DS.F.bodyMed)
                         .foregroundColor(DS.C.text)
                     if let s = sub {
                         Text(s)
-                            .font(.jakarta(11, weight: .regular))
+                            .font(DS.F.caption)
                             .foregroundColor(DS.C.text2)
                     }
                 }
@@ -959,54 +899,27 @@ private struct EInputRow: View {
                 NoAssistantTextField(
                     placeholder: placeholder,
                     text:        $text,
-                    uiFont:      UIFont.systemFont(ofSize: 12),
+                    uiFont:      UIFont.systemFont(ofSize: 15),
                     uiTextColor: UIColor(DS.C.text),
                     isFocused:   $isFocused
                 )
-                .frame(height: 34)
-                .frame(minWidth: 180, maxWidth: 220)
+                .frame(height: 44)
+                .frame(minWidth: 200, maxWidth: 260)
                 .padding(.horizontal, 12)
-                .background(DS.C.bg)
-                .cornerRadius(8)
+                .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.bg))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: DS.R.control)
+                        .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
                 )
-                .animation(.easeInOut(duration: 0.15), value: isFocused)
+                .animation(DS.M.fast, value: isFocused)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
 
             if showBorder {
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
             }
         }
-    }
-}
-
-private struct EToggle: View {
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { isOn.toggle() }
-        } label: {
-            ZStack(alignment: isOn ? .trailing : .leading) {
-                RoundedRectangle(cornerRadius: 11)
-                    .fill(isOn ? DS.C.acc : DS.C.sur2)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 11)
-                            .strokeBorder(isOn ? Color.clear : DS.C.brdLight, lineWidth: 1)
-                    )
-                    .frame(width: 38, height: 22)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 16, height: 16)
-                    .padding(3)
-            }
-        }
-        .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.2), value: isOn)
     }
 }
 
@@ -1014,42 +927,30 @@ private struct ESmallBtn: View {
     let label:  String
     let danger: Bool
     let action: () -> Void
-    @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.jakarta(11, weight: .semibold))
-                .foregroundColor(danger ? DS.C.dangerText : DS.C.text2)
-                .padding(.horizontal, 12)
-                .frame(height: 30)
+                .font(DS.F.captionBold)
+                .foregroundColor(danger ? DS.C.dangerText : DS.C.text)
+                .padding(.horizontal, 14)
+                .frame(height: 38)
                 .background(
-                    danger && hovered ? DS.C.dangerBg :
-                    (!danger && hovered ? DS.C.sur2 : Color.clear)
+                    Capsule().fill(danger ? DS.C.dangerBg : DS.C.sur2)
                 )
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            danger ? DS.C.dangerText.opacity(0.5) : DS.C.brdLight,
-                            lineWidth: 1
-                        )
-                )
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 }
-        .animation(.easeInOut(duration: 0.1), value: hovered)
     }
 }
 
-// MARK: - User Form Sheet (unchanged)
+// MARK: - User Form Sheet
 
 private struct UserFormSheet: View {
     let user:   User?
     let onSave: (String, String, String, UserRole, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var name     = ""
     @State private var email    = ""
@@ -1072,9 +973,9 @@ private struct UserFormSheet: View {
             .padding(.top, 12)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 18) {
                     Text(isEdit ? "Mitarbeiter bearbeiten" : "Neuer Mitarbeiter")
-                        .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                        .font(DS.F.title)
                         .foregroundColor(DS.C.text)
                         .padding(.top, 8)
 
@@ -1086,22 +987,20 @@ private struct UserFormSheet: View {
                         UFormField(label: "Passwort", placeholder: "Mindestens 8 Zeichen", text: $password, isSecure: true)
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Rolle")
-                            .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
+                    VStack(alignment: .leading, spacing: 8) {
+                        DSSectionLabel(text: "Rolle")
                         HStack(spacing: 8) {
                             ForEach([UserRole.staff, .manager, .owner], id: \.self) { r in
                                 Button {
-                                    withAnimation(.easeInOut(duration: 0.1)) { role = r }
+                                    withAnimation(DS.M.fast) { role = r }
                                 } label: {
                                     Text(r.displayName)
-                                        .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                                        .foregroundColor(role == r ? .white : DS.C.text2)
-                                        .padding(.horizontal, 14)
-                                        .frame(height: 34)
-                                        .background(role == r ? DS.C.acc : DS.C.sur2)
-                                        .cornerRadius(DS.R.button)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(role == r ? .white : DS.C.text)
+                                        .padding(.horizontal, 16)
+                                        .frame(height: 44)
+                                        .background(RoundedRectangle(cornerRadius: DS.R.button).fill(role == r ? DS.C.acc : DS.C.sur2))
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1114,28 +1013,18 @@ private struct UserFormSheet: View {
 
                     HStack(spacing: 10) {
                         Button("Abbrechen") { dismiss() }
-                            .font(.jakarta(DS.T.loginButton, weight: .medium))
-                            .foregroundColor(DS.C.text2)
-                            .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
-                            .background(DS.C.sur2)
-                            .cornerRadius(DS.R.button)
-                            .buttonStyle(.plain)
+                            .buttonStyle(DSSecondaryButton())
 
                         Button {
                             onSave(name, email, password, role, pin.isEmpty ? nil : pin)
                         } label: {
                             Text("Speichern")
-                                .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
                         }
-                        .background(canSave ? DS.C.acc : DS.C.acc.opacity(0.4))
-                        .cornerRadius(DS.R.button)
+                        .buttonStyle(DSPrimaryButton())
                         .disabled(!canSave)
-                        .buttonStyle(.plain)
                     }
                 }
-                .padding(24)
+                .padding(DS.S.pagePad)
             }
         }
         .background(DS.C.sur)
@@ -1154,33 +1043,29 @@ private struct UFormField: View {
     var isSecure:               Bool                          = false
     var keyboardType:           UIKeyboardType                = .default
     var autocapitalizationType: UITextAutocapitalizationType  = .words
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isFocused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                .foregroundColor(DS.C.text2)
+        VStack(alignment: .leading, spacing: 8) {
+            DSSectionLabel(text: label)
             NoAssistantTextField(
                 placeholder:            placeholder,
                 text:                   $text,
                 keyboardType:           keyboardType,
-                uiFont:                 UIFont.systemFont(ofSize: 14),
+                uiFont:                 UIFont.systemFont(ofSize: 16),
                 uiTextColor:            UIColor(DS.C.text),
                 isSecure:               isSecure,
                 autocapitalizationType: autocapitalizationType,
                 isFocused:              $isFocused
             )
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .frame(height: DS.S.inputHeight)
-            .background(DS.C.bg)
-            .cornerRadius(DS.R.input)
+            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
             )
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
+            .animation(DS.M.fast, value: isFocused)
         }
     }
 }

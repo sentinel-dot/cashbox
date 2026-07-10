@@ -1,6 +1,6 @@
 // TableOverviewView.swift
 // cashbox — Haupt-App-Shell: Topbar + Sidebar + Tischgitter
-// Design: kassensystem-design-system.md §3–4
+// Design v3 „Ledger Green": Status über Fläche + Pill, keine Streifen.
 
 import SwiftUI
 
@@ -45,9 +45,9 @@ enum NavSection {
     case uebersicht, abrechnung, system
     var title: String {
         switch self {
-        case .uebersicht:  return "ÜBERSICHT"
-        case .abrechnung:  return "ABRECHNUNG"
-        case .system:      return "SYSTEM"
+        case .uebersicht:  return "Übersicht"
+        case .abrechnung:  return "Abrechnung"
+        case .system:      return "System"
         }
     }
 }
@@ -74,7 +74,7 @@ struct TableOverviewView: View {
             showSchnellkasse = true
         } else {
             schnellkasseIntent = true
-            withAnimation(.easeInOut(duration: 0.15)) { selectedNav = .kassensitzung }
+            withAnimation(DS.M.base) { selectedNav = .kassensitzung }
         }
     }
 
@@ -95,7 +95,7 @@ struct TableOverviewView: View {
                         .frame(width: DS.S.sidebarWidth)
 
                     Rectangle()
-                        .fill(DS.C.brdLight)
+                        .fill(DS.C.brdAdaptive)
                         .frame(width: 1)
 
                     AppContent(selectedNav: selectedNav, onTableTap: { id, name in
@@ -107,7 +107,7 @@ struct TableOverviewView: View {
             }
         }
         .preferredColorScheme(prefersDarkMode ? .dark : .light)
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
         .task {
             async let t: () = tableStore.loadTables()
             async let s: () = sessionStore.loadCurrent()
@@ -163,47 +163,61 @@ private struct AppTopBar: View {
     var body: some View {
         HStack(spacing: 0) {
             // Brand
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 AppBrandMark()
-                Text("Kassensystem")
-                    .font(.jakarta(DS.T.topbarAppName, weight: .semibold))
+                Text("cashbox")
+                    .font(.system(size: DS.T.topbarAppName, weight: .bold))
                     .foregroundColor(DS.C.text)
             }
             .padding(.horizontal, 16)
             .frame(width: DS.S.sidebarWidth, alignment: .leading)
 
             Rectangle()
-                .fill(DS.C.brdLight)
+                .fill(DS.C.brdAdaptive)
                 .frame(width: 1, height: 24)
 
             Spacer()
 
-            // User name
-            if let user = authStore.currentUser {
-                Text(user.name)
-                    .font(.jakarta(DS.T.navItem, weight: .medium))
-                    .foregroundColor(DS.C.text)
-                Spacer().frame(width: 16)
-            }
-
             // Session chip
             SessionChip(selectedNav: $selectedNav)
 
-            Spacer().frame(width: 16)
+            Spacer().frame(width: 20)
 
-            // Dark mode toggle
-            Toggle("", isOn: $prefersDarkMode)
-                .toggleStyle(.switch)
-                .tint(DS.C.text2)
-                .labelsHidden()
-                .scaleEffect(0.85)
+            // User
+            if let user = authStore.currentUser {
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(DS.C.sur2)
+                            .frame(width: 32, height: 32)
+                        Text(String(user.name.prefix(1)).uppercased())
+                            .font(DS.F.captionBold)
+                            .foregroundColor(DS.C.text)
+                    }
+                    Text(user.name)
+                        .font(DS.F.subMed)
+                        .foregroundColor(DS.C.text)
+                }
+                Spacer().frame(width: 16)
+            }
 
-            Spacer().frame(width: 16)
+            // Dark mode toggle — Icon-Button, 44pt Trefferfläche
+            Button {
+                withAnimation(DS.M.base) { prefersDarkMode.toggle() }
+            } label: {
+                Image(systemName: prefersDarkMode ? "sun.max" : "moon")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(DS.C.text2)
+                    .frame(width: DS.S.touchTarget, height: DS.S.touchTarget)
+            }
+            .buttonStyle(.plain)
+
+            Spacer().frame(width: 10)
         }
         .frame(height: DS.S.topbarHeight)
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -220,30 +234,20 @@ private struct SessionChip: View {
                 .scaleEffect(0.7)
                 .frame(width: 32, height: 22)
         } else if let session = sessionStore.currentSession {
-            HStack(spacing: 5) {
-                Circle().fill(Color.green).frame(width: 6, height: 6)
-                Text("Schicht offen · \(formattedTime(session.openedAt))")
-                    .font(.jakarta(DS.T.sessionChip, weight: .semibold))
-                    .foregroundColor(DS.C.accT)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(DS.C.accBg)
-            .cornerRadius(20)
+            DSPill(
+                label: "Schicht offen · \(formattedTime(session.openedAt))",
+                fg: DS.C.accT,
+                bg: DS.C.accBg
+            )
         } else {
             Button {
-                withAnimation(.easeInOut(duration: 0.15)) { selectedNav = .kassensitzung }
+                withAnimation(DS.M.base) { selectedNav = .kassensitzung }
             } label: {
-                HStack(spacing: 5) {
-                    Circle().fill(Color.orange).frame(width: 6, height: 6)
-                    Text("Kasse geschlossen — tippen zum Öffnen")
-                        .font(.jakarta(DS.T.sessionChip, weight: .semibold))
-                        .foregroundColor(.orange)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(20)
+                DSPill(
+                    label: "Kasse geschlossen — tippen zum Öffnen",
+                    fg: DS.C.brassText,
+                    bg: DS.C.brassBg
+                )
             }
             .buttonStyle(.plain)
         }
@@ -293,15 +297,8 @@ private struct AppSidebar: View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(sections.enumerated()), id: \.element.0.title) { index, pair in
+                    ForEach(Array(sections.enumerated()), id: \.element.0.title) { _, pair in
                         let (section, items) = pair
-                        if index > 0 {
-                            Rectangle()
-                                .fill(DS.C.brdLight)
-                                .frame(height: 1)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                        }
                         SidebarSection(
                             title: section.title,
                             items: items,
@@ -312,8 +309,8 @@ private struct AppSidebar: View {
                         )
                     }
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
 
             SidebarKPIs()
@@ -331,13 +328,10 @@ private struct SidebarSection: View {
     var badgeFor: (NavItem) -> String? = { _ in nil }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(.jakarta(13, weight: .medium))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.8)
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
+        VStack(alignment: .leading, spacing: 2) {
+            DSSectionLabel(text: title)
+                .padding(.horizontal, 12)
+                .padding(.top, 18)
                 .padding(.bottom, 6)
 
             ForEach(items, id: \.self) { item in
@@ -346,7 +340,7 @@ private struct SidebarSection: View {
                     badge: badgeFor(item),
                     isSelected: selectedNav == item
                 ) {
-                    withAnimation(.easeInOut(duration: 0.15)) { selectedNav = item }
+                    withAnimation(DS.M.base) { selectedNav = item }
                 }
             }
         }
@@ -364,37 +358,33 @@ private struct SidebarNavRow: View {
             HStack(spacing: 12) {
                 Image(systemName: item.icon)
                     .font(.system(size: 17, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? DS.C.acc : DS.C.text2)
-                    .frame(width: 22)
+                    .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
+                    .frame(width: 24)
                 Text(item.label)
-                    .font(.jakarta(17, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: DS.T.navItem, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(.jakarta(13, weight: .semibold))
-                        .foregroundColor(DS.C.text2)
+                        .font(DS.F.captionBold)
+                        .monospacedDigit()
+                        .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(DS.C.sur2)
-                        .cornerRadius(DS.R.badge)
+                        .background(Capsule().fill(isSelected ? DS.C.sur : DS.C.sur2))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 12)
+            .frame(height: 46)
             .frame(maxWidth: .infinity)
-            .background(isSelected ? DS.C.accBg : Color.clear)
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Rectangle()
-                        .fill(DS.C.acc)
-                        .frame(width: 3)
-                        .cornerRadius(1.5)
-                }
-            }
+            .background(
+                RoundedRectangle(cornerRadius: DS.R.button)
+                    .fill(isSelected ? DS.C.accBg : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .animation(DS.M.fast, value: isSelected)
     }
 }
 
@@ -407,26 +397,43 @@ private struct SidebarKPIs: View {
     @State private var durationTimer: Timer?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            KPIBlock(
-                label: "UMSATZ HEUTE",
-                value: reportStore.isLoading ? "…" : formatCents(reportStore.dailyReport?.totalGrossCents ?? 0),
-                accent: true
-            )
-            KPIBlock(
-                label: "OFFENE TISCHE",
-                value: "\(tableStore.occupiedCount) / \(tableStore.tables.count)"
-            )
-            KPIBlock(
-                label: "SCHICHTDAUER",
-                value: sessionStore.hasOpenSession ? shiftDuration : "–"
-            )
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                DSSectionLabel(text: "Umsatz heute")
+                if reportStore.isLoading {
+                    Text("…")
+                        .font(DS.F.moneyDisplay(30))
+                        .foregroundColor(DS.C.text2)
+                } else {
+                    MoneyText(
+                        cents: reportStore.dailyReport?.totalGrossCents ?? 0,
+                        size: 30, weight: .bold, color: DS.C.accT
+                    )
+                }
+            }
+
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 3) {
+                    DSSectionLabel(text: "Tische")
+                    Text("\(tableStore.occupiedCount)/\(tableStore.tables.count)")
+                        .font(.system(size: 21, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundColor(DS.C.text)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    DSSectionLabel(text: "Schicht")
+                    Text(sessionStore.hasOpenSession ? shiftDuration : "–")
+                        .font(.system(size: 21, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundColor(DS.C.text)
+                }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .top
         )
         .onAppear {
@@ -458,29 +465,6 @@ private struct SidebarKPIs: View {
         let m = (elapsed % 3600) / 60
         shiftDuration = String(format: "%d:%02d h", h, m)
     }
-
-    private func formatCents(_ cents: Int) -> String {
-        "\(cents / 100),\(String(format: "%02d", cents % 100)) €"
-    }
-}
-
-private struct KPIBlock: View {
-    let label: String
-    let value: String
-    var accent: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.jakarta(13, weight: .medium))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.8)
-            Text(value)
-                .font(.jakarta(38, weight: .bold))
-                .foregroundColor(accent ? DS.C.acc : DS.C.text)
-                .tracking(-0.8)
-        }
-    }
 }
 
 private struct SidebarLogout: View {
@@ -492,19 +476,20 @@ private struct SidebarLogout: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 17, weight: .regular))
-                    .frame(width: 22)
+                    .font(.system(size: 16, weight: .regular))
+                    .frame(width: 24)
                 Text("Abmelden")
-                    .font(.jakarta(17, weight: .regular))
+                    .font(DS.F.subMed)
             }
             .foregroundColor(DS.C.text2)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .frame(height: 52)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .top
         )
     }
@@ -575,12 +560,16 @@ private struct TableGridContent: View {
                 ProgressView().progressViewStyle(.circular).scaleEffect(1.2)
                 Spacer()
             } else if tableStore.tables.isEmpty {
-                EmptyTablesPlaceholder()
+                DSEmptyState(
+                    icon: "square.grid.2x2",
+                    title: "Keine Tische angelegt",
+                    message: "Tische können in den Einstellungen hinzugefügt werden."
+                )
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: 3),
-                        spacing: 20
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3),
+                        spacing: 16
                     ) {
                         ForEach(filteredTables) { table in
                             let status: TableCardStatus = {
@@ -593,7 +582,7 @@ private struct TableGridContent: View {
                             }
                         }
                     }
-                    .padding(20)
+                    .padding(DS.S.pagePad)
                 }
                 .refreshable { await tableStore.loadTables() }
             }
@@ -619,37 +608,20 @@ private struct NoSessionBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
-                .font(.system(size: 13))
+                .foregroundColor(DS.C.brass)
+                .font(.system(size: 14))
             Text("Keine offene Kassensitzung — Bestellungen können erst nach Kasseneröffnung erstellt werden.")
-                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                .foregroundColor(DS.C.text2)
+                .font(DS.F.sub)
+                .foregroundColor(DS.C.brassText)
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.08))
+        .padding(.horizontal, DS.S.pagePad)
+        .padding(.vertical, 12)
+        .background(DS.C.brassBg)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(Color.orange.opacity(0.2)),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
-    }
-}
-
-private struct EmptyTablesPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 28, weight: .light))
-                .foregroundColor(DS.C.text2)
-            Text("Keine Tische angelegt")
-                .font(.jakarta(DS.T.loginTitle, weight: .semibold))
-                .foregroundColor(DS.C.text)
-            Text("Tische können in den Einstellungen hinzugefügt werden.")
-                .font(.jakarta(DS.T.loginBody, weight: .regular))
-                .foregroundColor(DS.C.text2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -660,45 +632,37 @@ private struct SchnellkasseButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 14) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.white.opacity(0.16)))
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Schnellkasse")
-                        .font(.jakarta(19, weight: .bold))
+                        .font(.system(size: DS.T.quickLabel, weight: .bold))
                         .foregroundColor(.white)
                     Text("Ohne Tisch — Direktverkauf")
-                        .font(.jakarta(15, weight: .regular))
-                        .foregroundColor(.white.opacity(0.7))
+                        .font(.system(size: DS.T.quickSub, weight: .regular))
+                        .foregroundColor(.white.opacity(0.75))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.75))
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 18)
-            .background(
-                LinearGradient(
-                    colors: [DS.C.acc, DS.C.acc.opacity(0.85)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .cornerRadius(DS.R.quickBanner)
+            .padding(.vertical, 14)
+            .background(RoundedRectangle(cornerRadius: DS.R.quickBanner).fill(DS.C.acc))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .top
         )
     }
@@ -709,26 +673,25 @@ private struct SchnellkasseButton: View {
 private struct ZonePillsBar: View {
     let zones: [TableZone]
     @Binding var selectedZoneId: Int?
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ZonePill(label: "Alle", isSelected: selectedZoneId == nil) {
-                    withAnimation(.easeInOut(duration: 0.15)) { selectedZoneId = nil }
+                    withAnimation(DS.M.base) { selectedZoneId = nil }
                 }
                 ForEach(zones) { zone in
                     ZonePill(label: zone.name, isSelected: selectedZoneId == zone.id) {
-                        withAnimation(.easeInOut(duration: 0.15)) { selectedZoneId = zone.id }
+                        withAnimation(DS.M.base) { selectedZoneId = zone.id }
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, DS.S.pagePad)
+            .padding(.vertical, 12)
         }
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -738,45 +701,32 @@ private struct ZonePill: View {
     let label:      String
     let isSelected: Bool
     let onTap:      () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: onTap) {
             Text(label)
-                .font(.jakarta(DS.T.zonePill, weight: .semibold))
-                .foregroundColor(isSelected ? .white : DS.C.text2)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 5)
-                .background(isSelected ? DS.C.acc : Color.clear)
-                .cornerRadius(DS.R.badge)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.R.badge)
-                        .strokeBorder(
-                            isSelected ? DS.C.acc : DS.C.brd(colorScheme),
-                            lineWidth: 1
-                        )
-                )
+                .font(.system(size: DS.T.zonePill, weight: .semibold))
+                .foregroundColor(isSelected ? .white : DS.C.text)
+                .padding(.horizontal, 16)
+                .frame(height: 38)
+                .background(Capsule().fill(isSelected ? DS.C.acc : DS.C.sur2))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .animation(DS.M.fast, value: isSelected)
     }
 }
 
 // MARK: - Tischkachel
+// frei    → ruhige Karte, nur Name + dezenter Status
+// besetzt → Betrag dominiert in Ledger Green
+// zahlung → Brass-Fläche: der Gast wartet, Kachel ruft
 
 private struct TableCard: View {
     let table:  TableItem
     let status: TableCardStatus
     let now:    Date
     let onTap:  () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var stripeColor: Color? {
-        switch status {
-        case .frei:    return nil
-        case .besetzt: return DS.C.stripeBusy
-        case .zahlung: return DS.C.stripeBill
-        }
-    }
 
     private var minutesOpen: Int? {
         guard let oldest = table.oldestOrderAt else { return nil }
@@ -790,125 +740,107 @@ private struct TableCard: View {
         return max(0, Int(now.timeIntervalSince(date)) / 60)
     }
 
-    private var amountText: String {
-        "\(table.totalOpenCents / 100),\(String(format: "%02d", table.totalOpenCents % 100)) €"
-    }
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 0) {
-                // Left status stripe
-                if let stripe = stripeColor {
-                    Rectangle()
-                        .fill(stripe)
-                        .frame(width: 8)
-                }
-
-                // Card content
-                VStack(alignment: .leading, spacing: 0) {
-                    // Row 1: Table name + status badge
-                    HStack(alignment: .center) {
-                        Text(table.name)
-                            .font(.jakarta(22, weight: .bold))
-                            .foregroundColor(DS.C.text)
-                            .lineLimit(1)
-                        Spacer()
-                        TableStatusBadge(status: status)
-                    }
-
-                    // Row 2: Amount (dominant)
-                    if status != .frei {
-                        Text(amountText)
-                            .font(.jakarta(52, weight: .bold))
-                            .foregroundColor(DS.C.text)
-                            .tracking(-1.5)
-                            .minimumScaleFactor(0.55)
-                            .lineLimit(1)
-                            .padding(.top, 12)
-                    } else {
-                        Spacer().frame(height: 12)
-                    }
-
-                    Spacer(minLength: 20)
-
-                    // Divider
-                    Rectangle()
-                        .fill(DS.C.brdLight)
-                        .frame(height: 1)
-
-                    // Row 3: Footer — time left, positions right
-                    HStack {
-                        if status == .frei {
-                            Text("Verfügbar")
-                                .foregroundColor(DS.C.freeText)
-                            Spacer()
-                        } else {
-                            Text(minutesOpen.map { "\($0) min" } ?? "—")
-                                .foregroundColor(DS.C.text2)
-                            Spacer()
-                            let posText = table.totalOpenItems == 1 ? "1 Position" : "\(table.totalOpenItems) Positionen"
-                            Text(posText)
-                                .foregroundColor(DS.C.text2)
-                        }
-                    }
-                    .font(.jakarta(17, weight: .medium))
-                    .padding(.top, 12)
-                }
-                .padding(22)
-            }
-        }
-        .buttonStyle(.plain)
-        .background(DS.C.sur)
-        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.R.card)
-                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-        )
-        .frame(minHeight: 210)
-    }
-}
-
-private struct TableStatusBadge: View {
-    let status: TableCardStatus
-
-    private var dotColor: Color {
+    private var cardBg: Color {
         switch status {
-        case .frei:    return DS.C.freeText
-        case .besetzt: return DS.C.busyText
-        case .zahlung: return DS.C.billText
-        }
-    }
-
-    private var label: String {
-        switch status {
-        case .frei:    return "Frei"
-        case .besetzt: return "Besetzt"
-        case .zahlung: return "Zahlung"
-        }
-    }
-
-    private var bg: Color {
-        switch status {
-        case .frei:    return DS.C.freeBg
-        case .besetzt: return DS.C.busyBg
+        case .frei:    return DS.C.sur
+        case .besetzt: return DS.C.sur
         case .zahlung: return DS.C.billBg
         }
     }
 
+    private var cardBorder: Color {
+        status == .zahlung ? DS.C.brass.opacity(0.45) : DS.C.brdAdaptive
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: 8, height: 8)
-            Text(label)
-                .font(.jakarta(15, weight: .semibold))
-                .foregroundColor(dotColor)
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Kopf: Tischname + Status-Pill
+                HStack(alignment: .center) {
+                    Text(table.name)
+                        .font(DS.F.heading)
+                        .foregroundColor(DS.C.text)
+                        .lineLimit(1)
+                    Spacer()
+                    statusPill
+                }
+
+                Spacer(minLength: 12)
+
+                // Betrag (dominant) oder ruhiger Frei-Zustand
+                if status != .frei {
+                    MoneyText(
+                        cents: table.totalOpenCents,
+                        size: DS.T.tableAmount,
+                        weight: .bold,
+                        color: status == .zahlung ? DS.C.brassText : DS.C.text
+                    )
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundColor(DS.C.text2.opacity(0.6))
+                }
+
+                Spacer(minLength: 12)
+
+                // Fußzeile: Zeit + Positionen
+                HStack {
+                    if status == .frei {
+                        Text(table.zone?.name ?? "Tippen zum Bestellen")
+                            .foregroundColor(DS.C.text2)
+                        Spacer()
+                    } else {
+                        Text(minutesOpen.map { "\($0) min" } ?? "—")
+                            .monospacedDigit()
+                            .foregroundColor(status == .zahlung ? DS.C.brassText.opacity(0.8) : DS.C.text2)
+                        Spacer()
+                        let posText = table.totalOpenItems == 1 ? "1 Position" : "\(table.totalOpenItems) Positionen"
+                        Text(posText)
+                            .monospacedDigit()
+                            .foregroundColor(status == .zahlung ? DS.C.brassText.opacity(0.8) : DS.C.text2)
+                    }
+                }
+                .font(.system(size: DS.T.tableMeta, weight: .medium))
+            }
+            .padding(DS.S.cardPad)
+            .frame(maxWidth: .infinity, minHeight: 176, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: DS.R.card).fill(cardBg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.R.card)
+                    .strokeBorder(cardBorder, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: DS.R.card))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(bg)
-        .cornerRadius(DS.R.badge)
-        .fixedSize()
+        .buttonStyle(TableCardPressStyle())
+    }
+
+    @ViewBuilder
+    private var statusPill: some View {
+        switch status {
+        case .frei:
+            Text("Frei")
+                .font(DS.F.captionBold)
+                .foregroundColor(DS.C.text2)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(DS.C.sur2))
+        case .besetzt:
+            DSPill(label: "Besetzt", fg: DS.C.accT, bg: DS.C.accBg)
+        case .zahlung:
+            DSPill(label: "Zahlung", fg: DS.C.brassText, bg: DS.C.brassBg)
+        }
+    }
+}
+
+/// Press-Feedback der Tischkachel: leichtes Zusammendrücken statt Farbwechsel
+private struct TableCardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(DS.M.press, value: configuration.isPressed)
     }
 }
 
@@ -917,36 +849,20 @@ enum TableCardStatus {
     case frei, besetzt, zahlung
 }
 
-// Linke Border der Tischkachel — offener Pfad: Oben-links-Bogen → linke Kante → Unten-links-Bogen
-private struct LeftBorder: Shape {
-    let cornerRadius: CGFloat
+// MARK: - Brand Mark
 
-    func path(in rect: CGRect) -> Path {
-        let r = cornerRadius
-        var path = Path()
-        path.move(to: CGPoint(x: r, y: 0))
-        path.addArc(center: CGPoint(x: r, y: r), radius: r,
-                    startAngle: .degrees(270), endAngle: .degrees(180), clockwise: true)
-        path.addLine(to: CGPoint(x: 0, y: rect.height - r))
-        path.addArc(center: CGPoint(x: r, y: rect.height - r), radius: r,
-                    startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
-        return path
-    }
-}
+struct AppBrandMark: View {
+    var size: CGFloat = DS.S.brandMarkSize
 
-
-// MARK: - Brand Mark (lokal — LoginView hat eigene private Version)
-
-private struct AppBrandMark: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: DS.R.brandMark)
                 .fill(DS.C.acc)
-                .frame(width: DS.S.brandMarkSize, height: DS.S.brandMarkSize)
-            Text("cb")
-                .font(.jakarta(13, weight: .bold))
+                .frame(width: size, height: size)
+            // Kassenlade-Glyphe: Rechteck mit Münzschlitz
+            Image(systemName: "eurosign")
+                .font(.system(size: size * 0.5, weight: .bold))
                 .foregroundColor(.white)
-                .tracking(-0.5)
         }
     }
 }

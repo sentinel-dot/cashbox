@@ -1,5 +1,7 @@
 // OfflineBanner.swift
 // cashbox — System-Banner: Offline, TSE-Warnung, TSE-Ausfall, Sync-OK, Trial
+// Design v3: ein Banner-Grundtyp, Semantik nur über Farbe — Brass für
+// Hinweise, Rot für Ausfall, Ledger Green für Erfolg.
 
 import SwiftUI
 
@@ -18,28 +20,31 @@ private struct AppBanner: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(fg)
-                .frame(width: 15)
+                .frame(width: 18)
 
             Group {
                 Text(label).fontWeight(.semibold) + Text(" — ") + Text(message)
             }
-            .font(.jakarta(12, weight: .regular))
+            .font(.system(size: 14))
             .foregroundColor(fg)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let actionLabel, let onAction {
                 Button(action: onAction) {
                     Text(actionLabel)
-                        .font(.jakarta(11, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(actionFg)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, DS.S.pagePad)
+        .padding(.vertical, 6)
+        .frame(minHeight: 44)
         .background(bg)
         .frame(maxWidth: .infinity)
     }
@@ -52,19 +57,21 @@ private struct AppBanner: View {
 struct OfflineBanner: View {
     var pendingCount: Int = 0
 
-    private let bg  = Color(UIColor { _ in UIColor(red: 0.176, green: 0.176, blue: 0.176, alpha: 1) })
-    private let fg  = Color(UIColor { _ in UIColor(red: 0.961, green: 0.957, blue: 0.945, alpha: 1) })
-    private let amberFg = Color(UIColor { _ in UIColor(red: 0.941, green: 0.753, blue: 0.376, alpha: 1) })
+    // Bewusst modus-unabhängig dunkel: Offline ist ein Systemzustand,
+    // der sich vom restlichen UI abheben soll.
+    private let bg = Color(hex: "1A1F17")
+    private let fg = Color(hex: "F1F3EC")
+    private let brassFg = Color(hex: "E2BE67")
 
     var body: some View {
         AppBanner(
             icon:        "wifi.slash",
             label:       "Kein Netz",
-            message:"TSE-Signierung ausstehend. Bestellungen lokal gespeichert.",
+            message:     "TSE-Signierung ausstehend. Bestellungen lokal gespeichert.",
             bg:          bg,
             fg:          fg,
             actionLabel: pendingCount > 0 ? "\(pendingCount) ausstehend →" : nil,
-            actionFg:    amberFg,
+            actionFg:    brassFg,
             onAction:    pendingCount > 0 ? {} : nil
         )
     }
@@ -79,7 +86,7 @@ struct TSEWarnBanner: View {
         AppBanner(
             icon:        "exclamationmark.triangle",
             label:       "TSE instabil",
-            message:"Fiskaly antwortet langsam. Bons werden verzögert signiert.",
+            message:     "Fiskaly antwortet langsam. Bons werden verzögert signiert.",
             bg:          DS.C.warnBg,
             fg:          DS.C.warnText,
             actionLabel: onDetails != nil ? "Details" : nil,
@@ -99,7 +106,7 @@ struct TSEErrorBanner: View {
         AppBanner(
             icon:        "xmark.circle",
             label:       "TSE-Ausfall seit \(hoursDown) Stunden",
-            message:"Meldepflicht beim Finanzamt. Kasse weiter nutzbar.",
+            message:     "Meldepflicht beim Finanzamt. Kasse weiter nutzbar.",
             bg:          DS.C.dangerBg,
             fg:          DS.C.dangerText,
             actionLabel: onReport != nil ? "Jetzt melden →" : nil,
@@ -119,11 +126,11 @@ struct SyncOKBanner: View {
         AppBanner(
             icon:        "checkmark.circle",
             label:       "Sync erfolgreich",
-            message:"\(count) ausstehende TSE-Signatur\(count == 1 ? "" : "en") erfolgreich synchronisiert.",
-            bg:          DS.C.freeBg,
-            fg:          DS.C.freeText,
+            message:     "\(count) ausstehende TSE-Signatur\(count == 1 ? "" : "en") erfolgreich synchronisiert.",
+            bg:          DS.C.successBg,
+            fg:          DS.C.successText,
             actionLabel: onDismiss != nil ? "Schließen" : nil,
-            actionFg:    DS.C.freeText,
+            actionFg:    DS.C.successText,
             onAction:    onDismiss
         )
     }
@@ -139,11 +146,11 @@ struct TrialBanner: View {
         AppBanner(
             icon:        "info.circle",
             label:       "Trial endet in \(daysLeft) Tag\(daysLeft == 1 ? "" : "en")",
-            message:"Jetzt upgraden um unterbrechungsfreien Betrieb sicherzustellen.",
-            bg:          DS.C.accBg,
-            fg:          DS.C.accT,
+            message:     "Jetzt upgraden um unterbrechungsfreien Betrieb sicherzustellen.",
+            bg:          DS.C.brassBg,
+            fg:          DS.C.brassText,
             actionLabel: onUpgrade != nil ? "Jetzt upgraden →" : nil,
-            actionFg:    DS.C.accT,
+            actionFg:    DS.C.brassText,
             onAction:    onUpgrade
         )
     }

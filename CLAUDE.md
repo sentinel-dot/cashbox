@@ -19,7 +19,8 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 3. ~~`TableOverviewView`~~ ✅ → ~~`OrderView`~~ ✅ → ~~`PaymentView`~~ ✅ → ~~`ReceiptView`~~ ✅
 4. ~~`ZBerichtView`~~ ✅, ~~`BerichteView`~~ ✅, ~~`ProdukteView`~~ ✅, ~~`KategorienView`~~ ✅, ~~`EinstellungenView`~~ ✅
 5. ~~Bug-Fixes: JSON-Decode-Fehler, PIN-Login, Produkt-/Kategorie-Anzeige, Berichte, 409-Mapping~~ ✅
-6. Plus Jakarta Sans Font-Dateien bundlen (Info.plist UIAppFonts)
+6. ~~Plus Jakarta Sans Font-Dateien bundlen~~ ✅ obsolet — Design v3 nutzt bewusst SF Pro (System-Font); `.jakarta()`-Shim in DesignSystem.swift mappt Alt-Aufrufe auf SF
+7. ~~Design-Overhaul v3 „Ledger Green" (alle Screens)~~ ✅ (2026-07-10)
 
 **Bekannte offene Sicherheitslücken:** keine ✅ (Audit 2026-07-10: alle kritischen + mittleren Findings behoben, siehe `implementierungsplan.md` §17)
 
@@ -230,7 +231,7 @@ npm run test:coverage        # Coverage-Report
 ### Fertig implementiert ✅
 | Screen / File | Inhalt | Stand |
 |---------------|--------|-------|
-| `DesignSystem.swift` | Alle Design-Tokens (Farben, Typo, Radii, Spacing) aus Design System v1.2 | ✅ |
+| `DesignSystem.swift` | Design v3 „Ledger Green": olivgetönte Neutrals, Ledger-Green-Primär + Brass-Sekundär, SF Pro (Geld: SF Rounded + `.monospacedDigit`), zentrale `euroString()`/`MoneyText`, Button-Styles (`DSPrimaryButton` etc.), `DSPill`, `DSEmptyState`, `DSSectionLabel`, `dsCard()`, Motion-Tokens. `.jakarta()`-Shim → SF Pro | ✅ |
 | `AppError.swift` | App-weite Fehlertypen (LocalizedError, deutsche Meldungen) | ✅ |
 | `Models.swift` | User, AuthUser, Tenant, UserRole, SubscriptionPlan, SubscriptionStatus, AuthResponse | ✅ |
 | `AuthStore.swift` | ObservableObject: Login, Register, PIN-Login, Logout, User-Cache (UserDefaults), sendet deviceToken aus Keychain | ✅ |
@@ -239,7 +240,7 @@ npm run test:coverage        # Coverage-Report
 | `NetworkMonitor.swift` | NWPathMonitor Wrapper, isOnline @Published | ✅ |
 | `OfflineBanner.swift` | Offline-Hinweisband "TSE-Signatur ausstehend" | ✅ |
 | `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular, PIN-Liste, Dark-Mode-Toggle, PINEntrySheet | ✅ |
-| `RegisterView.swift` | 2-Spalten Registrierung: Business-Name, E-Mail, Passwort, Adresse, Steuernummer, Gerätename → POST /onboarding/register | ✅ |
+| `OnboardingView.swift` | Registrierungs-/Onboarding-Flow (6 Schritte): Konto, Betriebsdaten, Gerät, Plan, Pflicht-Checkliste, Fertig → `authStore.register` (POST /onboarding/register). Einziger Registrierungsweg (RegisterView.swift gelöscht 2026-07-10, war toter Code) | ✅ |
 | `ContentView.swift` | Auth-Router: LoginView ↔ App | ✅ |
 | `zettel_frontendApp.swift` | Root mit @StateObject Stores + EnvironmentObject Injection | ✅ |
 | `SessionStore.swift` | ObservableObject: Session laden/öffnen/schließen, Movements, Preview-Factories | ✅ |
@@ -270,7 +271,7 @@ npm run test:coverage        # Coverage-Report
 ### SwiftUI — Offene Punkte
 | Punkt | Details |
 |-------|---------|
-| Plus Jakarta Sans | Font-Dateien bundlen + Info.plist UIAppFonts + Font.jakarta() umstellen |
+| Design v3 „Ledger Green" | ✅ Komplett-Overhaul 2026-07-10: alle Screens auf DS v3 (SF Pro, Ledger-Green/Brass-Palette, Touch-Targets ≥44pt, keine Hover-Zustände, zentrale Geld-Formatierung). Bugfixes nebenbei: MwSt-Anzeige 7 %/19 % getrennt (Warenkorb/Payment/Bon), lokale `formatCents` mit Punkt-Dezimal entfernt |
 | SyncManager Vollausbau | `SyncManager.swift` (minimal) existiert: triggert POST /sync/offline-queue bei Online-Wechsel/Foreground/Login, hält pendingCount. Fehlt: Retry-UI, Banner-Verdrahtung (Phase 3) |
 | Token-Refresh | ✅ APIClient refresht bei 401 automatisch (POST /auth/refresh) und wiederholt den Request; Force-Logout erst wenn Refresh scheitert |
 

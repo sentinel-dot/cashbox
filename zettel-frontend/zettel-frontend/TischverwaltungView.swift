@@ -1,5 +1,6 @@
 // TischverwaltungView.swift
 // cashbox — Tische & Zonen verwalten (Einstellungen-Tab)
+// Design v3: DS-Tokens statt Hardcode-Hex, 44pt-Aktionen.
 
 import SwiftUI
 
@@ -9,7 +10,6 @@ struct TischverwaltungView: View {
     @EnvironmentObject var tableStore:    TableStore
     @EnvironmentObject var authStore:     AuthStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showZoneSheet  = false
     @State private var showTischSheet = false
@@ -29,10 +29,11 @@ struct TischverwaltungView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            // ── Header ────────────────────────────────────────────────────
-            HStack {
+            // Header
+            HStack(spacing: 10) {
                 Text("\(tableStore.tables.count) Tische · \(tableStore.zones.count) Zonen")
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                    .font(DS.F.bodyBold)
+                    .monospacedDigit()
                     .foregroundColor(DS.C.text)
 
                 Spacer()
@@ -41,44 +42,32 @@ struct TischverwaltungView: View {
                     Button {
                         showZoneSheet = true
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                             Text("Zone")
-                                .font(.jakarta(DS.T.loginButton, weight: .semibold))
                         }
-                        .foregroundColor(DS.C.acc)
-                        .padding(.horizontal, 14)
-                        .frame(height: 34)
                     }
-                    .background(DS.C.acc.opacity(0.12))
-                    .cornerRadius(DS.R.button)
-                    .buttonStyle(.plain)
+                    .buttonStyle(DSSecondaryButton(height: 42, fullWidth: false))
 
                     Button {
                         showTischSheet = true
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                             Text("Tisch")
-                                .font(.jakarta(DS.T.loginButton, weight: .semibold))
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .frame(height: 34)
                     }
-                    .background(DS.C.acc)
-                    .cornerRadius(DS.R.button)
-                    .buttonStyle(.plain)
+                    .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, DS.S.pagePad)
             .padding(.vertical, 12)
             .background(DS.C.sur)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
 
-            // ── Content ───────────────────────────────────────────────────
+            // Content
             if tableStore.isLoading {
                 Spacer()
                 ProgressView().progressViewStyle(.circular)
@@ -86,23 +75,21 @@ struct TischverwaltungView: View {
             } else {
                 HStack(spacing: 0) {
                     ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 24) {
 
-                            // Zonen
                             if !tableStore.zones.isEmpty {
-                                TVSection("ZONEN (\(tableStore.zones.count))") {
+                                TVSection("Zonen (\(tableStore.zones.count))") {
                                     ForEach(tableStore.zones) { zone in
                                         let count = tableStore.tables.filter { $0.zone?.id == zone.id }.count
-                                        ZoneRow(zone: zone, tableCount: count, colorScheme: colorScheme)
+                                        ZoneRow(zone: zone, tableCount: count)
                                     }
                                 }
                             }
 
-                            // Tische
-                            TVSection("TISCHE (\(tableStore.tables.count))") {
+                            TVSection("Tische (\(tableStore.tables.count))") {
                                 if tableStore.tables.isEmpty {
                                     Text("Noch keine Tische angelegt.")
-                                        .font(.jakarta(DS.T.loginBody, weight: .regular))
+                                        .font(DS.F.sub)
                                         .foregroundColor(DS.C.text2)
                                         .padding(.vertical, 8)
                                 } else {
@@ -113,24 +100,22 @@ struct TischverwaltungView: View {
                                             onDelete: {
                                                 deletingTable = table
                                                 showDeleteConfirm = true
-                                            },
-                                            colorScheme: colorScheme
+                                            }
                                         )
                                     }
                                 }
                             }
                         }
-                        .padding(16)
+                        .padding(DS.S.pagePad)
                     }
-                    .frame(maxWidth: 560)
+                    .frame(maxWidth: 600)
 
                     Spacer()
                 }
             }
         }
         .background(DS.C.bg)
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
-        // ── Zone-Sheet ────────────────────────────────────────────────────
+        .animation(DS.M.base, value: networkMonitor.isOnline)
         .sheet(isPresented: $showZoneSheet) {
             ZoneFormSheet { name in
                 Task {
@@ -142,7 +127,6 @@ struct TischverwaltungView: View {
                 }
             }
         }
-        // ── Tisch-Sheet ───────────────────────────────────────────────────
         .sheet(isPresented: $showTischSheet) {
             TischFormSheet(zones: tableStore.zones) { name, zoneId in
                 Task {
@@ -154,7 +138,6 @@ struct TischverwaltungView: View {
                 }
             }
         }
-        // ── Löschen bestätigen ────────────────────────────────────────────
         .confirmationDialog(
             "Tisch deaktivieren?",
             isPresented: $showDeleteConfirm,
@@ -194,10 +177,7 @@ private struct TVSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.jakarta(DS.T.sectionHeader, weight: .semibold))
-                .foregroundColor(DS.C.text2)
-                .tracking(0.5)
+            DSSectionLabel(text: title)
             VStack(spacing: 8) { content }
         }
     }
@@ -208,31 +188,29 @@ private struct TVSection<Content: View>: View {
 private struct ZoneRow: View {
     let zone:       TableZone
     let tableCount: Int
-    let colorScheme: ColorScheme
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: "rectangle.3.group")
-                .font(.system(size: 15))
-                .foregroundColor(DS.C.acc)
-                .frame(width: 32, height: 32)
-                .background(DS.C.accBg)
-                .cornerRadius(8)
+                .font(.system(size: 16))
+                .foregroundColor(DS.C.accT)
+                .frame(width: 38, height: 38)
+                .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.accBg))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(zone.name)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(DS.C.text)
-                Text("\(tableCount) Tische")
-                    .font(.jakarta(DS.T.loginFooter, weight: .regular))
+                Text("\(tableCount) Tisch\(tableCount == 1 ? "" : "e")")
+                    .font(DS.F.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
         }
-        .padding(12)
+        .padding(14)
         .background(DS.C.sur)
-        .cornerRadius(DS.R.card)
-        .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
+        .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
     }
 }
 
@@ -242,68 +220,60 @@ private struct TischRow: View {
     let table:       TableItem
     let canDelete:   Bool
     let onDelete:    () -> Void
-    let colorScheme: ColorScheme
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: "chair")
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .foregroundColor(DS.C.text2)
-                .frame(width: 32, height: 32)
-                .background(DS.C.sur2)
-                .cornerRadius(8)
+                .frame(width: 38, height: 38)
+                .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.sur2))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(table.name)
-                    .font(.jakarta(DS.T.loginBody, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(DS.C.text)
                 if let zone = table.zone {
                     Text(zone.name)
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
             }
 
             Spacer()
 
-            // Offene Bestellungen
             if table.openOrdersCount > 0 {
-                Text("\(table.openOrdersCount) offen")
-                    .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                    .foregroundColor(Color(hex: "e67e22"))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color(hex: "e67e22").opacity(0.12))
-                    .cornerRadius(6)
+                DSPill(
+                    label: "\(table.openOrdersCount) offen",
+                    fg: DS.C.brassText,
+                    bg: DS.C.brassBg
+                )
             }
 
-            // Aktiv-Badge
-            Text(table.isActive ? "Aktiv" : "Inaktiv")
-                .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                .foregroundColor(table.isActive ? Color(hex: "27ae60") : DS.C.text2)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background((table.isActive ? Color(hex: "27ae60") : DS.C.text2).opacity(0.12))
-                .cornerRadius(6)
+            DSPill(
+                label: table.isActive ? "Aktiv" : "Inaktiv",
+                fg: table.isActive ? DS.C.accT : DS.C.text2,
+                bg: table.isActive ? DS.C.accBg : DS.C.sur2
+            )
 
             if canDelete {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "e74c3c"))
-                        .frame(width: 30, height: 30)
-                        .background(Color(hex: "e74c3c").opacity(0.1))
-                        .cornerRadius(6)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(DS.C.dangerText)
+                        .frame(width: 40, height: 40)
+                        .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.dangerBg.opacity(0.6)))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(table.openOrdersCount > 0)
                 .opacity(table.openOrdersCount > 0 ? 0.4 : 1.0)
             }
         }
-        .padding(12)
+        .padding(14)
         .background(DS.C.sur)
-        .cornerRadius(DS.R.card)
-        .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brd(colorScheme), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
+        .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
     }
 }
 
@@ -313,7 +283,6 @@ private struct ZoneFormSheet: View {
     let onSave: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @State private var name = ""
     @State private var focused = false
 
@@ -328,61 +297,48 @@ private struct ZoneFormSheet: View {
             }
             .padding(.top, 12)
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Neue Zone")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                    .font(DS.F.title)
                     .foregroundColor(DS.C.text)
                     .padding(.top, 8)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Zonenname")
-                        .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                        .foregroundColor(DS.C.text2)
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Zonenname")
                     NoAssistantTextField(
                         placeholder:  "z.B. Terrasse, Bar, Innen …",
                         text:         $name,
-                        uiFont:       UIFont.systemFont(ofSize: 14),
+                        uiFont:       UIFont.systemFont(ofSize: 16),
                         uiTextColor:  UIColor(DS.C.text),
                         isFocused:    $focused
                     )
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .frame(height: DS.S.inputHeight)
-                    .background(DS.C.bg)
-                    .cornerRadius(DS.R.input)
+                    .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.R.input)
-                            .strokeBorder(focused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                            .strokeBorder(focused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: focused ? 1.5 : 1)
                     )
-                    .animation(.easeInOut(duration: 0.15), value: focused)
+                    .animation(DS.M.fast, value: focused)
                 }
 
                 HStack(spacing: 10) {
                     Button("Abbrechen") { dismiss() }
-                        .font(.jakarta(DS.T.loginButton, weight: .medium))
-                        .foregroundColor(DS.C.text2)
-                        .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
-                        .background(DS.C.sur2)
-                        .cornerRadius(DS.R.button)
-                        .buttonStyle(.plain)
+                        .buttonStyle(DSSecondaryButton())
 
                     Button {
                         onSave(name.trimmingCharacters(in: .whitespaces))
                     } label: {
                         Text("Speichern")
-                            .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
                     }
-                    .background(name.trimmingCharacters(in: .whitespaces).isEmpty ? DS.C.acc.opacity(0.4) : DS.C.acc)
-                    .cornerRadius(DS.R.button)
+                    .buttonStyle(DSPrimaryButton())
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
         .background(DS.C.sur)
-        .presentationDetents([.height(240)])
+        .presentationDetents([.height(260)])
         .presentationDragIndicator(.hidden)
         .onAppear { focused = true }
     }
@@ -395,7 +351,6 @@ private struct TischFormSheet: View {
     let onSave: (String, Int?) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @State private var name           = ""
     @State private var selectedZoneId: Int? = nil
     @State private var focused        = false
@@ -411,48 +366,41 @@ private struct TischFormSheet: View {
             }
             .padding(.top, 12)
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Neuer Tisch")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                    .font(DS.F.title)
                     .foregroundColor(DS.C.text)
                     .padding(.top, 8)
 
-                // Name
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tischname")
-                        .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                        .foregroundColor(DS.C.text2)
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Tischname")
                     NoAssistantTextField(
                         placeholder:  "z.B. T1, Bar 3, Lounge 2 …",
                         text:         $name,
-                        uiFont:       UIFont.systemFont(ofSize: 14),
+                        uiFont:       UIFont.systemFont(ofSize: 16),
                         uiTextColor:  UIColor(DS.C.text),
                         isFocused:    $focused
                     )
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .frame(height: DS.S.inputHeight)
-                    .background(DS.C.bg)
-                    .cornerRadius(DS.R.input)
+                    .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.R.input)
-                            .strokeBorder(focused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                            .strokeBorder(focused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: focused ? 1.5 : 1)
                     )
-                    .animation(.easeInOut(duration: 0.15), value: focused)
+                    .animation(DS.M.fast, value: focused)
                 }
 
-                // Zone-Picker
                 if !zones.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Zone (optional)")
-                            .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
+                    VStack(alignment: .leading, spacing: 8) {
+                        DSSectionLabel(text: "Zone (optional)")
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ZonePill(label: "Keine Zone", isActive: selectedZoneId == nil) {
+                                TZonePill(label: "Keine Zone", isActive: selectedZoneId == nil) {
                                     selectedZoneId = nil
                                 }
                                 ForEach(zones) { zone in
-                                    ZonePill(label: zone.name, isActive: selectedZoneId == zone.id) {
+                                    TZonePill(label: zone.name, isActive: selectedZoneId == zone.id) {
                                         selectedZoneId = zone.id
                                     }
                                 }
@@ -463,28 +411,18 @@ private struct TischFormSheet: View {
 
                 HStack(spacing: 10) {
                     Button("Abbrechen") { dismiss() }
-                        .font(.jakarta(DS.T.loginButton, weight: .medium))
-                        .foregroundColor(DS.C.text2)
-                        .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
-                        .background(DS.C.sur2)
-                        .cornerRadius(DS.R.button)
-                        .buttonStyle(.plain)
+                        .buttonStyle(DSSecondaryButton())
 
                     Button {
                         onSave(name.trimmingCharacters(in: .whitespaces), selectedZoneId)
                     } label: {
                         Text("Speichern")
-                            .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity).frame(height: DS.S.buttonHeight)
                     }
-                    .background(name.trimmingCharacters(in: .whitespaces).isEmpty ? DS.C.acc.opacity(0.4) : DS.C.acc)
-                    .cornerRadius(DS.R.button)
+                    .buttonStyle(DSPrimaryButton())
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(24)
+            .padding(DS.S.pagePad)
         }
         .background(DS.C.sur)
         .presentationDetents([.medium])
@@ -493,7 +431,7 @@ private struct TischFormSheet: View {
     }
 }
 
-private struct ZonePill: View {
+private struct TZonePill: View {
     let label:    String
     let isActive: Bool
     let onTap:    () -> Void
@@ -501,15 +439,15 @@ private struct ZonePill: View {
     var body: some View {
         Button(action: onTap) {
             Text(label)
-                .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                .foregroundColor(isActive ? .white : DS.C.text2)
-                .padding(.horizontal, 14)
-                .frame(height: 34)
-                .background(isActive ? DS.C.acc : DS.C.sur2)
-                .cornerRadius(DS.R.button)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(isActive ? .white : DS.C.text)
+                .padding(.horizontal, 16)
+                .frame(height: 40)
+                .background(Capsule().fill(isActive ? DS.C.acc : DS.C.sur2))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.12), value: isActive)
+        .animation(DS.M.fast, value: isActive)
     }
 }
 

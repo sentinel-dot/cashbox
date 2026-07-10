@@ -1,6 +1,8 @@
 // OrderView.swift
 // cashbox — Bestellansicht: Produktkatalog (links) + Warenkorb (rechts)
 // Wird als fullScreenCover aus TableOverviewView geöffnet.
+// Design v3: Touch-first (Qty-Buttons 38pt+), keine Hover-Zustände,
+// Beträge in Tabellenziffern.
 
 import SwiftUI
 
@@ -15,7 +17,6 @@ struct OrderView: View {
     @EnvironmentObject var tableStore:    TableStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var currentOrderId: Int? = nil
     @State private var pendingProduct: Product? = nil
@@ -47,7 +48,7 @@ struct OrderView: View {
                             .frame(maxWidth: .infinity)
 
                         Rectangle()
-                            .fill(DS.C.brdLight)
+                            .fill(DS.C.brdAdaptive)
                             .frame(width: 1)
 
                         OCartPanel(
@@ -61,13 +62,13 @@ struct OrderView: View {
                                 showPaymentView = true
                             }
                         )
-                        .frame(width: 300)
+                        .frame(width: 340)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+            .animation(DS.M.base, value: networkMonitor.isOnline)
             .task {
                 await productStore.loadProducts()
                 await findOrLoadExistingOrder()
@@ -192,67 +193,50 @@ private struct OTopBar: View {
     let tableName: String?
     let orderId:   Int?
     let onClose:   () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 0) {
-            // Links: Brand + Zurück
+            // Links: Zurück zur Tischübersicht
             Button(action: onClose) {
                 HStack(spacing: 8) {
-                    HStack(spacing: 0) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(DS.C.acc)
-                    }
-                    HStack(spacing: 7) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(DS.C.acc)
-                            .frame(width: 24, height: 24)
-                            .overlay(
-                                Image(systemName: "squareshape.split.2x2")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(.white)
-                            )
-                        Text("Kassensystem")
-                            .font(.jakarta(13, weight: .semibold))
-                            .foregroundColor(DS.C.text)
-                    }
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Tische")
+                        .font(DS.F.bodyMed)
                 }
+                .foregroundColor(DS.C.accT)
+                .padding(.horizontal, 16)
+                .frame(height: DS.S.touchTarget)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.leading, 20)
+            .padding(.leading, 8)
 
             Spacer()
 
-            // Mitte: Tisch-Badge
-            Text(tableName.map { "\($0)" } ?? "Schnellkasse")
-                .font(.jakarta(13, weight: .semibold))
+            // Mitte: Tisch-Name
+            Text(tableName ?? "Schnellkasse")
+                .font(DS.F.bodyBold)
                 .foregroundColor(DS.C.text)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background(DS.C.sur2)
-                .cornerRadius(20)
 
             Spacer()
 
-            // Rechts: Order-Nr + Loading
-            HStack(spacing: 8) {
+            // Rechts: Order-Nr
+            HStack {
                 if let id = orderId {
                     Text("Bestellung #\(id)")
-                        .font(.jakarta(11, weight: .semibold))
-                        .foregroundColor(DS.C.accT)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(DS.C.accBg)
-                        .cornerRadius(20)
+                        .font(DS.F.caption)
+                        .monospacedDigit()
+                        .foregroundColor(DS.C.text2)
                 }
             }
-            .padding(.trailing, 20)
+            .frame(minWidth: 120, alignment: .trailing)
+            .padding(.trailing, DS.S.pagePad)
         }
         .frame(height: DS.S.topbarHeight)
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
@@ -282,30 +266,22 @@ private struct OProductCatalog: View {
                 ProgressView().progressViewStyle(.circular)
                 Spacer()
             } else if filteredProducts.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "tag.slash")
-                        .font(.system(size: 24, weight: .light))
-                        .foregroundColor(DS.C.text2)
-                    Text("Keine Produkte")
-                        .font(.jakarta(13, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                    Text("Produkte können in den Einstellungen angelegt werden.")
-                        .font(.jakarta(11, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                DSEmptyState(
+                    icon: "tag.slash",
+                    title: "Keine Produkte",
+                    message: "Produkte können in der Produktverwaltung angelegt werden."
+                )
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-                        spacing: 10
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                        spacing: 12
                     ) {
                         ForEach(filteredProducts) { product in
                             OProductCard(product: product) { onProductTap(product) }
                         }
                     }
-                    .padding(16)
+                    .padding(20)
                 }
             }
         }
@@ -321,37 +297,38 @@ private struct OCategoryTabBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                OCategoryTab(
+            HStack(spacing: 8) {
+                OCategoryPill(
                     label: "Alle",
                     color: nil,
                     isActive: selectedCategoryId == nil
                 ) {
-                    withAnimation(.easeInOut(duration: 0.15)) { selectedCategoryId = nil }
+                    withAnimation(DS.M.base) { selectedCategoryId = nil }
                 }
                 ForEach(categories) { cat in
-                    OCategoryTab(
+                    OCategoryPill(
                         label: cat.name,
                         color: cat.color,
                         isActive: selectedCategoryId == cat.id
                     ) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(DS.M.base) {
                             selectedCategoryId = selectedCategoryId == cat.id ? nil : cat.id
                         }
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
         .background(DS.C.sur)
         .overlay(
-            Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+            Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
             alignment: .bottom
         )
     }
 }
 
-private struct OCategoryTab: View {
+private struct OCategoryPill: View {
     let label:    String
     let color:    String?
     let isActive: Bool
@@ -359,30 +336,24 @@ private struct OCategoryTab: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 0) {
-                HStack(spacing: 7) {
-                    if let hex = color {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 8, height: 8)
-                    }
-                    Text(label)
-                        .font(.jakarta(12, weight: .semibold))
-                        .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
-                        .fixedSize()
+            HStack(spacing: 7) {
+                if let hex = color {
+                    Circle()
+                        .fill(Color(hex: hex))
+                        .frame(width: 8, height: 8)
                 }
-                .frame(maxHeight: .infinity)
-                .padding(.horizontal, 16)
-
-                // Active bottom border (2px)
-                Rectangle()
-                    .fill(isActive ? DS.C.acc : Color.clear)
-                    .frame(height: 2)
+                Text(label)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(isActive ? .white : DS.C.text)
+                    .fixedSize()
             }
+            .padding(.horizontal, 16)
+            .frame(height: 38)
+            .background(Capsule().fill(isActive ? DS.C.acc : DS.C.sur2))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .frame(height: 40)
-        .animation(.easeInOut(duration: 0.15), value: isActive)
+        .animation(DS.M.fast, value: isActive)
     }
 }
 
@@ -391,76 +362,62 @@ private struct OCategoryTab: View {
 private struct OProductCard: View {
     let product: Product
     let onTap:   () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Zeile 1: Name + VAT-Badge
-                HStack(alignment: .top, spacing: 6) {
-                    Text(product.name)
-                        .font(.jakarta(13, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(product.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DS.C.text)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text("19 %")
-                        .font(.jakarta(9, weight: .semibold))
-                        .foregroundColor(DS.C.warnText)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(DS.C.warnBg)
-                        .cornerRadius(4)
-                        .padding(.top, 1)
-                        .fixedSize()
-                }
-
-                // Zeile 2: Subtitle (Kategoriename als Sub-Text)
                 if let catName = product.category?.name {
                     Text(catName)
-                        .font(.jakarta(10, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundColor(DS.C.text2)
                         .lineLimit(1)
                 }
 
-                // Zeile 3: Preis + Modifier-Hinweis
+                Spacer(minLength: 4)
+
                 HStack(alignment: .center, spacing: 0) {
-                    Text(oFmtCents(product.priceCents))
-                        .font(.jakarta(15, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                        .tracking(-0.2)
+                    MoneyText(cents: product.priceCents, size: 17, weight: .bold)
 
                     Spacer()
 
                     if product.hasRequiredModifiers {
                         Text("Optionen")
-                            .font(.jakarta(10, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(DS.C.accT)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(DS.C.accBg)
-                            .cornerRadius(10)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(DS.C.accBg))
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 14)
-            .background(DS.C.sur)
-            .cornerRadius(12)
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 12).fill(DS.C.sur))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(
-                        isHovered ? DS.C.acc.opacity(0.3) : DS.C.brd(colorScheme),
-                        lineWidth: 1
-                    )
+                    .strokeBorder(DS.C.brdAdaptive, lineWidth: 1)
             )
-            .scaleEffect(isHovered ? 0.99 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isHovered)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .buttonStyle(OCardPressStyle())
+    }
+}
+
+/// Press-Feedback: kurzes Aufleuchten der Akzent-Border + Zusammendrücken
+private struct OCardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(DS.M.press, value: configuration.isPressed)
     }
 }
 
@@ -474,12 +431,10 @@ private struct OCartPanel: View {
     let onBezahlen: () -> Void
 
     @EnvironmentObject var orderStore: OrderStore
-    @Environment(\.colorScheme) private var colorScheme
 
     private var order: OrderDetail? { orderStore.selectedOrder }
     private var items: [OrderItem]  { order?.items ?? [] }
     private var total: Int          { order?.totalCents ?? 0 }
-    private var vatCents: Int       { total * 19 / 119 }
     private var totalArticles: Int  { items.reduce(0) { $0 + $1.quantity } }
 
     var body: some View {
@@ -487,7 +442,7 @@ private struct OCartPanel: View {
             // Header
             HStack {
                 Text("Bestellung")
-                    .font(.jakarta(13, weight: .semibold))
+                    .font(DS.F.bodyBold)
                     .foregroundColor(DS.C.text)
                 Spacer()
                 if orderStore.isLoading {
@@ -497,17 +452,21 @@ private struct OCartPanel: View {
                         .padding(.trailing, 6)
                 }
                 if !items.isEmpty {
-                    Button("Leeren", action: onClear)
-                        .font(.jakarta(11, weight: .semibold))
-                        .foregroundColor(DS.C.dangerText)
-                        .buttonStyle(.plain)
+                    Button(action: onClear) {
+                        Text("Stornieren")
+                            .font(DS.F.captionBold)
+                            .foregroundColor(DS.C.dangerText)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 18)
+            .frame(height: DS.S.topbarHeight)
             .background(DS.C.sur)
             .overlay(
-                Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+                Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
                 alignment: .bottom
             )
 
@@ -525,8 +484,9 @@ private struct OCartPanel: View {
                             )
                             if item.id != items.last?.id {
                                 Rectangle()
-                                    .fill(DS.C.brdLight)
+                                    .fill(DS.C.brdAdaptive)
                                     .frame(height: 1)
+                                    .padding(.leading, 18)
                             }
                         }
                     }
@@ -539,7 +499,6 @@ private struct OCartPanel: View {
                 OCartFooter(
                     itemCount:    items.count,
                     articleCount: totalArticles,
-                    vatCents:     vatCents,
                     total:        total,
                     onBezahlen:   onBezahlen
                 )
@@ -551,19 +510,22 @@ private struct OCartPanel: View {
 
 private struct OCartEmpty: View {
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                Circle()
                     .fill(DS.C.sur2)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 56, height: 56)
                 Image(systemName: "cart")
-                    .font(.system(size: 18, weight: .light))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundColor(DS.C.text2)
             }
             Text("Noch keine Positionen")
-                .font(.jakarta(12, weight: .regular))
+                .font(DS.F.sub)
                 .foregroundColor(DS.C.text2)
                 .multilineTextAlignment(.center)
+            Text("Produkt links antippen, um zu starten.")
+                .font(DS.F.caption)
+                .foregroundColor(DS.C.text2.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DS.C.sur)
@@ -574,174 +536,108 @@ private struct OCartItemRow: View {
     let item:     OrderItem
     let onRemove: () -> Void
     let onAdd:    () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var removeHovered = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            // Info: Name + Mods + Qty-Row
-            VStack(alignment: .leading, spacing: 0) {
-                Text(item.productName)
-                    .font(.jakarta(12, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                    .lineLimit(1)
-
-                if !item.modifiers.isEmpty {
-                    Text(item.modifiers.map { $0.name }.joined(separator: " · "))
-                        .font(.jakarta(10, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                        .lineLimit(1)
-                        .padding(.top, 2)
-                }
-
-                // Qty-Buttons: − | num | +
-                HStack(spacing: 6) {
-                    OQtyButton(label: "−", isDanger: true, isHovered: removeHovered) {
-                        onRemove()
-                    }
-                    .onHover { removeHovered = $0 }
-
-                    Text("\(item.quantity)")
-                        .font(.jakarta(12, weight: .semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            // Name + Preis
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.productName)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(DS.C.text)
-                        .frame(minWidth: 16, alignment: .center)
+                        .lineLimit(1)
 
-                    OQtyButton(label: "+", isDanger: false, isHovered: false) {
-                        onAdd()
+                    if !item.modifiers.isEmpty {
+                        Text(item.modifiers.map { $0.name }.joined(separator: " · "))
+                            .font(.system(size: 13))
+                            .foregroundColor(DS.C.text2)
+                            .lineLimit(1)
                     }
                 }
-                .padding(.top, 6)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Preis (rechts)
-            Text(oFmtCents(item.subtotalCents))
-                .font(.jakarta(12, weight: .semibold))
-                .foregroundColor(DS.C.text)
-                .fixedSize()
-                .padding(.top, 1)
+                MoneyText(cents: item.subtotalCents, size: 15, weight: .semibold)
+                    .fixedSize()
+            }
+
+            // Menge: − n +
+            HStack(spacing: 0) {
+                OQtyButton(icon: "minus", isDanger: item.quantity == 1, onTap: onRemove)
+
+                Text("\(item.quantity)")
+                    .font(.system(size: 16, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundColor(DS.C.text)
+                    .frame(minWidth: 36, alignment: .center)
+
+                OQtyButton(icon: "plus", isDanger: false, onTap: onAdd)
+
+                Spacer()
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
     }
 }
 
 private struct OQtyButton: View {
-    let label:     String
-    let isDanger:  Bool
-    let isHovered: Bool
-    let onTap:     () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var hov = false
+    let icon:     String
+    let isDanger: Bool
+    let onTap:    () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            Text(label)
+            Image(systemName: isDanger && icon == "minus" ? "trash" : icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(
-                    isDanger && hov ? DS.C.dangerText :
-                    hov ? DS.C.text : DS.C.text2
-                )
-                .frame(width: 22, height: 22)
+                .foregroundColor(isDanger ? DS.C.dangerText : DS.C.text)
+                .frame(width: DS.S.qtyButton, height: DS.S.qtyButton)
                 .background(
-                    isDanger && hov ? DS.C.dangerBg :
-                    hov ? DS.C.sur2 : Color.clear
+                    RoundedRectangle(cornerRadius: DS.R.control)
+                        .fill(isDanger ? DS.C.dangerBg : DS.C.sur2)
                 )
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(
-                            isDanger && hov ? DS.C.dangerText.opacity(0.4) : DS.C.brd(colorScheme),
-                            lineWidth: 1
-                        )
-                )
-                .animation(.easeInOut(duration: 0.1), value: hov)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hov = $0 }
+        .buttonStyle(OCardPressStyle())
     }
 }
 
 private struct OCartFooter: View {
     let itemCount:    Int
     let articleCount: Int
-    let vatCents:     Int
     let total:        Int
     let onBezahlen:   () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
-            Rectangle().fill(DS.C.brdLight).frame(height: 1)
+            Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
 
-            VStack(spacing: 10) {
-                // Positionen-Zeile
+            VStack(spacing: 14) {
                 HStack {
-                    Text("\(itemCount) Position\(itemCount == 1 ? "" : "en")")
-                        .font(.jakarta(11, weight: .regular))
+                    Text("\(itemCount) Position\(itemCount == 1 ? "" : "en") · \(articleCount) Artikel")
+                        .font(DS.F.caption)
+                        .monospacedDigit()
                         .foregroundColor(DS.C.text2)
                     Spacer()
-                    Text("\(articleCount) Artikel")
-                        .font(.jakarta(11, weight: .semibold))
-                        .foregroundColor(DS.C.text)
                 }
 
-                // MwSt-Zeile
-                HStack {
-                    Text("MwSt. 19 %")
-                        .font(.jakarta(11, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                    Spacer()
-                    Text(oFmtCents(vatCents))
-                        .font(.jakarta(11, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                }
-
-                // Gesamt-Trennlinie + Zeile
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
-
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     Text("Gesamt")
-                        .font(.jakarta(14, weight: .semibold))
+                        .font(DS.F.bodyBold)
                         .foregroundColor(DS.C.text)
                     Spacer()
-                    Text(oFmtCents(total))
-                        .font(.jakarta(20, weight: .semibold))
-                        .foregroundColor(DS.C.text)
-                        .tracking(-0.3)
+                    MoneyText(cents: total, size: 26, weight: .bold)
                 }
 
-                // Notiz-Button
-                Button("+ Notiz zur Bestellung") {}
-                    .font(.jakarta(12, weight: .medium))
-                    .foregroundColor(DS.C.text2)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 34)
-                    .background(Color.clear)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-                    )
-                    .buttonStyle(.plain)
-
-                // Bezahlen-Button
                 Button(action: onBezahlen) {
                     HStack(spacing: 8) {
                         Image(systemName: "creditcard")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Zur Kasse · \(oFmtCents(total))")
-                            .font(.jakarta(14, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Bezahlen")
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
                 }
-                .background(DS.C.acc)
-                .cornerRadius(12)
-                .buttonStyle(.plain)
+                .buttonStyle(DSPrimaryButton())
             }
-            .padding(16)
+            .padding(18)
             .background(DS.C.sur)
         }
     }
@@ -754,7 +650,6 @@ private struct ModifierSelectionSheet: View {
     let onConfirm: ([Int]) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedOptionIds: [Int] = []
 
     private var requiredGroupsSatisfied: Bool {
@@ -782,47 +677,42 @@ private struct ModifierSelectionSheet: View {
         VStack(spacing: 0) {
             // Header
             ZStack(alignment: .topTrailing) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(product.name)
-                        .font(.jakarta(16, weight: .semibold))
+                        .font(DS.F.heading)
                         .foregroundColor(DS.C.text)
-                        .tracking(-0.3)
 
-                    Text("Basispreis: \(oFmtCents(product.priceCents))\(requiredGroupsSatisfied ? "" : " · Bitte Pflichtfelder auswählen")")
-                        .font(.jakarta(12, weight: .regular))
+                    Text("Basispreis \(euroString(product.priceCents))")
+                        .font(DS.F.sub)
+                        .monospacedDigit()
                         .foregroundColor(DS.C.text2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 14)
+                .padding(.horizontal, 24)
+                .padding(.top, 22)
+                .padding(.bottom, 16)
 
-                // Close button
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(DS.C.text2)
-                        .frame(width: 28, height: 28)
-                        .background(DS.C.sur)
-                        .cornerRadius(7)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7)
-                                .strokeBorder(DS.C.brd(colorScheme), lineWidth: 1)
-                        )
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(DS.C.sur2))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 16)
-                .padding(.trailing, 16)
+                .padding(.top, 18)
+                .padding(.trailing, 18)
             }
             .background(DS.C.sur)
             .overlay(
-                Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight),
+                Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive),
                 alignment: .bottom
             )
 
             // Body
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 22) {
                     ForEach(product.modifierGroups) { group in
                         MGroupSection(
                             group:             group,
@@ -830,52 +720,38 @@ private struct ModifierSelectionSheet: View {
                         )
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
             }
 
             // Footer
             VStack(spacing: 0) {
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
-                HStack(alignment: .center) {
-                    // Gesamtpreis links
+                Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
+                HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("GESAMTPREIS")
-                            .font(.jakarta(10, weight: .semibold))
-                            .foregroundColor(DS.C.text2)
-                            .tracking(0.5)
-                        Text(oFmtCents(totalCents))
-                            .font(.jakarta(18, weight: .semibold))
-                            .foregroundColor(DS.C.text)
-                            .tracking(-0.3)
+                        DSSectionLabel(text: "Gesamtpreis")
+                        MoneyText(cents: totalCents, size: 22, weight: .bold)
                         if !requiredGroupsSatisfied {
-                            Text("Pflichtfelder auswählen")
-                                .font(.jakarta(10, weight: .regular))
+                            Text("Pflichtoptionen auswählen")
+                                .font(DS.F.caption)
                                 .foregroundColor(DS.C.dangerText)
                         }
                     }
 
                     Spacer()
 
-                    // Hinzufügen rechts
                     Button {
                         onConfirm(selectedOptionIds)
                         dismiss()
                     } label: {
-                        Text("Hinzufügen · \(oFmtCents(totalCents))")
-                            .font(.jakarta(13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .frame(height: 42)
+                        Text("Hinzufügen")
                     }
-                    .background(requiredGroupsSatisfied ? DS.C.acc : DS.C.acc.opacity(0.4))
-                    .cornerRadius(10)
+                    .buttonStyle(DSPrimaryButton(height: 50, fullWidth: false))
                     .disabled(!requiredGroupsSatisfied)
-                    .buttonStyle(.plain)
-                    .animation(.easeInOut(duration: 0.15), value: requiredGroupsSatisfied)
+                    .animation(DS.M.base, value: requiredGroupsSatisfied)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
                 .background(DS.C.sur)
             }
         }
@@ -894,32 +770,30 @@ private struct MGroupSection: View {
             // Group header: name + badge
             HStack {
                 Text(group.name)
-                    .font(.jakarta(13, weight: .semibold))
+                    .font(DS.F.bodyBold)
                     .foregroundColor(DS.C.text)
 
                 Spacer()
 
                 if group.isRequired {
-                    Text("Pflicht · \(group.maxSelections ?? 1) auswählen")
-                        .font(.jakarta(10, weight: .semibold))
-                        .foregroundColor(DS.C.dangerText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(DS.C.dangerBg)
-                        .cornerRadius(20)
+                    Text("Pflicht")
+                        .font(DS.F.captionBold)
+                        .foregroundColor(DS.C.brassText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(DS.C.brassBg))
                 } else {
                     Text("Optional")
-                        .font(.jakarta(10, weight: .semibold))
+                        .font(DS.F.captionBold)
                         .foregroundColor(DS.C.text2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(DS.C.sur2)
-                        .cornerRadius(20)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(DS.C.sur2))
                 }
             }
 
             // Options
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 ForEach(group.options) { option in
                     MOptionRow(
                         option:         option,
@@ -953,96 +827,73 @@ private struct MOptionRow: View {
     let isSelected:     Bool
     let isSingleSelect: Bool
     let onTap:          () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 10) {
-                // Radio or Checkbox (18×18)
+            HStack(spacing: 12) {
+                // Radio / Checkbox — 22pt, klar erkennbar
                 ZStack {
                     if isSingleSelect {
-                        // Radio
                         Circle()
                             .strokeBorder(
-                                isSelected ? DS.C.acc : DS.C.brd(colorScheme),
+                                isSelected ? DS.C.acc : DS.C.brdAdaptive,
                                 lineWidth: 2
                             )
                             .background(
                                 Circle().fill(isSelected ? DS.C.acc : Color.clear)
                             )
-                            .frame(width: 18, height: 18)
+                            .frame(width: 22, height: 22)
                         if isSelected {
                             Circle()
                                 .fill(Color.white)
-                                .frame(width: 7, height: 7)
+                                .frame(width: 8, height: 8)
                         }
                     } else {
-                        // Checkbox
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: 6)
                             .strokeBorder(
-                                isSelected ? DS.C.acc : DS.C.brd(colorScheme),
+                                isSelected ? DS.C.acc : DS.C.brdAdaptive,
                                 lineWidth: 2
                             )
                             .background(
-                                RoundedRectangle(cornerRadius: 5)
+                                RoundedRectangle(cornerRadius: 6)
                                     .fill(isSelected ? DS.C.acc : Color.clear)
                             )
-                            .frame(width: 18, height: 18)
+                            .frame(width: 22, height: 22)
                         if isSelected {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
                 }
-                .frame(width: 18, height: 18)
+                .frame(width: 22, height: 22)
 
-                // Name
                 Text(option.name)
-                    .font(.jakarta(13, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? DS.C.accT : DS.C.text)
+                    .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(DS.C.text)
 
                 Spacer()
 
-                // Preis
-                Text(option.priceDeltaCents > 0 ? "+ \(oFmtCents(option.priceDeltaCents))" : "inklusive")
-                    .font(.jakarta(12, weight: .semibold))
+                Text(option.priceDeltaCents > 0 ? "+ \(euroString(option.priceDeltaCents))" : "inklusive")
+                    .font(.system(size: 15, weight: .medium))
+                    .monospacedDigit()
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(isSelected ? DS.C.accBg : (isHovered ? DS.C.bg : Color.clear))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(
-                        isSelected ? DS.C.acc : (isHovered ? DS.C.acc.opacity(0.25) : DS.C.brd(colorScheme)),
-                        lineWidth: 1.5
-                    )
+            .padding(.horizontal, 16)
+            .frame(minHeight: 52)
+            .background(
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .fill(isSelected ? DS.C.accBg : DS.C.sur)
             )
-            .animation(.easeInOut(duration: 0.1), value: isSelected)
-            .animation(.easeInOut(duration: 0.1), value: isHovered)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .strokeBorder(isSelected ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isSelected ? 1.5 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: DS.R.input))
+            .animation(DS.M.fast, value: isSelected)
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
     }
-}
-
-// MARK: - Helpers
-
-private let _oFmt: NumberFormatter = {
-    let f = NumberFormatter()
-    f.numberStyle = .decimal
-    f.minimumFractionDigits = 2
-    f.maximumFractionDigits = 2
-    f.locale = Locale(identifier: "de_DE")
-    return f
-}()
-
-private func oFmtCents(_ cents: Int) -> String {
-    let val = NSNumber(value: Double(cents) / 100.0)
-    return (_oFmt.string(from: val) ?? "0,00") + " €"
 }
 
 // MARK: - Previews

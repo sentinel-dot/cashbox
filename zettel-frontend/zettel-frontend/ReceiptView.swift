@@ -1,5 +1,7 @@
 // ReceiptView.swift
 // cashbox — Bon-Anzeige: Erfolgs-Spalte + Bon-Dokument
+// Design v3: Bon-Dokument mit Beleg-Charakter (Monospace-Ziffern,
+// gestrichelte Trennlinien), MwSt getrennt nach 7 % und 19 %.
 
 import SwiftUI
 import CoreImage.CIFilterBuiltins
@@ -10,8 +12,7 @@ struct ReceiptView: View {
     let receiptId: Int
 
     @EnvironmentObject var networkMonitor: NetworkMonitor
-    @Environment(\.dismiss)      private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
 
     @State private var receipt:  ReceiptDetail?
     @State private var isLoading = true
@@ -39,15 +40,15 @@ struct ReceiptView: View {
                 } else if let r = receipt {
                     RContent(receipt: r, onNewOrder: { dismiss() })
                 } else {
-                    Spacer()
-                    Text("Bon konnte nicht geladen werden.")
-                        .font(.jakarta(DS.T.loginBody, weight: .regular))
-                        .foregroundColor(DS.C.text2)
-                    Spacer()
+                    DSEmptyState(
+                        icon: "doc.questionmark",
+                        title: "Bon nicht gefunden",
+                        message: "Der Bon konnte nicht geladen werden."
+                    )
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
         .task { await loadReceipt() }
         .alert("Fehler", isPresented: $showError) {
             Button("OK") { error = nil }
@@ -74,57 +75,42 @@ struct ReceiptView: View {
 private struct RTopBar: View {
     let receipt:  ReceiptDetail?
     let onClose:  () -> Void
-    @Environment(\.colorScheme) private var cs
 
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 14) {
-                HStack(spacing: 7) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(DS.C.acc)
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Image(systemName: "squareshape.split.2x2")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.white)
-                        )
-                    Text("Kassensystem")
-                        .font(.jakarta(13, weight: .semibold))
-                        .foregroundColor(DS.C.text)
+            Button(action: onClose) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Zurück")
+                        .font(DS.F.bodyMed)
                 }
-                Button(action: onClose) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Zurück")
-                            .font(.jakarta(12, weight: .semibold))
-                    }
-                    .foregroundColor(DS.C.text2)
-                }
-                .buttonStyle(.plain)
+                .foregroundColor(DS.C.accT)
+                .padding(.horizontal, 16)
+                .frame(height: DS.S.touchTarget)
+                .contentShape(Rectangle())
             }
-            .padding(.leading, 20)
+            .buttonStyle(.plain)
+            .padding(.leading, 8)
 
             Spacer()
 
-            // "Zahlung erfolgreich" chip
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(DS.C.successText)
-                    .frame(width: 6, height: 6)
-                Text(receipt != nil ? "Zahlung erfolgreich" : "Bon")
-                    .font(.jakarta(11, weight: .semibold))
-                    .foregroundColor(DS.C.successText)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(DS.C.successBg)
-            .cornerRadius(20)
-            .padding(.trailing, 20)
+            Text("Bon")
+                .font(DS.F.bodyBold)
+                .foregroundColor(DS.C.text)
+
+            Spacer()
+
+            DSPill(
+                label: receipt != nil ? "Zahlung erfolgreich" : "Bon",
+                fg: DS.C.successText,
+                bg: DS.C.successBg
+            )
+            .padding(.trailing, DS.S.pagePad)
         }
         .frame(height: DS.S.topbarHeight)
         .background(DS.C.sur)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdLight), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .bottom)
     }
 }
 
@@ -136,12 +122,12 @@ private struct RContent: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            HStack(alignment: .top, spacing: 24) {
+            HStack(alignment: .top, spacing: 28) {
                 RSuccessCol(receipt: receipt, onNewOrder: onNewOrder)
-                    .frame(width: 200)
+                    .frame(width: 240)
 
                 RReceiptDoc(receipt: receipt)
-                    .frame(width: 380)
+                    .frame(width: 400)
             }
             .padding(32)
             .frame(maxWidth: .infinity)
@@ -150,7 +136,7 @@ private struct RContent: View {
     }
 }
 
-// MARK: - Success Column (links, 200px)
+// MARK: - Success Column (links)
 
 private struct RSuccessCol: View {
     let receipt:    ReceiptDetail
@@ -162,146 +148,102 @@ private struct RSuccessCol: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Success icon
+        VStack(spacing: 18) {
             ZStack {
-                RoundedRectangle(cornerRadius: 18)
+                Circle()
                     .fill(DS.C.successBg)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 72, height: 72)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundColor(DS.C.successText)
             }
 
-            Text("Zahlung erfolgreich")
-                .font(.jakarta(16, weight: .semibold))
-                .foregroundColor(DS.C.text)
-                .tracking(-0.2)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 6) {
+                Text("Zahlung erfolgreich")
+                    .font(DS.F.heading)
+                    .foregroundColor(DS.C.text)
+                    .multilineTextAlignment(.center)
 
-            Text(rFmt(totalCents))
-                .font(.jakarta(28, weight: .semibold))
-                .foregroundColor(DS.C.acc)
-                .tracking(-0.5)
+                MoneyText(cents: totalCents, size: 32, weight: .bold, color: DS.C.accT)
 
-            Text("\(formatDate(receipt.createdAt))\n\(formatTime(receipt.createdAt)) · \(payMethod)")
-                .font(.jakarta(11, weight: .regular))
-                .foregroundColor(DS.C.text2)
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
+                Text("\(formatDate(receipt.createdAt)) · \(formatTime(receipt.createdAt))\n\(payMethod)")
+                    .font(DS.F.caption)
+                    .foregroundColor(DS.C.text2)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+            }
 
-            // Action buttons
+            // Aktionen (PDF/Druck: Phase 5, Storno: über Bon-Liste)
             VStack(spacing: 8) {
-                RActionBtn(
-                    icon:    "doc.text",
-                    label:   "PDF senden",
-                    style:   .primary,
-                    enabled: false  // Phase 5
-                ) {}
+                Button {
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("PDF senden")
+                    }
+                }
+                .buttonStyle(DSSecondaryButton(height: 46))
+                .disabled(true)  // Phase 5
 
-                RActionBtn(
-                    icon:    "printer",
-                    label:   "Bon drucken",
-                    style:   .secondary,
-                    enabled: false  // Phase 5
-                ) {}
-
-                RActionBtn(
-                    icon:    "arrow.uturn.backward",
-                    label:   "Stornieren",
-                    style:   .ghost,
-                    enabled: false  // TODO: Storno via API
-                ) {}
+                Button {
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "printer")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Bon drucken")
+                    }
+                }
+                .buttonStyle(DSSecondaryButton(height: 46))
+                .disabled(true)  // Phase 5
             }
 
             Rectangle()
-                .fill(DS.C.brdLight)
+                .fill(DS.C.brdAdaptive)
                 .frame(height: 1)
 
-            // Neuer Tisch / Bestellung
-            Button(action: onNewOrder) {
+            Button {
+                onNewOrder()
+            } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Neuer Tisch / Bestellung")
-                        .font(.jakarta(13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Neue Bestellung")
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
             }
-            .background(DS.C.acc)
-            .cornerRadius(12)
-            .buttonStyle(.plain)
+            .buttonStyle(DSPrimaryButton())
         }
         .frame(maxWidth: .infinity)
     }
 }
 
-private enum RBtnStyle { case primary, secondary, ghost }
+// MARK: - Receipt Document (rechts)
 
-private struct RActionBtn: View {
-    let icon:    String
-    let label:   String
-    let style:   RBtnStyle
-    let enabled: Bool
-    let onTap:   () -> Void
-    @Environment(\.colorScheme) private var cs
-
+/// Gestrichelte Trennlinie — Beleg-Idiom
+private struct RDashedLine: View {
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                Text(label)
-                    .font(.jakarta(12, weight: .semibold))
-            }
-            .foregroundColor(fgColor)
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
-            .background(bgColor)
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(borderColor, lineWidth: style == .primary ? 0 : 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .opacity(enabled ? 1.0 : 0.4)
-        .disabled(!enabled)
+        Line()
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            .foregroundColor(DS.C.brdAdaptive)
+            .frame(height: 1)
     }
 
-    private var fgColor: Color {
-        switch style {
-        case .primary:   return .white
-        case .secondary: return DS.C.text
-        case .ghost:     return DS.C.text2
+    private struct Line: Shape {
+        func path(in rect: CGRect) -> Path {
+            var p = Path()
+            p.move(to: CGPoint(x: 0, y: rect.midY))
+            p.addLine(to: CGPoint(x: rect.width, y: rect.midY))
+            return p
         }
-    }
-    private var bgColor: Color {
-        switch style {
-        case .primary:   return DS.C.acc
-        case .secondary: return DS.C.sur
-        case .ghost:     return Color.clear
-        }
-    }
-    private var borderColor: Color {
-        DS.C.brd(cs)
     }
 }
 
-// MARK: - Receipt Document (rechts, 380px)
-
 private struct RReceiptDoc: View {
     let receipt: ReceiptDetail
-    @Environment(\.colorScheme) private var cs
 
     private var snap: ReceiptSnapshot? { receipt.rawReceiptJson }
     private var nettoCents:  Int {
         (snap?.vat19NetCents ?? 0) + (snap?.vat7NetCents ?? 0)
-    }
-    private var vatCents: Int {
-        (snap?.vat19TaxCents ?? 0) + (snap?.vat7TaxCents ?? 0)
     }
     private var totalCents: Int {
         snap?.totalGrossCents ?? receipt.totalGrossCents
@@ -310,13 +252,13 @@ private struct RReceiptDoc: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header: Betrieb + Adresse (zentriert)
-            VStack(spacing: 4) {
-                Text(snap?.tenant.name ?? "Kassensystem")
-                    .font(.jakarta(15, weight: .semibold))
+            VStack(spacing: 5) {
+                Text(snap?.tenant.name ?? "cashbox")
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundColor(DS.C.text)
                 if let tenant = snap?.tenant {
                     Text(tenantAddressLine(tenant))
-                        .font(.system(size: 10, design: .default))
+                        .font(.system(size: 12))
                         .foregroundColor(DS.C.text2)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -324,138 +266,111 @@ private struct RReceiptDoc: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
+            .padding(.top, 22)
+            .padding(.bottom, 16)
 
-            Rectangle().fill(DS.C.brdLight).frame(height: 1)
+            RDashedLine().padding(.horizontal, 16)
 
-            // Meta: 2×2 grid
-            VStack(spacing: 0) {
+            // Meta: 2×2
+            VStack(spacing: 8) {
                 HStack(spacing: 0) {
-                    RMetaCell(label: "BON-NR.", value: "#\(receipt.receiptNumber)")
-                    Rectangle().fill(DS.C.brdLight).frame(width: 1)
-                    RMetaCell(label: "DATUM", value: formatDate(receipt.createdAt))
+                    RMetaCell(label: "Bon-Nr.", value: "#\(receipt.receiptNumber)")
+                    RMetaCell(label: "Datum", value: formatDate(receipt.createdAt))
                 }
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
                 HStack(spacing: 0) {
-                    RMetaCell(label: "UHRZEIT", value: formatTimeFull(receipt.createdAt))
-                    Rectangle().fill(DS.C.brdLight).frame(width: 1)
-                    RMetaCell(label: "GERÄT", value: receipt.deviceName)
+                    RMetaCell(label: "Uhrzeit", value: formatTimeFull(receipt.createdAt))
+                    RMetaCell(label: "Gerät", value: receipt.deviceName)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
 
-            Rectangle().fill(DS.C.brdLight).frame(height: 1)
+            RDashedLine().padding(.horizontal, 16)
 
             // Positionen
             if let items = snap?.items, !items.isEmpty {
-                RItemRows(items: items, fmt: rFmt)
+                RItemRows(items: items)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                RDashedLine().padding(.horizontal, 16)
             }
 
-            // Netto + MwSt rows
-            VStack(spacing: 4) {
-                HStack {
-                    Text("Netto")
-                        .font(.system(size: 11))
-                        .foregroundColor(DS.C.text2)
-                    Spacer()
-                    Text(rFmt(nettoCents))
-                        .font(.jakarta(11, weight: .semibold))
-                        .foregroundColor(DS.C.text)
+            // Netto + MwSt (getrennt nach Satz)
+            VStack(spacing: 5) {
+                RTotalRow(label: "Netto", cents: nettoCents)
+                if let s = snap, s.vat7NetCents + s.vat7TaxCents > 0 {
+                    RTotalRow(label: "MwSt. 7 %", cents: s.vat7TaxCents)
                 }
-                HStack {
-                    Text("MwSt. 19 % (auf \(rFmt(totalCents)))")
-                        .font(.system(size: 11))
-                        .foregroundColor(DS.C.text2)
-                    Spacer()
-                    Text(rFmt(vatCents))
-                        .font(.jakarta(11, weight: .semibold))
-                        .foregroundColor(DS.C.text)
+                if let s = snap, s.vat19NetCents + s.vat19TaxCents > 0 {
+                    RTotalRow(label: "MwSt. 19 %", cents: s.vat19TaxCents)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            Rectangle().fill(DS.C.brdLight).frame(height: 1)
-
-            // Gesamt (bg background, acc value)
+            // Gesamt
             HStack {
                 Text("Gesamt")
-                    .font(.jakarta(13, weight: .semibold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(DS.C.text)
                 Spacer()
-                Text(rFmt(totalCents))
-                    .font(.jakarta(16, weight: .semibold))
-                    .foregroundColor(DS.C.acc)
+                Text(euroString(totalCents))
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundColor(DS.C.text)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(DS.C.bg)
-
-            Rectangle().fill(DS.C.brdLight).frame(height: 1)
+            .padding(.vertical, 12)
+            .background(DS.C.sur2)
 
             // Zahlung
             if let payments = snap?.payments, !payments.isEmpty {
-                VStack(spacing: 3) {
+                VStack(spacing: 5) {
                     ForEach(payments.indices, id: \.self) { i in
                         let p = payments[i]
-                        HStack {
-                            Text(p.method.displayName)
-                                .font(.system(size: 11))
-                                .foregroundColor(DS.C.text2)
-                            Spacer()
-                            Text(rFmt(p.amountCents))
-                                .font(.jakarta(11, weight: .semibold))
-                                .foregroundColor(DS.C.text)
-                        }
+                        RTotalRow(label: p.method.displayName, cents: p.amountCents)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
 
-                Rectangle().fill(DS.C.brdLight).frame(height: 1)
+                RDashedLine().padding(.horizontal, 16)
             }
 
             // QR + TSE
             HStack(alignment: .top, spacing: 14) {
-                // QR-Code
                 if receipt.tsePending {
                     ZStack {
                         RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(DS.C.brd(cs), lineWidth: 1.5)
-                            .frame(width: 64, height: 64)
+                            .strokeBorder(DS.C.brdAdaptive, lineWidth: 1.5)
+                            .frame(width: 72, height: 72)
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 20, weight: .light))
-                            .foregroundColor(DS.C.text2)
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundColor(DS.C.brassText)
                     }
                 } else if let sig = receipt.tseSignature, let qrImg = generateQR(sig) {
                     Image(uiImage: qrImg)
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 64, height: 64)
+                        .frame(width: 72, height: 72)
                         .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(DS.C.brd(cs), lineWidth: 1.5))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(DS.C.brdAdaptive, lineWidth: 1.5))
                 } else {
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(DS.C.brd(cs), lineWidth: 1.5)
-                        .frame(width: 64, height: 64)
+                        .strokeBorder(DS.C.brdAdaptive, lineWidth: 1.5)
+                        .frame(width: 72, height: 72)
                 }
 
-                // TSE info
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("TSE-SIGNATUR (KASSENSICHV)")
-                        .font(.system(size: 9))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("TSE-Signatur (KassenSichV)")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(DS.C.text2)
-                        .tracking(0.5)
                         .padding(.bottom, 2)
 
                     if receipt.tsePending {
-                        Text("Ausstehend – wird nachsigniert")
-                            .font(.system(size: 9))
-                            .foregroundColor(DS.C.warnText)
+                        Text("Ausstehend — wird nachsigniert")
+                            .font(.system(size: 12))
+                            .foregroundColor(DS.C.brassText)
                     } else {
                         if let sn = receipt.tseSerialNumber {
                             RTseRow(key: "Seriennr.", value: String(sn.prefix(8)) + "…")
@@ -479,21 +394,21 @@ private struct RReceiptDoc: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
 
-            Rectangle().fill(DS.C.brdLight).frame(height: 1)
+            RDashedLine().padding(.horizontal, 16)
 
             // Footer
-            Text("Vielen Dank für Ihren Besuch! · \(snap?.tenant.name ?? "Kassensystem")")
-                .font(.system(size: 10))
+            Text("Vielen Dank für Ihren Besuch! · \(snap?.tenant.name ?? "cashbox")")
+                .font(.system(size: 12))
                 .foregroundColor(DS.C.text2)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+                .padding(.vertical, 12)
         }
         .background(DS.C.sur)
-        .cornerRadius(14)
+        .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(DS.C.brd(cs), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.R.card)
+                .strokeBorder(DS.C.brdAdaptive, lineWidth: 1)
         )
     }
 
@@ -505,9 +420,24 @@ private struct RReceiptDoc: View {
     }
 }
 
+private struct RTotalRow: View {
+    let label: String
+    let cents: Int
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(DS.C.text2)
+            Spacer()
+            Text(euroString(cents))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundColor(DS.C.text)
+        }
+    }
+}
+
 private struct RItemRows: View {
     let items: [ReceiptItemSnapshot]
-    let fmt: (Int) -> String
 
     private struct Row: Identifiable {
         let id: Int
@@ -522,23 +452,20 @@ private struct RItemRows: View {
         VStack(spacing: 0) {
             ForEach(rows, id: \.id) { (row: Row) in
                 HStack(alignment: .top, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(row.item.productName)
-                            .font(.jakarta(12, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(DS.C.text)
-                        Text("\(row.item.quantity) × \(fmt(row.item.productPriceCents))")
-                            .font(.system(size: 10))
+                        Text("\(row.item.quantity) × \(euroString(row.item.productPriceCents))")
+                            .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(DS.C.text2)
                     }
                     Spacer()
-                    Text(fmt(row.item.subtotalCents))
-                        .font(.jakarta(12, weight: .semibold))
+                    Text(euroString(row.item.subtotalCents))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(DS.C.text)
                 }
-                .padding(.vertical, 5)
-                if row.id < items.count - 1 {
-                    Rectangle().fill(DS.C.brdLight).frame(height: 1)
-                }
+                .padding(.vertical, 6)
             }
         }
     }
@@ -551,17 +478,14 @@ private struct RMetaCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.system(size: 9))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(DS.C.text2)
-                .tracking(0.5)
             Text(value)
-                .font(.jakarta(11, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(DS.C.text)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 }
 
@@ -572,11 +496,11 @@ private struct RTseRow: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(key)
-                .font(.system(size: 9))
+                .font(.system(size: 11))
                 .foregroundColor(DS.C.text2)
-                .frame(minWidth: 55, alignment: .leading)
+                .frame(minWidth: 60, alignment: .leading)
             Text(value)
-                .font(.system(size: 9, design: .monospaced))
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(DS.C.text)
         }
     }
@@ -593,20 +517,6 @@ private func generateQR(_ content: String) -> UIImage? {
     let scaled = output.transformed(by: CGAffineTransform(scaleX: 4, y: 4))
     guard let cg = context.createCGImage(scaled, from: scaled.extent) else { return nil }
     return UIImage(cgImage: cg)
-}
-
-private let _rFmt: NumberFormatter = {
-    let f = NumberFormatter()
-    f.numberStyle = .decimal
-    f.minimumFractionDigits = 2
-    f.maximumFractionDigits = 2
-    f.locale = Locale(identifier: "de_DE")
-    return f
-}()
-
-private func rFmt(_ cents: Int) -> String {
-    let val = NSNumber(value: Double(cents) / 100.0)
-    return (_rFmt.string(from: val) ?? "0,00") + " €"
 }
 
 private func formatDate(_ iso: String) -> String {

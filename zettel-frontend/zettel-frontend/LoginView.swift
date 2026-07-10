@@ -1,6 +1,7 @@
 // LoginView.swift
 // cashbox — Login Screen
-// Layout: 2 Spalten — Brand-Fläche (flex) | PIN-Panel (420pt fix)
+// Layout: 2 Spalten — Brand-Fläche (flex, Nacht-Olive) | PIN-Panel (420pt fix)
+// Design v3: Committed-Farbfläche links, Touch-Numpad 56pt, SF Pro.
 
 import SwiftUI
 
@@ -36,15 +37,18 @@ struct LoginView: View {
             }
         }
         .preferredColorScheme(usesDarkMode ? .dark : .light)
-        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
-        .animation(.easeInOut(duration: 0.3), value: authStore.sessionExpiredReason != nil)
+        .animation(DS.M.base, value: networkMonitor.isOnline)
+        .animation(DS.M.slow, value: authStore.sessionExpiredReason != nil)
     }
 }
 
-// MARK: - Brand Panel (Linke Spalte)
+// MARK: - Brand Panel (Linke Spalte — Nacht-Olive, committed)
 
 private struct BrandPanel: View {
     @Binding var usesDarkMode: Bool
+
+    // Helle Akzentfarbe auf dunklem Panel (Ledger Green, Dark-Variante)
+    private let leaf = Color(hex: "AECB6E")
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -56,7 +60,7 @@ private struct BrandPanel: View {
     private var dateTimeString: String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "de_DE")
-        df.dateFormat = "d. MMMM yyyy"
+        df.dateFormat = "EEEE, d. MMMM yyyy"
         let tf = DateFormatter()
         tf.locale = Locale(identifier: "de_DE")
         tf.timeStyle = .short
@@ -66,65 +70,49 @@ private struct BrandPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Brand mark + Name
-            HStack(spacing: 11) {
-                GridBrandMark()
-                Text("Kassensystem")
-                    .font(.jakarta(16, weight: .semibold))
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.R.brandMark)
+                        .fill(leaf)
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "eurosign")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color(hex: "1C2413"))
+                }
+                Text("cashbox")
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundColor(.white)
-                    .tracking(-0.3)
             }
 
             Spacer()
 
             // Tagline
             (Text(greeting + "\n").foregroundColor(.white)
-             + Text("bereit für die\nneue Schicht.").foregroundColor(.white.opacity(0.6)))
-                .font(.jakarta(26, weight: .semibold))
-                .lineSpacing(2)
-                .tracking(-0.5)
+             + Text("bereit für die\nneue Schicht.").foregroundColor(leaf))
+                .font(.system(size: 34, weight: .bold))
+                .lineSpacing(3)
 
             Spacer()
 
             // Meta + Dark-Mode-Toggle
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text(dateTimeString)
-                    .font(.jakarta(11, weight: .regular))
-                    .foregroundColor(.white.opacity(0.5))
-                    .lineSpacing(4)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.55))
 
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Text("Dark Mode")
-                        .font(.jakarta(11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.5))
-                    DarkModeToggle(isOn: $usesDarkMode)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.55))
+                    Toggle("", isOn: $usesDarkMode)
+                        .labelsHidden()
+                        .tint(leaf.opacity(0.6))
                 }
             }
         }
-        .padding(36)
+        .padding(44)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(DS.C.brandPanel)
-    }
-}
-
-// MARK: - 4-Dot Grid Brand Mark
-
-private struct GridBrandMark: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: DS.R.brandMark)
-                .fill(Color.white.opacity(0.2))
-                .frame(width: DS.S.brandMarkSize, height: DS.S.brandMarkSize)
-            HStack(spacing: 3) {
-                VStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(.white).frame(width: 6, height: 6)
-                    RoundedRectangle(cornerRadius: 1.5).fill(.white).frame(width: 6, height: 6)
-                }
-                VStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(.white).frame(width: 6, height: 6)
-                    RoundedRectangle(cornerRadius: 1.5).fill(.white).frame(width: 6, height: 6)
-                }
-            }
-        }
     }
 }
 
@@ -137,23 +125,26 @@ private struct SessionExpiredBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.trianglebadge.exclamationmark.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
             Text(message)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.white)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(hex: "c0392b"))
+        .padding(.vertical, 6)
+        .frame(minHeight: 44)
+        .background(Color(hex: "9E2F22"))
         .frame(maxWidth: .infinity)
     }
 }
@@ -193,7 +184,6 @@ private struct PINPanel: View {
     let onSwitchToPassword: () -> Void
 
     @EnvironmentObject var authStore: AuthStore
-    @Environment(\.colorScheme) private var cs
 
     @State private var selectedUser:  AuthUser?
     @State private var pin            = ""
@@ -214,20 +204,15 @@ private struct PINPanel: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
 
-                // ── Wer bist du? ──────────────────────────────
-                Text("Wer bist du?")
-                    .font(.jakarta(10, weight: .semibold))
-                    .foregroundColor(DS.C.text2)
-                    .tracking(0.6)
-                    .textCase(.uppercase)
+                // Wer bist du?
+                DSSectionLabel(text: "Wer bist du?")
                     .padding(.bottom, 12)
 
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     ForEach(authStore.availableUsers) { user in
                         UserCard(
                             user:     user,
-                            selected: selectedUser?.id == user.id,
-                            cs:       cs
+                            selected: selectedUser?.id == user.id
                         ) {
                             selectedUser = user
                             pin          = ""
@@ -236,39 +221,34 @@ private struct PINPanel: View {
                         }
                     }
                 }
-                .padding(.bottom, 20)
+                .padding(.bottom, 22)
 
-                // ── Divider ───────────────────────────────────
                 Rectangle()
-                    .fill(DS.C.brd(cs))
+                    .fill(DS.C.brdAdaptive)
                     .frame(height: 1)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 22)
 
-                // ── PIN eingeben ──────────────────────────────
-                Text("PIN eingeben")
-                    .font(.jakarta(10, weight: .semibold))
-                    .foregroundColor(DS.C.text2)
-                    .tracking(0.6)
-                    .textCase(.uppercase)
-                    .padding(.bottom, 12)
-
-                let greeting = "Hallo, \(selectedUser.map { $0.name } ?? "Gast") 👋"
-                Text(greeting)
-                    .font(.jakarta(13, weight: .semibold))
+                // PIN eingeben
+                Text("Hallo, \(selectedUser.map { $0.name } ?? "Gast") 👋")
+                    .font(DS.F.heading)
                     .foregroundColor(DS.C.text)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 4)
+                Text("Gib deinen 4-stelligen PIN ein.")
+                    .font(DS.F.sub)
+                    .foregroundColor(DS.C.text2)
+                    .padding(.bottom, 18)
 
                 // PIN-Dots
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     ForEach(0..<4, id: \.self) { i in
                         Circle()
                             .fill(dotFill(i))
-                            .frame(width: 14, height: 14)
+                            .frame(width: 15, height: 15)
                             .overlay(
                                 Circle().strokeBorder(dotBorder(i), lineWidth: 2)
                             )
-                            .animation(.easeInOut(duration: 0.1), value: pin.count)
-                            .animation(.easeInOut(duration: 0.1), value: pinState)
+                            .animation(DS.M.fast, value: pin.count)
+                            .animation(DS.M.fast, value: pinState)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -276,10 +256,10 @@ private struct PINPanel: View {
 
                 // Fehlertext
                 Text(pinErrorMsg ?? " ")
-                    .font(.jakarta(11, weight: .medium))
-                    .foregroundColor(DS.C.danger)
+                    .font(DS.F.caption)
+                    .foregroundColor(DS.C.dangerText)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 10)
 
                 // Numpad
                 LazyVGrid(
@@ -293,15 +273,17 @@ private struct PINPanel: View {
                         }
                     }
                 }
-                .padding(.bottom, 14)
+                .padding(.bottom, 16)
 
                 // Fallback-Link
                 Button {
                     onSwitchToPassword()
                 } label: {
                     Text("PIN vergessen? Mit Passwort anmelden →")
-                        .font(.jakarta(11, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -326,7 +308,7 @@ private struct PINPanel: View {
     private func dotBorder(_ i: Int) -> Color {
         if pinState == .error && i < 4   { return DS.C.danger }
         if i < pin.count                  { return DS.C.acc }
-        return DS.C.brdLight
+        return DS.C.brdAdaptive
     }
 
     private func handleKey(_ key: String) {
@@ -369,13 +351,12 @@ private struct PINPanel: View {
 private struct UserCard: View {
     let user:     AuthUser
     let selected: Bool
-    let cs:       ColorScheme
     let onTap:    () -> Void
 
     private var avatarBg: Color {
         switch user.role {
         case .owner:   return DS.C.accBg
-        case .manager: return Color.adaptive(light: "fff3e0", dark: "2e1f0a")
+        case .manager: return DS.C.brassBg
         case .staff:   return DS.C.sur2
         }
     }
@@ -383,7 +364,7 @@ private struct UserCard: View {
     private var avatarFg: Color {
         switch user.role {
         case .owner:   return DS.C.accT
-        case .manager: return Color.adaptive(light: "8a5010", dark: "f0a840")
+        case .manager: return DS.C.brassText
         case .staff:   return DS.C.text2
         }
     }
@@ -391,52 +372,52 @@ private struct UserCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                // Avatar
                 ZStack {
                     Circle()
                         .fill(selected ? DS.C.acc : avatarBg)
                         .frame(width: DS.S.avatarSize, height: DS.S.avatarSize)
                     Text(String(user.name.prefix(1)).uppercased())
-                        .font(.jakarta(13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(selected ? .white : avatarFg)
                 }
 
-                // Name + Rolle
                 VStack(alignment: .leading, spacing: 1) {
                     Text(user.name)
-                        .font(.jakarta(13, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(selected ? DS.C.accT : DS.C.text)
                     Text(user.role.displayName)
-                        .font(.jakarta(10, weight: .regular))
+                        .font(DS.F.caption)
                         .foregroundColor(DS.C.text2)
                 }
 
                 Spacer()
 
-                // Checkmark-Kreis
                 ZStack {
                     Circle()
                         .fill(selected ? DS.C.acc : .clear)
-                        .frame(width: 18, height: 18)
+                        .frame(width: 20, height: 20)
                     Circle()
-                        .strokeBorder(selected ? DS.C.acc : DS.C.brd(cs), lineWidth: 1.5)
-                        .frame(width: 18, height: 18)
+                        .strokeBorder(selected ? DS.C.acc : DS.C.brdAdaptive, lineWidth: 1.5)
+                        .frame(width: 20, height: 20)
                     if selected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(selected ? DS.C.accBg : .clear)
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(selected ? DS.C.acc : DS.C.brd(cs), lineWidth: 1.5)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 56)
+            .background(
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .fill(selected ? DS.C.accBg : Color.clear)
             )
-            .animation(.easeInOut(duration: 0.15), value: selected)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.R.input)
+                    .strokeBorder(selected ? DS.C.acc : DS.C.brdAdaptive, lineWidth: selected ? 1.5 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: DS.R.input))
+            .animation(DS.M.fast, value: selected)
         }
         .buttonStyle(.plain)
     }
@@ -450,30 +431,29 @@ private struct NumpadButton: View {
     let isLoading: Bool
     let onTap:     () -> Void
 
-    @Environment(\.colorScheme) private var cs
-
     var body: some View {
         if digit.isEmpty {
-            Color.clear.frame(height: 52)
+            Color.clear.frame(height: 56)
         } else {
             Button(action: onTap) {
                 ZStack {
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(.circular)
-                            .tint(DS.C.acc)
+                            .tint(DS.C.accT)
                     } else if digit == "⌫" {
                         Image(systemName: "delete.left")
-                            .font(.system(size: 18, weight: .regular))
+                            .font(.system(size: 19, weight: .medium))
                             .foregroundColor(DS.C.text2)
                     } else {
                         VStack(spacing: 1) {
                             Text(digit)
-                                .font(.jakarta(18, weight: .semibold))
+                                .font(.system(size: 22, weight: .semibold))
+                                .monospacedDigit()
                                 .foregroundColor(DS.C.text)
                             if let sub {
                                 Text(sub)
-                                    .font(.system(size: 8, weight: .medium))
+                                    .font(.system(size: 9, weight: .medium))
                                     .foregroundColor(DS.C.text2)
                                     .tracking(1)
                             }
@@ -481,17 +461,26 @@ private struct NumpadButton: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(digit == "⌫" ? DS.C.sur2 : DS.C.bg)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(DS.C.brd(cs), lineWidth: 1)
-                )
+                .frame(height: 56)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NumpadPressStyle(isDelete: digit == "⌫"))
             .disabled(isLoading)
         }
+    }
+}
+
+private struct NumpadPressStyle: ButtonStyle {
+    let isDelete: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: DS.R.pinRow)
+                    .fill(configuration.isPressed ? DS.C.sur2 : (isDelete ? DS.C.sur2.opacity(0.6) : DS.C.bg))
+            )
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(DS.M.press, value: configuration.isPressed)
     }
 }
 
@@ -500,7 +489,6 @@ private struct NumpadButton: View {
 private struct EmailPasswordPanel: View {
     @EnvironmentObject var authStore:      AuthStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
-    @Environment(\.colorScheme) private var cs
 
     @Binding var showRegister: Bool
     let onSwitchToPIN: (() -> Void)?
@@ -523,50 +511,51 @@ private struct EmailPasswordPanel: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                             Text("Zur PIN-Anmeldung")
-                                .font(.jakarta(12, weight: .medium))
+                                .font(DS.F.subMed)
                         }
-                        .foregroundColor(DS.C.acc)
+                        .foregroundColor(DS.C.accT)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 16)
                 }
 
                 Text("Mit Passwort anmelden")
-                    .font(.jakarta(DS.T.loginTitle, weight: .semibold))
+                    .font(DS.F.title)
                     .foregroundColor(DS.C.text)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 6)
 
-                Text("Melden Sie sich mit Ihren Zugangsdaten an")
-                    .font(.jakarta(DS.T.loginBody, weight: .regular))
+                Text("Melde dich mit deinen Zugangsdaten an.")
+                    .font(DS.F.sub)
                     .foregroundColor(DS.C.text2)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 26)
 
                 LoginTextField(
                     placeholder:     "E-Mail",
                     text:            $email,
                     keyboardType:    .emailAddress,
-                    textContentType: .emailAddress,
-                    colorScheme:     cs
+                    textContentType: .emailAddress
                 )
                 .padding(.bottom, 10)
 
                 LoginPasswordField(
                     password:    $password,
-                    showPassword: $showPW,
-                    colorScheme: cs
+                    showPassword: $showPW
                 )
-                .padding(.bottom, 6)
+                .padding(.bottom, 8)
 
                 HStack {
                     Spacer()
                     Button("Passwort vergessen?") {}
-                        .font(.jakarta(DS.T.loginForgot, weight: .regular))
-                        .foregroundColor(DS.C.acc)
+                        .font(DS.F.sub)
+                        .foregroundColor(DS.C.accT)
                         .buttonStyle(.plain)
+                        .frame(minHeight: 44)
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, 10)
 
                 Button {
                     Task { await doLogin() }
@@ -576,30 +565,24 @@ private struct EmailPasswordPanel: View {
                             ProgressView().progressViewStyle(.circular).tint(.white)
                         } else {
                             Text("Anmelden")
-                                .font(.jakarta(DS.T.loginButton, weight: .semibold))
-                                .foregroundColor(.white)
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: DS.S.buttonHeight)
                 }
-                .background(DS.C.acc)
-                .cornerRadius(DS.R.button)
+                .buttonStyle(DSPrimaryButton())
                 .disabled(isLoading || email.isEmpty || password.isEmpty)
-                .opacity(isLoading || email.isEmpty || password.isEmpty ? 0.6 : 1.0)
-                .buttonStyle(.plain)
-                .padding(.bottom, 20)
+                .padding(.bottom, 22)
 
                 HStack(spacing: 4) {
                     Text("Noch kein Konto?")
-                        .font(.jakarta(DS.T.loginFooter, weight: .regular))
+                        .font(DS.F.sub)
                         .foregroundColor(DS.C.text2)
                     Button("Jetzt registrieren →") {
                         showRegister = true
                     }
-                    .font(.jakarta(DS.T.loginFooter, weight: .semibold))
-                    .foregroundColor(DS.C.acc)
+                    .font(DS.F.subBold)
+                    .foregroundColor(DS.C.accT)
                     .buttonStyle(.plain)
+                    .frame(minHeight: 44)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -628,31 +611,6 @@ private struct EmailPasswordPanel: View {
     }
 }
 
-// MARK: - Dark Mode Toggle
-
-private struct DarkModeToggle: View {
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { isOn.toggle() }
-        } label: {
-            ZStack(alignment: isOn ? .trailing : .leading) {
-                Capsule()
-                    .fill(isOn ? Color.white.opacity(0.3) : Color.white.opacity(0.2))
-                    .frame(width: 38, height: 22)
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
-                Circle()
-                    .fill(isOn ? DS.C.acc : Color.white.opacity(0.5))
-                    .frame(width: 16, height: 16)
-                    .padding(3)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(isOn ? "Dark Mode an" : "Dark Mode aus")
-    }
-}
-
 // MARK: - Login Text Field
 
 private struct LoginTextField: View {
@@ -660,7 +618,6 @@ private struct LoginTextField: View {
     @Binding var text:   String
     var keyboardType:    UIKeyboardType = .default
     var textContentType: UITextContentType? = nil
-    let colorScheme:     ColorScheme
 
     @State private var isFocused = false
 
@@ -669,22 +626,21 @@ private struct LoginTextField: View {
             placeholder:            placeholder,
             text:                   $text,
             keyboardType:           keyboardType,
-            uiFont:                 UIFont.systemFont(ofSize: 14),
+            uiFont:                 UIFont.systemFont(ofSize: 16),
             uiTextColor:            UIColor(DS.C.text),
             textContentType:        textContentType,
             autocapitalizationType: .none,
             autocorrectionType:     .no,
             isFocused:              $isFocused
         )
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .frame(height: DS.S.inputHeight)
-        .background(DS.C.bg)
-        .cornerRadius(DS.R.input)
+        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
         .overlay(
             RoundedRectangle(cornerRadius: DS.R.input)
-                .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
         )
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
+        .animation(DS.M.fast, value: isFocused)
     }
 }
 
@@ -693,7 +649,6 @@ private struct LoginTextField: View {
 private struct LoginPasswordField: View {
     @Binding var password:     String
     @Binding var showPassword: Bool
-    let colorScheme:           ColorScheme
 
     @State private var isFocused = false
 
@@ -702,7 +657,7 @@ private struct LoginPasswordField: View {
             NoAssistantTextField(
                 placeholder:     "Passwort",
                 text:            $password,
-                uiFont:          UIFont.systemFont(ofSize: 14),
+                uiFont:          UIFont.systemFont(ofSize: 16),
                 uiTextColor:     UIColor(DS.C.text),
                 isSecure:        !showPassword,
                 textContentType: .password,
@@ -712,21 +667,21 @@ private struct LoginPasswordField: View {
                 showPassword.toggle()
             } label: {
                 Image(systemName: showPassword ? "eye.slash" : "eye")
-                    .font(.system(size: 14))
+                    .font(.system(size: 16))
                     .foregroundColor(DS.C.text2)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 40, height: 40)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .frame(height: DS.S.inputHeight)
-        .background(DS.C.bg)
-        .cornerRadius(DS.R.input)
+        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
         .overlay(
             RoundedRectangle(cornerRadius: DS.R.input)
-                .strokeBorder(isFocused ? DS.C.acc : DS.C.brd(colorScheme), lineWidth: 1)
+                .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
         )
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
+        .animation(DS.M.fast, value: isFocused)
     }
 }
 
