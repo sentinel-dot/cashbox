@@ -13,16 +13,9 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Nächste Aufgaben (Reihenfolge):**
-1. ~~`OrderStore` + `SessionStore` implementieren~~ ✅
-2. ~~`KassensitzungView`~~ ✅
-3. ~~`TableOverviewView`~~ ✅ → ~~`OrderView`~~ ✅ → ~~`PaymentView`~~ ✅ → ~~`ReceiptView`~~ ✅
-4. ~~`ZBerichtView`~~ ✅, ~~`BerichteView`~~ ✅, ~~`ProdukteView`~~ ✅, ~~`KategorienView`~~ ✅, ~~`EinstellungenView`~~ ✅
-5. ~~Bug-Fixes: JSON-Decode-Fehler, PIN-Login, Produkt-/Kategorie-Anzeige, Berichte, 409-Mapping~~ ✅
-6. ~~Plus Jakarta Sans Font-Dateien bundlen~~ ✅ obsolet — Design v3 nutzt bewusst SF Pro (System-Font); `.jakarta()`-Shim in DesignSystem.swift mappt Alt-Aufrufe auf SF
-7. ~~Design-Overhaul v3 „Ledger Green" (alle Screens)~~ ✅ (2026-07-10)
+**Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 
-**Bekannte offene Sicherheitslücken:** keine ✅ (Audit 2026-07-10: alle kritischen + mittleren Findings behoben, siehe `implementierungsplan.md` §17)
+**Bekannte offene Sicherheitslücken:** keine ✅ (Audit #1 + Finanz-Integritäts-Audit #2, beide 2026-07-10: alle kritischen Findings behoben — u.a. Doppel-Storno-Race, Session-Close-Race, cancelOrder-Guard, app_user-DELETE-Grant. Details + verbleibende mittlere Punkte: `OFFEN.md` §1)
 
 **Betriebshinweis:** Berichte nutzen `CONVERT_TZ(…, 'Europe/Berlin')` — der Produktions-MariaDB-Server braucht geladene Timezone-Tabellen (`mariadb-tzinfo-to-sql /usr/share/zoneinfo | mysql mysql`), sonst liefern alle Berichte 0.
 
@@ -34,8 +27,8 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 
 Nach **jeder** Änderung — egal ob über Skill oder direkt — folgendes prüfen:
 - Steht der Punkt unter "Aktueller Stand → Bekannte offene Sicherheitslücken"? → entfernen
-- Ist der Punkt in `implementierungsplan.md` §17 als offen gelistet? → als erledigt markieren oder entfernen
-- Ist der Punkt in `implementierungsplan.md` §18 Nächste Schritte? → streichen oder verschieben
+- Ist der Punkt in `OFFEN.md` gelistet? → streichen (erledigt) oder Prio/Beschreibung anpassen
+- Neue offene Punkte (Bugs, Schulden, Ideen) → nur in `OFFEN.md` eintragen, mit Prio + Warum
 
 ## Pflicht bei jeder Implementierung
 
@@ -74,6 +67,8 @@ Dasselbe gilt für das **Frontend (SwiftUI):** Nach jeder Implementierung (neuer
 - Preisänderung **nur** über `POST /products/:id/price`: schreibt zuerst den GoBD-Pflicht-Eintrag in `product_price_history` (INSERT-only via auditDb), danach `UPDATE products SET price_cents` (operativer Preis — addItem/listProducts lesen diese Spalte). Direktes `price_cents` via `PATCH /products/:id` bleibt verboten (Route-Guard).
 - **Order-Item entfernen** = `INSERT INTO order_item_removals` (wer, wann, warum) — `order_items`-Zeile bleibt erhalten; Queries filtern via `NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)`
 - Bon-Nummer vergeben → TX schlägt fehl → Receipt mit `status='voided'` anlegen, niemals skippen
+- **Session-Lock-Invariante (Audit #2):** `payOrder`, `splitBill` und `cancelReceipt` sperren in ihrer TX die `cash_register_sessions`-Zeile (`FOR UPDATE`) und geben 409, wenn sie nicht mehr `open` ist; `closeSession` läuft komplett in einer TX unter demselben Lock (Aggregation + Schließen). So kann kein Bon in eine geschlossene Session buchen und im unveränderlichen Z-Bericht fehlen. **Jeder neue Buchungspfad muss dieses Lock übernehmen.** Lock-Reihenfolge: Order/Receipt → Session → receipt_sequences (Deadlock-Vermeidung)
+- **Doppel-Storno:** `cancellations.original_receipt_id` ist UNIQUE (V008) — Controller prüft zusätzlich unter FOR-UPDATE-Lock auf dem Original-Bon
 
 ### Tenant-Isolation
 - **Jede** DB-Query enthält `WHERE tenant_id = ?` — keine Ausnahme
@@ -131,7 +126,9 @@ rateLimitMiddleware
 ## DB-Berechtigungen (drei verschiedene DB-User)
 
 ```
-app_user          SELECT, INSERT, UPDATE, CREATE, ALTER auf Standard-Tabellen (inkl. Migrations)
+app_user          SELECT, INSERT, UPDATE, CREATE, ALTER, INDEX (inkl. Migrations) —
+                  KEIN pauschales DELETE (Audit #2): DELETE nur tabellen-scoped auf
+                  Nicht-Finanztabellen (Seed-Rollback); in der Test-DB pauschal (testHelpers)
 audit_insert_user NUR INSERT auf: audit_log, z_reports, product_price_history, order_item_modifiers, order_item_removals
 app_readonly      SELECT only (für Reports, Admin-Panel)
 ```
@@ -268,21 +265,10 @@ npm run test:coverage        # Coverage-Report
 | Bon-PDF senden | GET /receipts/:id/pdf + ShareSheet | Phase 5 |
 | SyncManager Vollausbau | Retry-UI, Fehler-Detailansicht | Phase 3 |
 
-### SwiftUI — Offene Punkte
-| Punkt | Details |
-|-------|---------|
-| Design v3 „Ledger Green" | ✅ Komplett-Overhaul 2026-07-10: alle Screens auf DS v3 (SF Pro, Ledger-Green/Brass-Palette, Touch-Targets ≥44pt, keine Hover-Zustände, zentrale Geld-Formatierung). Bugfixes nebenbei: MwSt-Anzeige 7 %/19 % getrennt (Warenkorb/Payment/Bon), lokale `formatCents` mit Punkt-Dezimal entfernt |
-| SyncManager Vollausbau | `SyncManager.swift` (minimal) existiert: triggert POST /sync/offline-queue bei Online-Wechsel/Foreground/Login, hält pendingCount. Fehlt: Retry-UI, Banner-Verdrahtung (Phase 3) |
-| Token-Refresh | ✅ APIClient refresht bei 401 automatisch (POST /auth/refresh) und wiederholt den Request; Force-Logout erst wenn Refresh scheitert |
-
-### Offene Backend-Punkte (dokumentiert, noch nicht implementiert)
-| Bereich | Details | Priorität |
-|---------|---------|-----------|
-| `versionMiddleware` | `X-App-Version`-Header prüfen, Deprecation-Warnings für alte iOS-Versionen | Vor Go-Live |
-| Passwort-Reset | `POST /auth/forgot-password` + `/reset-password` via E-Mail-Token | Vor Go-Live |
-| E-Mail-Service | Trial-Ablauf-Warnung, Subscription-Events, Passwort-Reset (Nodemailer/SES) | Vor Go-Live |
-| Cron-Jobs | Trial-Ablauf (Tag 10+13), `past_due`-Sperrung, ELSTER-Frist-Prüfung bei TSE-Ausfall | Vor Go-Live |
-| Admin-Panel | Tenant-Übersicht, manuelle Plan-Änderung, Audit-Einsicht | Phase 4 |
+### Offene Punkte (SwiftUI + Backend)
+**→ `OFFEN.md`** — einzige Quelle, hier keine Doppelpflege. Implementiert-Hinweise, die beim Codelesen helfen:
+- Token-Refresh ✅: APIClient refresht bei 401 automatisch und wiederholt den Request; Force-Logout erst wenn Refresh scheitert
+- SyncManager (minimal) ✅: triggert POST /sync/offline-queue bei Online-Wechsel/Foreground/Login, hält pendingCount — Vollausbau (Retry-UI) ist Phase 3, siehe OFFEN.md
 
 ### Backend — Logging (implementiert ✅)
 - **Pino** (`pino` + `pino-http`) — JSON-Logs in Production, Pretty-Print in Development
@@ -345,7 +331,9 @@ src/
 │   ├── migrations/     -- V001__initial_schema, V002__order_items_soft_delete,
 │   │                      V003__onboarding_trial_stripe, V004__tenants_subscription_period_end,
 │   │                      V005__shishabar_seed (Pilot-Testdaten: Tenant, Users, Produkte, Tische),
-│   │                      V006__offline_queue_processing_started_at (atomarer Sync-Claim)
+│   │                      V006__offline_queue_processing_started_at (atomarer Sync-Claim),
+│   │                      V007__performance_indexes,
+│   │                      V008__cancellations_unique_original (Doppel-Storno-Backstop)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/

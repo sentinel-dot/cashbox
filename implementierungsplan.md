@@ -1207,177 +1207,13 @@ if appVersion < min_app_version → 426 Upgrade Required
 
 ---
 
-## 16. Offene TODOs vor Phase 0
+## 16. Offene Punkte
 
-*(Diese Liste stammt aus der ursprünglichen Planung — viele Punkte inzwischen erledigt)*
-
-- [ ] Fiskaly Sandbox Account anlegen — Transaktionsflow durchspielen
-- [ ] Steuerberater: Offline-TSE-Handling absegnen lassen
-- [ ] Steuerberater: Trinkgeld-Verbuchung klären — erst vor Phase 3 nötig (Feature bis dahin deaktiviert)
-- [ ] Steuerberater: Außer-Haus-MwSt klären — erst vor Phase 4 nötig (für Shishabar-Pilot irrelevant)
-- [ ] AGB + Haftungsausschluss (Anwalt, ~300-500€)
-- [ ] AVV-Vorlage erstellen
-- [ ] Verfahrensdokumentation-Vorlage erstellen (vor Go-live Pflicht!)
-- [ ] Apple Developer Account (99€/Jahr) für TestFlight
-- [ ] Gewerbeanmeldung falls noch nicht vorhanden
-- [ ] Schriftliche Vereinbarung mit Pilotkunden
-- [x] Testing-Framework festlegen → Vitest + Supertest ✅
-- [ ] Datenhaltungs-Konzept nach Kündigung kommunizieren (AGB-relevant)
-- [ ] `receipt_sequences` Konzept mit Steuerberater besprechen (Lücken-Dokumentation)
+**Alle offenen Punkte (Backend, Frontend, Tests, Infrastruktur, Recht, Priorisierung) leben in [`OFFEN.md`](OFFEN.md)** — einzige Quelle, hier wird nichts mehr doppelt gepflegt. Die früheren Abschnitte 16–18 (Stand: erledigt bzw. nach OFFEN.md überführt) sind in der Git-History erhalten.
 
 ---
 
-## 17. Offene Backend-Punkte (nach Vollständigkeitsprüfung)
-
-### Kritisch — vor Go-live (Sicherheit) ✅ behoben
-
-**Refresh-Token Security Fix** ✅
-`authMiddleware.ts` prüft jetzt `payload.type === 'refresh'` → 401. Behoben 2026-03-16.
-
-**`past_due` Grace Period** ✅
-`subscriptionMiddleware.ts` prüft jetzt `subscription_current_period_end + GRACE_PERIOD_DAYS` gegen `now` → 402 nach Ablauf. Behoben 2026-03-16.
-
-### Kritisch — Audit 2026-07-10 ✅ behoben
-
-**Preisänderung wirkungslos** ✅ — `POST /products/:id/price` schrieb nur Historie, `products.price_cents` (von addItem/listProducts gelesen) blieb unverändert. Jetzt: Historie-INSERT + operatives UPDATE.
-**Storno ohne Gegenbuchung** ✅ — Storno-Bons jetzt mit negierten Beträgen + negativen payments-Zeilen; Z-Bericht/closeSession aggregieren über `receipts.session_id`.
-**Cent-Verlust Preiseingabe (iOS)** ✅ — `parseCents` in ProdukteView rundet jetzt (`19,99` → 1999 statt 1998).
-**Pay-Race** ✅ — payOrder/splitBill re-validieren Items nach dem FOR-UPDATE-Lock; addItem/removeItem serialisieren via Order-Lock.
-**TSE-Robustheit** ✅ — 10s-Timeout auf Fiskaly-Calls, Offline-Queue-Retry (transient → pending statt failed), atomarer Claim + `processing_started_at` (V006), keine 1970-Timestamps, `tse_outages` wird befüllt, enqueueOffline-Fehler geloggt.
-**iOS-Ausfallsicherheit** ✅ — 401 → Token-Refresh + Retry im APIClient; minimaler SyncManager triggert Offline-Queue-Sync bei Online-Wechsel/Foreground/Login.
-
-### Mittlere Findings — Audit 2026-07-10 ✅ alle behoben
-
-1. **Stripe-Webhook-Status-Mapping** ✅ — `sub.status` wird gemappt; Update-Events reaktivieren keine gesperrten Tenants mehr.
-2. **Storno-von-Storno** ✅ — 409 wenn Ziel-Bon selbst Gegenbuchung ist.
-3. **Berichts-Timezone** ✅ — `CONVERT_TZ(…, 'Europe/Berlin')` in Reports + Bon-Liste. **Prod-Voraussetzung: MariaDB-Timezone-Tabellen laden** (`mariadb-tzinfo-to-sql`).
-4. **Rollenrechte** ✅ — `requireRole('owner','manager')` auf Produkt-/Kategorien-/Modifier-Schreibrouten, Preisänderung, Berichte, Export; iOS-Sidebar blendet Bereiche für staff aus.
-5. **Session-Races** ✅ — openSession lockt Geräte-Zeile (FOR UPDATE), closeSession claimt atomar.
-6. **listReceipts-Plan-Limit** ✅ — Untergrenze gilt immer, auch ohne `from`.
-7. **quantity-Limit** ✅ — Zod `max(999)`.
-8. **PIN-Uniqueness** ✅ — 409 bei Kollision (create + update).
-9. **Onboarding-E-Mail-Race** ✅ — Advisory Lock (`GET_LOCK`) um Check+Insert.
-10. **Keychain (iOS)** ✅ — `kSecAttrAccessibleAfterFirstUnlock`, OSStatus-Rückgabe.
-11. **Indizes** ✅ — V007: `receipts(tenant_id, created_at)`, `orders(session_id, status)`, `offline_queue(tenant_id, status)`.
-12. **Kleinkram** ✅ — `removeItem` speichert optionalen `reason`; `syncRateLimit` auf Sync-Route verdrahtet.
-
-### Kritisch — vor Go-live (Features)
-
-**E-Mail-Service (kein Transactional-Mail implementiert)**
-Wird benötigt für:
-- TSE-Ausfall > 48h → Pflichtbenachrichtigung (KassenSichV)
-- Trial-Ablauf-Warnung (z.B. 7 Tage vorher)
-- Session > 24h offen → Warnung an Owner (GoBD)
-- Passwort-Reset-Flow
-
-Empfehlung: Resend oder Postmark (einfache REST-API, keine SMTP-Konfiguration).
-
-**Cron-Jobs (komplett fehlend)**
-Im Plan erwähnt, in DB-Schema vorbereitet (`tse_outages`-Tabelle), aber nie implementiert:
-```
-Täglich:
-  - Sessions prüfen die > 24h offen → E-Mail an Owner (GoBD-Warnung)
-  - TSE-Ausfall-Status prüfen → nach 48h: E-Mail + tse_outages.notified_at setzen
-Stündlich:
-  - Offline-Queue auf 'failed'-Einträge prüfen → Alert (Dashboard + E-Mail)
-```
-Umsetzung: `node-cron` oder PM2-Cron-Task. Separates Script `src/cron.ts` das neben `index.ts` läuft.
-
-**`POST /auth/forgot-password` + `POST /auth/reset-password` fehlen**
-Ohne Passwort-Reset kein Self-Service-Recovery. Wenn Owner Passwort vergisst → manueller DB-Eingriff nötig.
-Flow: Token per E-Mail → Link → neues Passwort setzen (Token einmalig, 1h gültig).
-
-**`versionMiddleware` nicht implementiert**
-DB-Feld `devices.min_app_version` vorhanden, Middleware fehlt.
-```typescript
-// X-App-Version Header aus App → semver-Vergleich → 426 wenn veraltet
-if (semver.lt(appVersion, minAppVersion)) → 426 Upgrade Required
-```
-
-**`GET /tenants/me` gibt keine Subscription-Details zurück**
-Frontend hat keine Info über Trial-Restzeit oder `subscription_current_period_end`.
-Ergänzen: `trial_expires_at`, `subscription_current_period_end`, `subscription_status` in Response.
-
-### Wichtig — nach Pilot
-
-**ELSTER-Onboarding-Checkliste nicht durchgesetzt**
-Plan sieht vor: Kassen-Features gesperrt bis Checklist abgehakt (ELSTER-Meldung, AVV, Verfahrensdoku).
-Datenmodell fehlt (z.B. `tenants.onboarding_completed BOOLEAN`). Ohne Enforcement kann ein Tenant die Kasse nutzen ohne die Pflichten erfüllt zu haben.
-
-**Tenant-Daten-Export nach Kündigung fehlt**
-Plan: 30-Tage-Fenster für ZIP-Export nach Kündigung (`subscription_status = 'cancelled'`).
-Weder Endpoint (`POST /tenants/me/export`) noch Hintergrund-Job implementiert.
-
-**Rate-Limit per Tenant statt per IP**
-Aktuell: `apiRateLimit` läuft vor `authMiddleware` → effektiv per IP.
-Nachteil: Tenant hinter NAT/Proxy kann andere Tenants blockieren.
-Lösung: `apiRateLimit` nach `tenantMiddleware` verschieben, `keyGenerator: req.auth.tenantId`.
-
-### Wichtig — nach Pilot
-
-**Error-Monitoring (Sentry)**
-Pino loggt in stdout — in Produktion weiß man nicht was schiefläuft ohne aktiv Logs zu lesen. Bei einem SaaS-Kassensystem (Bugs blockieren direkt Einnahmen) ist Alerting kein Nice-to-have. Sentry Free Tier, ~20min Integration: `@sentry/node` + `Sentry.init()` in `app.ts`, `Sentry.captureException(err)` im globalen Error Handler.
-
-**`subscriptionMiddleware` macht DB-Query pro Request**
-Jeder authentifizierte API-Call feuert `SELECT subscription_status, created_at FROM tenants WHERE id = ?`. Bei aktivem Kassenbetrieb mit vielen Order-Calls unnötig. Subscription-Status ändert sich selten. Lösung: `subscriptionStatus` in JWT-Payload einbauen — `subscriptionMiddleware` prüft dann nur den Token (kein DB-Hit) und macht die DB-Query nur bei `trial` (für Ablaufberechnung). Auth- und Stripe-Webhook aktualisieren den JWT bei Status-Änderung.
-
-**Rate-Limit per Tenant statt per IP** *(bereits in Plan dokumentiert)*
-Aktuell: `apiRateLimit` läuft vor `authMiddleware` → effektiv per IP. Tenant hinter NAT/Proxy kann andere blockieren. Fix: nach `tenantMiddleware`, `keyGenerator: req.auth!.tenantId`.
-
-### Nice-to-have
-
-**Docker Compose für lokale Entwicklung**
-Kein `docker-compose.yml` vorhanden. Lokale Entwicklung erfordert manuell MariaDB + `npm run db:setup`. Ein `docker-compose.yml` (Node + MariaDB) reduziert das auf `docker compose up`. Nicht kritisch für Soloprojekt, aber nötig sobald ein zweiter Entwickler oder neues Gerät hinzukommt.
-
-**Graceful Shutdown**
-Kein `SIGTERM`-Handler — bei PM2 Rolling Restart können laufende TSE-Transaktionen abbrechen.
-```typescript
-process.on('SIGTERM', async () => {
-  await db.end(); // Pool-Connections sauber schließen
-  server.close(() => process.exit(0));
-});
-```
-
-**`.env.example`** ✅ vorhanden — `backend/.env.example` existiert.
-
----
-
-## 18. Nächste Schritte (priorisiert)
-
-### Jetzt — Blocker für Pilot (SwiftUI)
-
-3. **SwiftUI Phase 1 Screens** — kritischer Pfad, alles andere ist zweitrangig
-   Reihenfolge: `OrderStore` → `SessionStore` → `KassensitzungView` → `TableOverviewView` → `OrderView` → `ModifierSheet` → `PaymentView` → `ReceiptView`
-   Danach: `ProdukteView`, `EinstellungenView`, `BerichteView`
-
-### Vor Go-live — Backend (nicht optional)
-
-4. **E-Mail-Service + Cron-Jobs** — KassenSichV-Pflicht (TSE-Ausfall-Meldung nach 48h)
-5. **Passwort-Reset-Flow** (`POST /auth/forgot-password` + `/reset-password`)
-6. **`versionMiddleware`** — klein (~2h), nötig sobald erste App-Version deployed
-7. **`GET /tenants/me` Subscription-Details** — `trial_expires_at`, `subscription_current_period_end` fehlen in Response
-
-### Vor Go-live — Infrastruktur & Recht
-
-8. **Rechtliches**: AGB, AVV, Verfahrensdokumentation (Anwalt beauftragen)
-9. **Infrastruktur**: Hetzner-Server, GitHub Actions CI/CD, Nginx, SSL, PM2
-10. **Fiskaly Live-Account** anlegen + TSS für Shishabar + ELSTER-Meldung
-11. **Stripe Live-Keys** + Webhook-Endpoint in Stripe-Dashboard eintragen
-12. **Apple Developer Account** (99€/Jahr) für TestFlight-Verteilung
-
-### Nach Pilot
-
-13. Error-Monitoring (Sentry)
-14. ELSTER-Onboarding-Checkliste enforcement
-15. Tenant-Daten-Export (ZIP nach Kündigung)
-16. Rate-Limit per Tenant (statt per IP)
-17. `subscriptionMiddleware` Performance (Status in JWT)
-18. Graceful Shutdown (SIGTERM-Handler)
-19. Docker Compose für lokale Entwicklung
-
----
-
-*Plan-Version: 2.5 | Stack: SwiftUI / Node.js+TS / MariaDB / Fiskaly / Stripe*
+*Plan-Version: 2.9 | Stack: SwiftUI / Node.js+TS / MariaDB / Fiskaly / Stripe*
 *Scope Phase 1-4: Digitaler Bon (kein Drucker), Single-iPad (kein Multi-Device-Sync)*
 *Trinkgeld: deaktiviert bis Phase 3 | Außer-Haus-Toggle: deaktiviert bis Phase 4*
 
@@ -1396,5 +1232,6 @@ process.on('SIGTERM', async () => {
 | 2.4 | Phase 4 Backend vollständig: `GET /receipts` (Liste + Plan-Limit), `GET /reports/daily` + `/summary` (Plan-Limit Starter/Pro/Business), `GET /export/dsfinvk` + `/:id/status` + `/:id/file` (Fiskaly TAR-Proxy, async mit 202-Fallback). Fiskaly-Doku ausgewertet (SIGN_DE_V2_API-DOC.json): `start_date`/`end_date` als Unix-Timestamps, Polling auf PENDING→COMPLETED, TAR-Format. Teststruktur aktualisiert (20 Integration-Testdateien, 302 Tests). |
 | 2.6 | SwiftUI Phase 1 gestartet: LoginView ✅ implementiert. Neue Files: DesignSystem.swift (alle Tokens aus Design System v1.2), AppError.swift, Models.swift, AuthStore.swift, NetworkMonitor.swift, OfflineBanner.swift, LoginView.swift, ContentView.swift (Auth-Router), zettel_frontendApp.swift. Screen-Bauplan und Phasenstatus aktualisiert. |
 | 2.7 | Frontend-Backend-Integration: APIClient.swift (HTTP-Client, JWT+DeviceToken-Header, snake_case encoder), KeychainHelper.swift, RegisterView.swift (Onboarding-Formular mit Inline-Validation + Passwort-Stärke-Anzeige). AuthResponse-Modell an echtes Backend-Format angepasst (AuthUser statt User, kein tenant). login() um device_token ergänzt. Pino-Logging im Backend (pino + pino-http, src/logger.ts, Request-Logging in app.ts). |
+| 2.9 | Finanz-Integritäts-Audit #2 (2026-07-10): Doppel-Storno-Race (V008 UNIQUE + TX-Locks), Session-Close-Race (Session-Lock in payOrder/splitBill/cancelReceipt/closeSession), cancelOrder-Status-Guard, app_user-DELETE-Grant entzogen (setup-db.ts), Z-Bericht cancellation_count über Storno-Session. §16–18 durch OFFEN.md ersetzt, Reference_Frontend_Screen/ gelöscht. |
 | 2.8 | Sicherheitsanalyse + Priorisierung: Refresh-Token Security Bug dokumentiert (Abschnitt 8), past_due Grace Period Bug dokumentiert, subscriptionMiddleware Performance-Problem dokumentiert. Neue Punkte in Abschnitt 17 (Kritisch/Wichtig/Nice-to-have) und Abschnitt 18 (priorisierte Reihenfolge). Veraltete Einträge korrigiert (Structured Logging ✅, .env.example ✅). |
 | 2.9 | Vollaudit 2026-07-10: 4 kritische Bugs behoben (Preisänderung wirkungslos, Storno ohne Gegenbuchung, iOS-Cent-Verlust, Pay-Race) + TSE-Ausfallsicherheit (Fiskaly-Timeout, Offline-Queue-Retry/atomarer Claim/V006 processing_started_at, tse_outages-Erfassung, iOS Token-Refresh + SyncManager-Trigger). Regeländerung: `POST /products/:id/price` aktualisiert jetzt auch `products.price_cents` (Historie bleibt Pflicht); Storno = negative Gegenbuchung. 12 mittlere Findings in §17 dokumentiert. |

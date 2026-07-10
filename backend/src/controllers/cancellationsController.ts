@@ -132,6 +132,43 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
   try {
     await conn.beginTransaction();
 
+    // Original-Bon sperren — serialisiert parallele Storno-Requests (Doppel-Tap).
+    // Die Vor-Prüfungen oben laufen ohne Lock und können beide passieren;
+    // maßgeblich ist der Zustand NACH dem Lock.
+    const [lockedReceipt] = await conn.execute<any[]>(
+      `SELECT id, status FROM receipts WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [receiptId, tenantId]
+    );
+    if (lockedReceipt.length === 0 || lockedReceipt[0].status !== 'active') {
+      await conn.rollback();
+      res.status(409).json({ error: 'Nur aktive Bons können storniert werden.' });
+      return;
+    }
+
+    // Doppel-Storno-Check erneut unter Lock (UNIQUE-Constraint uq_cancellations_original
+    // ist der DB-Backstop, dieser Check liefert das saubere 409)
+    const [cancelUnderLock] = await conn.execute<any[]>(
+      `SELECT id FROM cancellations WHERE original_receipt_id = ? LIMIT 1`,
+      [receiptId]
+    );
+    if (cancelUnderLock.length > 0) {
+      await conn.rollback();
+      res.status(409).json({ error: 'Dieser Bon wurde bereits storniert.' });
+      return;
+    }
+
+    // Session muss noch offen sein — sonst landet die Gegenbuchung in einer
+    // geschlossenen Session und fehlt im unveränderlichen Z-Bericht
+    const [lockedSession] = await conn.execute<any[]>(
+      `SELECT status FROM cash_register_sessions WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [sessionId, tenantId]
+    );
+    if (lockedSession.length === 0 || lockedSession[0].status !== 'open') {
+      await conn.rollback();
+      res.status(409).json({ error: 'Kassensitzung wurde zwischenzeitlich geschlossen. Bitte neue Sitzung öffnen.' });
+      return;
+    }
+
     // Storno-Bon-Nummer atomar vergeben
     cancellationReceiptNumber = await nextReceiptNumber(tenantId, conn);
 

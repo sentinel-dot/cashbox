@@ -140,11 +140,46 @@ async function main(): Promise<void> {
 
     // 3. Grants
     //
-    // app_user: vollständige App-Rechte + ALTER/CREATE/INDEX für Migrations
+    // app_user: App-Rechte + ALTER/CREATE/INDEX für Migrations — OHNE pauschales
+    // DELETE: die GoBD-Tabellen (orders, order_items, receipts, payments,
+    // cancellations, audit_log, z_reports, product_price_history,
+    // order_item_modifiers, order_item_removals, cash_register_sessions,
+    // cash_movements) sind append-only; die DB muss das erzwingen, nicht nur
+    // der Code. DELETE gibt es nur tabellen-scoped auf operativen Tabellen
+    // (Seed-Rollback V005) — bzw. in der Test-DB pauschal (testHelpers wischen
+    // zwischen Testläufen alle Tabellen).
     await run(conn,
-      `GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
+      `GRANT SELECT, INSERT, UPDATE, CREATE, ALTER, INDEX ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
       `Grants für '${DB_USER}'`
     );
+    if (NODE_ENV === 'test') {
+      await run(conn,
+        `GRANT DELETE ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
+        `Grants für '${DB_USER}' (DELETE — nur Test-DB)`
+      );
+    } else {
+      // Früher vergebenes pauschales DELETE entziehen (Grants sind additiv —
+      // ohne REVOKE bliebe es auf bestehenden Dev-DBs bestehen)
+      try {
+        await conn.execute(`REVOKE DELETE ON \`${DB_NAME}\`.* FROM '${DB_USER}'@'localhost'`);
+        console.log(`  ✓ Pauschales DELETE für '${DB_USER}' entzogen`);
+      } catch {
+        // kein bestehender DELETE-Grant — nichts zu entziehen
+      }
+      // Nicht-Finanztabellen, die der Seed-Rollback (V005 down) leeren darf.
+      // Tabellen-Grants funktionieren auch bevor die Tabelle existiert.
+      const DELETABLE_TABLES = [
+        'tenants', 'users', 'devices', 'products', 'product_categories',
+        'product_modifier_groups', 'product_modifier_options',
+        'tables', 'zones', 'receipt_sequences',
+      ];
+      for (const table of DELETABLE_TABLES) {
+        await run(conn,
+          `GRANT DELETE ON \`${DB_NAME}\`.\`${table}\` TO '${DB_USER}'@'localhost'`,
+        );
+      }
+      console.log(`  ✓ Grants für '${DB_USER}' (DELETE nur auf ${DELETABLE_TABLES.length} Nicht-Finanztabellen)`);
+    }
 
     // audit_insert_user: nur INSERT (GoBD: append-only auf Finanztabellen)
     // Hinweis: In Production engere Grants pro Tabelle setzen (nach Migration):

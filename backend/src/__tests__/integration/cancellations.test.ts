@@ -214,6 +214,66 @@ describe('POST /receipts/:id/cancel', () => {
     expect(res.status).toBe(409);
   });
 
+  it('DB-Backstop: UNIQUE-Constraint verhindert zweite cancellations-Zeile (Doppel-Storno-Race)', async () => {
+    const receiptId = await setupPaidOrder(token, productId);
+    const cancelRes = await request(app)
+      .post(`/receipts/${receiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Erster Storno' });
+    expect(cancelRes.status).toBe(201);
+
+    // Simuliert den zweiten Gewinner eines Race: direkter INSERT unter Umgehung
+    // der Controller-Checks — die DB selbst muss ablehnen (uq_cancellations_original)
+    await expect(
+      db.execute(
+        `INSERT INTO cancellations
+           (original_receipt_id, original_receipt_number, cancellation_receipt_id, cancelled_by_user_id, reason)
+         SELECT c.original_receipt_id, c.original_receipt_number, c.cancellation_receipt_id, c.cancelled_by_user_id, 'Race-Duplikat'
+         FROM cancellations c WHERE c.original_receipt_id = ?`,
+        [receiptId]
+      )
+    ).rejects.toMatchObject({ code: 'ER_DUP_ENTRY' });
+  });
+
+  it('Storno am Folgetag: zählt und nettet in der Session des Stornos, nicht der Original-Session', async () => {
+    const receiptId = await setupPaidOrder(token, productId);
+
+    // Session A schließen — Umsatz 2500, kein Storno
+    const closeA = await request(app)
+      .post('/sessions/close')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ closing_cash_cents: 12500 });
+    expect(closeA.status).toBe(200);
+    expect(closeA.body.total_revenue_cents).toBe(2500);
+    expect(closeA.body.cancellation_count).toBe(0);
+    expect(closeA.body.difference_cents).toBe(0);
+
+    // Session B öffnen und den Bon aus Session A stornieren
+    const openB = await request(app)
+      .post('/sessions/open')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ opening_cash_cents: 12500 });
+    expect(openB.status).toBe(201);
+
+    const cancelRes = await request(app)
+      .post(`/receipts/${receiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Gast reklamiert am Folgetag' });
+    expect(cancelRes.status).toBe(201);
+
+    // Session B schließen — Gegenbuchung (−2500) UND Storno-Zählung gehören hierhin
+    const closeB = await request(app)
+      .post('/sessions/close')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ closing_cash_cents: 10000 });
+    expect(closeB.status).toBe(200);
+    expect(closeB.body.total_revenue_cents).toBe(-2500);
+    expect(closeB.body.cancellation_count).toBe(1);
+    // Bar-Erstattung reduziert den erwarteten Kassenbestand: 12500 − 2500 = 10000
+    expect(closeB.body.expected_cash_cents).toBe(10000);
+    expect(closeB.body.difference_cents).toBe(0);
+  });
+
   it('403 für staff-Benutzer', async () => {
     const receiptId = await setupPaidOrder(token, productId);
     const { token: staffToken } = await setup(db, 'staff');

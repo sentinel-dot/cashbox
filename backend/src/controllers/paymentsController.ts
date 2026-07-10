@@ -180,6 +180,20 @@ export async function payOrder(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Session muss noch offen sein — sessionMiddleware prüfte nur beim Request-Start.
+    // Ohne diesen Lock kann die Zahlung in eine parallel geschlossene Session buchen:
+    // Bon fehlt dann im unveränderlichen Z-Bericht → unkorrigierbare Kassendifferenz.
+    // closeSession sperrt dieselbe Zeile und serialisiert sich so gegen Zahlungen.
+    const [lockedSession] = await conn.execute<any[]>(
+      `SELECT status FROM cash_register_sessions WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [sessionId, tenantId]
+    );
+    if (lockedSession.length === 0 || lockedSession[0].status !== 'open') {
+      await conn.rollback();
+      res.status(409).json({ error: 'Kassensitzung wurde zwischenzeitlich geschlossen. Bitte neue Sitzung öffnen.' });
+      return;
+    }
+
     // Bon-Nummer atomar vergeben (KassenSichV: fortlaufend, keine Lücken)
     receiptNumber = await nextReceiptNumber(tenantId, conn);
 

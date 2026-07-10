@@ -420,11 +420,19 @@ export async function cancelOrder(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Nur offene Orders (kein Bon) können direkt storniert werden
-  await db.execute(
-    `UPDATE orders SET status = 'cancelled', closed_at = NOW() WHERE id = ? AND tenant_id = ?`,
+  // Nur offene Orders (kein Bon) können direkt storniert werden.
+  // Status-Guard im UPDATE: ohne ihn überschreibt ein Storno-Request, der das
+  // Race gegen payOrder verliert, eine bezahlte Order (mit aktivem Bon!) auf
+  // 'cancelled' — ohne Gegenbuchung.
+  const [cancelResult] = await db.execute<any>(
+    `UPDATE orders SET status = 'cancelled', closed_at = NOW()
+     WHERE id = ? AND tenant_id = ? AND status = 'open'`,
     [orderId, tenantId]
   );
+  if (cancelResult.affectedRows !== 1) {
+    res.status(409).json({ error: 'Bestellung wurde zwischenzeitlich bezahlt oder storniert.' });
+    return;
+  }
 
   await writeAuditLog({
     tenantId, userId, action: 'order.cancelled',

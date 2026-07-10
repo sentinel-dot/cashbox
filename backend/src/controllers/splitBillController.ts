@@ -181,6 +181,18 @@ export async function splitBill(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Session muss noch offen sein — gleicher Schutz wie in payOrder: sonst buchen
+    // die Split-Bons in eine parallel geschlossene Session (fehlen im Z-Bericht)
+    const [lockedSession] = await conn.execute<any[]>(
+      `SELECT status FROM cash_register_sessions WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [sessionId, tenantId]
+    );
+    if (lockedSession.length === 0 || lockedSession[0].status !== 'open') {
+      await conn.rollback();
+      res.status(409).json({ error: 'Kassensitzung wurde zwischenzeitlich geschlossen. Bitte neue Sitzung öffnen.' });
+      return;
+    }
+
     const splitGroupId = orderId; // orderId als gemeinsame Gruppen-ID aller Split-Bons
     const now = new Date().toISOString();
 
