@@ -54,6 +54,18 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // Storno-von-Storno verhindern — die Gegenbuchung einer Gegenbuchung würde
+  // den Umsatz wieder positiv buchen
+  const originalJsonCheck = original.raw_receipt_json
+    ? (typeof original.raw_receipt_json === 'string'
+        ? JSON.parse(original.raw_receipt_json)
+        : original.raw_receipt_json)
+    : null;
+  if (originalJsonCheck?.cancellation === true) {
+    res.status(409).json({ error: 'Storno-Bons können nicht storniert werden.' });
+    return;
+  }
+
   // Prüfen ob Bon bereits storniert wurde (GoBD: kein Doppel-Storno)
   const [existingCancel] = await db.execute<any[]>(
     `SELECT c.id FROM cancellations c
@@ -83,12 +95,8 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
   const tenant = tenantRows[0];
   const device = deviceRows[0];
 
-  // Original raw_receipt_json parsen (für Storno-Bon-Snapshot)
-  const originalJson = original.raw_receipt_json
-    ? (typeof original.raw_receipt_json === 'string'
-        ? JSON.parse(original.raw_receipt_json)
-        : original.raw_receipt_json)
-    : null;
+  // Original raw_receipt_json (bereits oben geparst) — für Storno-Bon-Snapshot
+  const originalJson = originalJsonCheck;
 
   // Brutto-Beträge für TSE rekonstruieren (net + tax = gross)
   const vat7GrossCents  = (original.vat_7_net_cents  ?? 0) + (original.vat_7_tax_cents  ?? 0);

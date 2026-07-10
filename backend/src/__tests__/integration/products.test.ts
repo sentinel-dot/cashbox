@@ -9,7 +9,7 @@ import type { AuthPayload } from '../../middleware/authMiddleware.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function setup(conn: any) {
+async function setup(conn: any, role: 'owner' | 'manager' | 'staff' = 'owner') {
   const [t] = await conn.execute(
     `INSERT INTO tenants (name, address, plan, subscription_status)
      VALUES ('Test GmbH', 'Str. 1, Berlin', 'business', 'active')`
@@ -19,8 +19,8 @@ async function setup(conn: any) {
 
   const hash = await bcrypt.hash('pw', 10);
   const [u] = await conn.execute(
-    `INSERT INTO users (tenant_id, name, email, password_hash, role) VALUES (?, 'O', 'o@t.de', ?, 'owner')`,
-    [tenantId, hash]
+    `INSERT INTO users (tenant_id, name, email, password_hash, role) VALUES (?, 'O', 'o@t.de', ?, ?)`,
+    [tenantId, hash, role]
   );
   const userId = u.insertId as number;
 
@@ -32,7 +32,7 @@ async function setup(conn: any) {
   const deviceId = d.insertId as number;
 
   const token = jwt.sign(
-    { userId, tenantId, deviceId, role: 'owner' } as AuthPayload,
+    { userId, tenantId, deviceId, role } as AuthPayload,
     process.env['JWT_SECRET'] ?? 'test-secret',
     { expiresIn: '15m' }
   );
@@ -410,5 +410,65 @@ describe('POST /products/:id/price', () => {
       .post(`/products/${productId}/price`)
       .send({ price_cents: 2500 });
     expect(res.status).toBe(401);
+  });
+});
+
+// ─── Rollen-Guards: staff darf Katalog lesen, aber nicht schreiben ────────────
+
+describe('Rollen-Guards Produkte (staff)', () => {
+  let staffToken: string; let tenantId: number; let productId: number;
+
+  beforeEach(async () => {
+    ({ token: staffToken, tenantId } = await setup(db, 'staff'));
+    const [p] = await db.execute(
+      `INSERT INTO products (tenant_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway)
+       VALUES (?, 'Shisha', 2000, '19', '19')`,
+      [tenantId]
+    ) as any;
+    productId = p.insertId;
+  });
+  afterEach(() => { /* cleanup in setup.ts */ });
+
+  it('staff darf Produkte lesen', async () => {
+    const res = await request(app).get('/products').set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('staff darf keine Produkte anlegen → 403', async () => {
+    const res = await request(app)
+      .post('/products')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ name: 'X', price_cents: 1000, vat_rate_inhouse: '19' });
+    expect(res.status).toBe(403);
+  });
+
+  it('staff darf keine Preise ändern → 403', async () => {
+    const res = await request(app)
+      .post(`/products/${productId}/price`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ price_cents: 9999 });
+    expect(res.status).toBe(403);
+  });
+
+  it('staff darf keine Produkte löschen → 403', async () => {
+    const res = await request(app)
+      .delete(`/products/${productId}`)
+      .set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('staff darf keine Berichte abrufen → 403', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await request(app)
+      .get(`/reports/daily?date=${today}`)
+      .set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('staff darf keinen DSFinV-K-Export starten → 403', async () => {
+    const res = await request(app)
+      .get('/export/dsfinvk?from=2026-07-01&to=2026-07-10')
+      .set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(403);
   });
 });

@@ -22,6 +22,23 @@ export const updateUserSchema = z.object({
   message: 'Mindestens ein Feld muss angegeben werden.',
 });
 
+// ─── PIN-Uniqueness ──────────────────────────────────────────────────────────
+// PIN-Login vergleicht gegen ALLE User des Tenants — bei Kollision gewinnt der
+// erste bcrypt-Treffer (falscher User!). Daher: PIN muss pro Tenant eindeutig sein.
+
+async function pinAlreadyUsed(tenantId: number, pin: string, excludeUserId?: number): Promise<boolean> {
+  const [rows] = await db.execute<any[]>(
+    `SELECT id, pin_hash FROM users
+     WHERE tenant_id = ? AND is_active = TRUE AND pin_hash IS NOT NULL`,
+    [tenantId]
+  );
+  for (const row of rows) {
+    if (excludeUserId !== undefined && row.id === excludeUserId) continue;
+    if (await bcrypt.compare(pin, row.pin_hash)) return true;
+  }
+  return false;
+}
+
 // ─── Role-Guard-Helper ───────────────────────────────────────────────────────
 
 function requireRole(req: Request, res: Response, allowed: ('owner' | 'manager' | 'staff')[]): boolean {
@@ -76,6 +93,11 @@ export async function createUser(req: Request, res: Response): Promise<void> {
   );
   if (existing.length > 0) {
     res.status(409).json({ error: 'E-Mail bereits vergeben.' });
+    return;
+  }
+
+  if (pin && await pinAlreadyUsed(tenantId, pin)) {
+    res.status(409).json({ error: 'PIN bereits vergeben. Bitte andere PIN wählen.' });
     return;
   }
 
@@ -147,6 +169,10 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
   if (name !== undefined) { updates.push('name = ?');         values.push(name); }
   if (role !== undefined) { updates.push('role = ?');         values.push(role); }
   if (pin  !== undefined) {
+    if (pin !== null && await pinAlreadyUsed(tenantId, pin, targetId)) {
+      res.status(409).json({ error: 'PIN bereits vergeben. Bitte andere PIN wählen.' });
+      return;
+    }
     const hash = pin !== null ? await bcrypt.hash(pin, 12) : null;
     updates.push('pin_hash = ?');
     values.push(hash);

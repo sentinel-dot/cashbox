@@ -75,7 +75,21 @@ export async function register(req: Request, res: Response): Promise<void> {
   const conn = await (db as any).getConnection();
   await conn.beginTransaction();
 
+  // Race-Schutz für die globale E-Mail-Prüfung: der UNIQUE KEY ist nur
+  // per-Tenant, check-then-insert wäre bei parallelen Registrierungen
+  // derselben E-Mail lückenhaft → Advisory Lock auf die E-Mail.
+  const emailLock = `onboarding:email:${email.toLowerCase()}`;
+  let lockAcquired = false;
+
   try {
+    const [lockRows] = await conn.execute('SELECT GET_LOCK(?, 5) AS got', [emailLock]) as any[];
+    lockAcquired = Number((lockRows as any[])[0]?.got) === 1;
+    if (!lockAcquired) {
+      await conn.rollback();
+      res.status(409).json({ error: 'Registrierung läuft bereits. Bitte erneut versuchen.' });
+      return;
+    }
+
     // 1. Tenant anlegen (trial)
     const [tenantResult] = await conn.execute(
       `INSERT INTO tenants (name, address, tax_number, subscription_status)
@@ -84,15 +98,13 @@ export async function register(req: Request, res: Response): Promise<void> {
     ) as any[];
     const tenantId: number = tenantResult.insertId;
 
-    // 1b. Globale E-Mail-Eindeutigkeit prüfen (onboarding-spezifisch:
-    //     UNIQUE KEY uq_users_email_tenant ist nur per-Tenant — nicht ausreichend)
+    // 1b. Globale E-Mail-Eindeutigkeit prüfen (unter dem Advisory Lock)
     const [emailCheck] = await conn.execute(
       'SELECT id FROM users WHERE email = ? LIMIT 1',
       [email]
     ) as any[];
     if ((emailCheck as any[]).length > 0) {
       await conn.rollback();
-      conn.release();
       res.status(409).json({ error: 'E-Mail bereits registriert.' });
       return;
     }
@@ -139,6 +151,9 @@ export async function register(req: Request, res: Response): Promise<void> {
       throw err;
     }
   } finally {
+    if (lockAcquired) {
+      await conn.execute('SELECT RELEASE_LOCK(?)', [emailLock]).catch(() => {});
+    }
     conn.release();
   }
 }

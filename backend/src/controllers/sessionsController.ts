@@ -122,24 +122,41 @@ export async function openSession(req: Request, res: Response): Promise<void> {
   const userId    = req.auth!.userId;
   const { opening_cash_cents } = req.body as z.infer<typeof openSessionSchema>;
 
-  // Nur eine offene Session pro Gerät erlaubt
-  const [existing] = await db.execute<any[]>(
-    `SELECT id FROM cash_register_sessions
-     WHERE tenant_id = ? AND device_id = ? AND status = 'open' LIMIT 1`,
-    [tenantId, deviceId]
-  );
-  if (existing.length > 0) {
-    res.status(409).json({ error: 'Es gibt bereits eine offene Kassensitzung für dieses Gerät.' });
-    return;
-  }
+  // Nur eine offene Session pro Gerät — Check+Insert in TX mit Lock auf der
+  // Geräte-Zeile, sonst öffnen zwei parallele Requests zwei Sessions
+  const conn = await db.getConnection();
+  let newId!: number;
+  try {
+    await conn.beginTransaction();
+    await conn.execute(
+      `SELECT id FROM devices WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [deviceId, tenantId]
+    );
+    const [existing] = await conn.execute<any[]>(
+      `SELECT id FROM cash_register_sessions
+       WHERE tenant_id = ? AND device_id = ? AND status = 'open' LIMIT 1`,
+      [tenantId, deviceId]
+    );
+    if (existing.length > 0) {
+      await conn.rollback();
+      res.status(409).json({ error: 'Es gibt bereits eine offene Kassensitzung für dieses Gerät.' });
+      return;
+    }
 
-  const [result] = await db.execute<any>(
-    `INSERT INTO cash_register_sessions
-       (tenant_id, device_id, opened_by_user_id, opening_cash_cents, status)
-     VALUES (?, ?, ?, ?, 'open')`,
-    [tenantId, deviceId, userId, opening_cash_cents]
-  );
-  const newId = result.insertId as number;
+    const [result] = await conn.execute<any>(
+      `INSERT INTO cash_register_sessions
+         (tenant_id, device_id, opened_by_user_id, opening_cash_cents, status)
+       VALUES (?, ?, ?, ?, 'open')`,
+      [tenantId, deviceId, userId, opening_cash_cents]
+    );
+    newId = result.insertId as number;
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 
   await writeAuditLog({
     tenantId, userId, action: 'session.opened',
@@ -241,14 +258,20 @@ export async function closeSession(req: Request, res: Response): Promise<void> {
   // Z-Bericht-Daten aggregieren
   const reportData = await buildZReportData(sessionId, tenantId);
 
-  // Session schließen (UPDATE erlaubt auf cash_register_sessions — kein Finanzdatum)
-  await db.execute(
+  // Session schließen — atomarer Claim via status='open'-Bedingung:
+  // von zwei parallelen close-Requests gewinnt genau einer, der zweite
+  // bekommt 409 (verhindert doppelte z_reports)
+  const [closeResult] = await db.execute<any>(
     `UPDATE cash_register_sessions
      SET status = 'closed', closed_by_user_id = ?, closed_at = NOW(),
          closing_cash_cents = ?, expected_cash_cents = ?, difference_cents = ?
-     WHERE id = ? AND tenant_id = ?`,
+     WHERE id = ? AND tenant_id = ? AND status = 'open'`,
     [userId, closing_cash_cents, expected_cash_cents, difference_cents, sessionId, tenantId]
   );
+  if (closeResult.affectedRows !== 1) {
+    res.status(409).json({ error: 'Kassensitzung wurde bereits geschlossen.' });
+    return;
+  }
 
   // Z-Bericht unveränderlich speichern (audit_insert_user = INSERT-only)
   const zReportJson = {

@@ -3,11 +3,12 @@ import { authMiddleware } from '../middleware/authMiddleware.js';
 import { deviceMiddleware } from '../middleware/deviceMiddleware.js';
 import { tenantMiddleware } from '../middleware/tenantMiddleware.js';
 import { subscriptionMiddleware } from '../middleware/subscriptionMiddleware.js';
+import { requireRole } from '../middleware/roleMiddleware.js';
 import { triggerExport, getExportStatus, downloadExportFile } from '../controllers/exportController.js';
 
 const router = Router();
 
-router.use(authMiddleware, deviceMiddleware, tenantMiddleware, subscriptionMiddleware);
+router.use(authMiddleware, deviceMiddleware, tenantMiddleware, subscriptionMiddleware, requireRole('owner', 'manager'));
 
 // Query-Param-Validierung im Controller via Zod
 router.get('/dsfinvk',                       triggerExport);

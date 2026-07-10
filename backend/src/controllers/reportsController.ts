@@ -10,6 +10,12 @@ const REPORT_DAYS_LIMIT: Record<string, number> = {
   business: 3650,
 };
 
+// Geschäftstag-Zuordnung in lokaler Zeit — sonst landen Umsätze nach Mitternacht
+// (UTC-Datumsgrenze 00/01 Uhr lokal) am falschen Tag.
+// Voraussetzung: MariaDB-Timezone-Tabellen geladen (mariadb-tzinfo-to-sql) — auch in Prod!
+const REPORT_TZ = 'Europe/Berlin';
+const LOCAL_DATE = (col: string) => `DATE(CONVERT_TZ(${col}, '+00:00', '${REPORT_TZ}'))`;
+
 async function getPlanLimit(tenantId: number): Promise<{ maxDays: number; plan: string }> {
   const [rows] = await db.execute<any[]>('SELECT plan FROM tenants WHERE id = ?', [tenantId]);
   const plan = rows[0]?.plan ?? 'starter';
@@ -65,7 +71,7 @@ export async function getDailyReport(req: Request, res: Response): Promise<void>
        COALESCE(SUM(vat_19_tax_cents),  0)  AS vat_19_tax_cents,
        COALESCE(SUM(total_gross_cents), 0)  AS total_gross_cents
      FROM receipts
-     WHERE tenant_id = ? AND DATE(created_at) = ? AND status = 'active'`,
+     WHERE tenant_id = ? AND ${LOCAL_DATE('created_at')} = ? AND status = 'active'`,
     [tenantId, date]
   );
 
@@ -74,7 +80,7 @@ export async function getDailyReport(req: Request, res: Response): Promise<void>
     `SELECT p.method, COALESCE(SUM(p.amount_cents), 0) AS total_cents
      FROM payments p
      JOIN receipts r ON r.id = p.receipt_id
-     WHERE r.tenant_id = ? AND DATE(r.created_at) = ? AND r.status = 'active'
+     WHERE r.tenant_id = ? AND ${LOCAL_DATE('r.created_at')} = ? AND r.status = 'active'
      GROUP BY p.method`,
     [tenantId, date]
   );
@@ -84,7 +90,7 @@ export async function getDailyReport(req: Request, res: Response): Promise<void>
     `SELECT COUNT(*) AS cancellation_count
      FROM cancellations c
      JOIN receipts r ON r.id = c.original_receipt_id
-     WHERE r.tenant_id = ? AND DATE(c.created_at) = ?`,
+     WHERE r.tenant_id = ? AND ${LOCAL_DATE('c.created_at')} = ?`,
     [tenantId, date]
   );
 
@@ -93,7 +99,7 @@ export async function getDailyReport(req: Request, res: Response): Promise<void>
     `SELECT id, opened_at, closed_at, opening_cash_cents, closing_cash_cents,
             expected_cash_cents, difference_cents, status
      FROM cash_register_sessions
-     WHERE tenant_id = ? AND DATE(opened_at) = ?
+     WHERE tenant_id = ? AND ${LOCAL_DATE('opened_at')} = ?
      ORDER BY opened_at ASC`,
     [tenantId, date]
   );
@@ -156,7 +162,7 @@ export async function getSummaryReport(req: Request, res: Response): Promise<voi
        COALESCE(SUM(vat_19_tax_cents),  0)  AS vat_19_tax_cents,
        COALESCE(SUM(total_gross_cents), 0)  AS total_gross_cents
      FROM receipts
-     WHERE tenant_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status = 'active'`,
+     WHERE tenant_id = ? AND ${LOCAL_DATE('created_at')} BETWEEN ? AND ? AND status = 'active'`,
     [tenantId, from, to]
   );
 
@@ -165,7 +171,7 @@ export async function getSummaryReport(req: Request, res: Response): Promise<voi
     `SELECT p.method, COALESCE(SUM(p.amount_cents), 0) AS total_cents
      FROM payments p
      JOIN receipts r ON r.id = p.receipt_id
-     WHERE r.tenant_id = ? AND DATE(r.created_at) BETWEEN ? AND ? AND r.status = 'active'
+     WHERE r.tenant_id = ? AND ${LOCAL_DATE('r.created_at')} BETWEEN ? AND ? AND r.status = 'active'
      GROUP BY p.method`,
     [tenantId, from, to]
   );
@@ -173,7 +179,7 @@ export async function getSummaryReport(req: Request, res: Response): Promise<voi
   // Pro-Tag-Aufschlüsselung (Receipts)
   const [byDayRows] = await db.execute<any[]>(
     `SELECT
-       DATE(created_at)                      AS date,
+       ${LOCAL_DATE('created_at')}       AS date,
        COUNT(*)                              AS receipt_count,
        COALESCE(SUM(vat_7_net_cents),   0)  AS vat_7_net_cents,
        COALESCE(SUM(vat_7_tax_cents),   0)  AS vat_7_tax_cents,
@@ -181,8 +187,8 @@ export async function getSummaryReport(req: Request, res: Response): Promise<voi
        COALESCE(SUM(vat_19_tax_cents),  0)  AS vat_19_tax_cents,
        COALESCE(SUM(total_gross_cents), 0)  AS total_gross_cents
      FROM receipts
-     WHERE tenant_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status = 'active'
-     GROUP BY DATE(created_at)
+     WHERE tenant_id = ? AND ${LOCAL_DATE('created_at')} BETWEEN ? AND ? AND status = 'active'
+     GROUP BY ${LOCAL_DATE('created_at')}
      ORDER BY date ASC`,
     [tenantId, from, to]
   );
@@ -190,13 +196,13 @@ export async function getSummaryReport(req: Request, res: Response): Promise<voi
   // Pro-Tag-Payments nach Methode
   const [byDayPayments] = await db.execute<any[]>(
     `SELECT
-       DATE(r.created_at) AS date,
+       ${LOCAL_DATE('r.created_at')} AS date,
        p.method,
        COALESCE(SUM(p.amount_cents), 0) AS total_cents
      FROM payments p
      JOIN receipts r ON r.id = p.receipt_id
-     WHERE r.tenant_id = ? AND DATE(r.created_at) BETWEEN ? AND ? AND r.status = 'active'
-     GROUP BY DATE(r.created_at), p.method`,
+     WHERE r.tenant_id = ? AND ${LOCAL_DATE('r.created_at')} BETWEEN ? AND ? AND r.status = 'active'
+     GROUP BY ${LOCAL_DATE('r.created_at')}, p.method`,
     [tenantId, from, to]
   );
 

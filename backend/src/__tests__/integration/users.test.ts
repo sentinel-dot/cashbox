@@ -146,6 +146,21 @@ describe('POST /users', () => {
     expect(res.status).toBe(403);
   });
 
+  it('409 bei bereits vergebener PIN (PIN-Kollision im Tenant)', async () => {
+    const first = await request(app)
+      .post('/users')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'A', email: 'pin-a@t.de', password: 'password1', role: 'staff', pin: '4711' });
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post('/users')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'B', email: 'pin-b@t.de', password: 'password1', role: 'staff', pin: '4711' });
+    expect(second.status).toBe(409);
+    expect(second.body.error).toContain('PIN');
+  });
+
   it('gibt 409 bei doppelter E-Mail im selben Tenant', async () => {
     const res = await request(app)
       .post('/users')

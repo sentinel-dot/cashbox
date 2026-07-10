@@ -11,6 +11,10 @@ const REPORT_DAYS_LIMIT: Record<string, number> = {
   business: 3650,
 };
 
+// Lokale Geschäftstag-Zuordnung (siehe reportsController) — Timezone-Tabellen nötig
+const REPORT_TZ = 'Europe/Berlin';
+const LOCAL_DATE = (col: string) => `DATE(CONVERT_TZ(${col}, '+00:00', '${REPORT_TZ}'))`;
+
 // ─── GET /receipts — Listenansicht ──────────────────────────────────────────
 
 const listReceiptsQuerySchema = z.object({
@@ -49,12 +53,16 @@ export async function listReceipts(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Dynamische WHERE-Klausel aufbauen
+  // Dynamische WHERE-Klausel aufbauen.
+  // Plan-Limit gilt IMMER als Untergrenze — sonst umgeht ein Request ohne
+  // `from` das Rückblick-Limit und liest die volle Historie.
   const conditions: string[] = ['r.tenant_id = ?'];
   const params: (string | number)[] = [tenantId];
 
-  if (from) { conditions.push('DATE(r.created_at) >= ?'); params.push(from); }
-  if (to)   { conditions.push('DATE(r.created_at) <= ?'); params.push(to); }
+  conditions.push(`${LOCAL_DATE('r.created_at')} >= ?`);
+  params.push(from && from > earliestStr ? from : earliestStr);
+
+  if (to)   { conditions.push(`${LOCAL_DATE('r.created_at')} <= ?`); params.push(to); }
   if (session_id) { conditions.push('r.session_id = ?'); params.push(session_id); }
 
   const where = conditions.join(' AND ');

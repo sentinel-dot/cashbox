@@ -5,6 +5,7 @@ import { tenantMiddleware } from '../middleware/tenantMiddleware.js';
 import { subscriptionMiddleware } from '../middleware/subscriptionMiddleware.js';
 import { planLimitMiddleware } from '../middleware/planMiddleware.js';
 import { validationMiddleware } from '../middleware/validationMiddleware.js';
+import { requireRole } from '../middleware/roleMiddleware.js';
 import {
   createCategorySchema, updateCategorySchema,
   createProductSchema,  updateProductSchema,  changePriceSchema,
@@ -32,15 +33,15 @@ router.use(authMiddleware, deviceMiddleware, tenantMiddleware, subscriptionMiddl
 
 // ─── Kategorien ──────────────────────────────────────────────────────────────
 router.get( '/categories',     listCategories);
-router.post('/categories',     validationMiddleware(createCategorySchema), createCategory);
-router.patch('/categories/:id', validationMiddleware(updateCategorySchema), updateCategory);
-router.delete('/categories/:id', deleteCategory);
+router.post('/categories',     requireRole('owner', 'manager'), validationMiddleware(createCategorySchema), createCategory);
+router.patch('/categories/:id', requireRole('owner', 'manager'), validationMiddleware(updateCategorySchema), updateCategory);
+router.delete('/categories/:id', requireRole('owner', 'manager'), deleteCategory);
 
 // ─── Produkte ─────────────────────────────────────────────────────────────────
 router.get('/',          listProducts);
-router.post('/',         planLimitMiddleware('products'), validationMiddleware(createProductSchema), createProduct);
-router.post('/:id/price', validationMiddleware(changePriceSchema), changePrice);
-router.patch('/:id',     rejectImmutablePriceFields, validationMiddleware(updateProductSchema), updateProduct);
-router.delete('/:id',    deleteProduct);
+router.post('/',         requireRole('owner', 'manager'), planLimitMiddleware('products'), validationMiddleware(createProductSchema), createProduct);
+router.post('/:id/price', requireRole('owner', 'manager'), validationMiddleware(changePriceSchema), changePrice);
+router.patch('/:id',     requireRole('owner', 'manager'), rejectImmutablePriceFields, validationMiddleware(updateProductSchema), updateProduct);
+router.delete('/:id',    requireRole('owner', 'manager'), deleteProduct);
 
 export default router;

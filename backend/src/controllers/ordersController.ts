@@ -11,7 +11,7 @@ export const createOrderSchema = z.object({
 
 export const addItemSchema = z.object({
   product_id:          z.number().int().positive(),
-  quantity:            z.number().int().min(1).default(1),
+  quantity:            z.number().int().min(1).max(999).default(1),
   modifier_option_ids: z.array(z.number().int().positive()).optional(),
   discount_cents:      z.number().int().nonnegative().optional(),
   discount_reason:     z.string().min(1).max(500).optional(),
@@ -366,10 +366,14 @@ export async function removeItem(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // GoBD: kein DELETE — Entfernung wird in order_item_removals dokumentiert (INSERT-only, append-only)
+    // GoBD: kein DELETE — Entfernung wird in order_item_removals dokumentiert (INSERT-only, append-only).
+    // reason optional aus Body (kein Zod-Schema auf DELETE-Route — nur String-Check)
+    const removalReason = typeof (req.body as any)?.reason === 'string'
+      ? (req.body as any).reason.slice(0, 500)
+      : null;
     await conn.execute(
-      'INSERT INTO order_item_removals (order_item_id, removed_by_user_id) VALUES (?, ?)',
-      [itemId, userId]
+      'INSERT INTO order_item_removals (order_item_id, removed_by_user_id, reason) VALUES (?, ?, ?)',
+      [itemId, userId, removalReason]
     );
     await conn.commit();
   } catch (err) {

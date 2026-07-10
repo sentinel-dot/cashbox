@@ -37,6 +37,24 @@ interface PendingAudit {
 
 // ─── Event Handlers ──────────────────────────────────────────────────────────
 
+// Stripe-Status → Tenant-Status. NIEMALS blind 'active' setzen — ein beliebiges
+// subscription.updated-Event (z.B. past_due) würde sonst gesperrte Tenants reaktivieren.
+function mapStripeStatus(status: Stripe.Subscription.Status): 'active' | 'past_due' | 'cancelled' {
+  switch (status) {
+    case 'active':
+    case 'trialing':
+      return 'active';
+    case 'past_due':
+    case 'unpaid':
+      return 'past_due';
+    case 'canceled':
+    case 'incomplete_expired':
+      return 'cancelled';
+    default: // 'incomplete', 'paused' — nicht zahlend → nicht freischalten
+      return 'past_due';
+  }
+}
+
 async function onSubscriptionCreatedOrUpdated(
   conn: any,
   sub: Stripe.Subscription
@@ -47,30 +65,31 @@ async function onSubscriptionCreatedOrUpdated(
 
   const priceId = sub.items.data[0]?.price?.id ?? '';
   const plan    = getPlanFromPriceId(priceId);
+  const status  = mapStripeStatus(sub.status);
 
   if (plan) {
     await conn.execute(
       `UPDATE tenants
-          SET subscription_status    = 'active',
+          SET subscription_status    = ?,
               stripe_subscription_id = ?,
               plan                   = ?
         WHERE id = ?`,
-      [sub.id, plan, tenantId]
+      [status, sub.id, plan, tenantId]
     );
   } else {
     await conn.execute(
       `UPDATE tenants
-          SET subscription_status    = 'active',
+          SET subscription_status    = ?,
               stripe_subscription_id = ?
         WHERE id = ?`,
-      [sub.id, tenantId]
+      [status, sub.id, tenantId]
     );
   }
 
   return {
     tenantId,
-    action: 'stripe.subscription.active',
-    diff:   { new: { subscription_status: 'active', plan, stripe_subscription_id: sub.id } },
+    action: `stripe.subscription.${status}`,
+    diff:   { new: { subscription_status: status, plan, stripe_subscription_id: sub.id } },
   };
 }
 

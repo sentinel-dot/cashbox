@@ -183,6 +183,22 @@ describe('POST /receipts/:id/cancel', () => {
     expect(rows[0].original_receipt_number).toBe(1);
   });
 
+  it('409 bei Storno eines Storno-Bons (Storno-von-Storno)', async () => {
+    const receiptId = await setupPaidOrder(token, productId);
+    const cancelRes = await request(app)
+      .post(`/receipts/${receiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Erster Storno' });
+    const cancelReceiptId = cancelRes.body.cancellation_receipt_id as number;
+
+    const res = await request(app)
+      .post(`/receipts/${cancelReceiptId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Storno des Stornos' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('Storno');
+  });
+
   it('409 bei Doppel-Storno', async () => {
     const receiptId = await setupPaidOrder(token, productId);
     await request(app)

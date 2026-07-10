@@ -140,9 +140,9 @@ async function main(): Promise<void> {
 
     // 3. Grants
     //
-    // app_user: vollständige App-Rechte + ALTER/CREATE für Migrations
+    // app_user: vollständige App-Rechte + ALTER/CREATE/INDEX für Migrations
     await run(conn,
-      `GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
       `Grants für '${DB_USER}'`
     );
 

@@ -272,11 +272,22 @@ private struct AppSidebar: View {
     @Binding var selectedNav: NavItem
     let onSchnellkasse: () -> Void
 
-    private let sections: [(NavSection, [NavItem])] = [
-        (.uebersicht,  [.tische, .produkte, .kategorien]),
-        (.abrechnung,  [.kassensitzung, .berichte, .zbericht]),
-        (.system,      [.einstellungen]),
-    ]
+    // Backend erlaubt Produkt-/Kategorien-Schreibzugriff und Berichte nur für
+    // owner+manager (403 für staff) — staff sieht die Bereiche gar nicht erst.
+    private var sections: [(NavSection, [NavItem])] {
+        let isStaff = authStore.currentUser?.role == .staff
+        if isStaff {
+            return [
+                (.uebersicht,  [.tische]),
+                (.abrechnung,  [.kassensitzung]),
+            ]
+        }
+        return [
+            (.uebersicht,  [.tische, .produkte, .kategorien]),
+            (.abrechnung,  [.kassensitzung, .berichte, .zbericht]),
+            (.system,      [.einstellungen]),
+        ]
+    }
 
     var body: some View {
         VStack(spacing: 0) {

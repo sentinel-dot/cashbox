@@ -48,6 +48,7 @@ function fakeSubscription(overrides: object = {}): object {
     id:       SUB_ID,
     object:   'subscription',
     customer: CUSTOMER_ID,
+    status:   'active', // echte Stripe-Subscriptions haben immer einen Status
     items:    { data: [{ price: { id: process.env['STRIPE_PRICE_STARTER'] ?? 'price_starter_test' } }] },
     ...overrides,
   };
@@ -146,6 +147,37 @@ describe('POST /webhooks/stripe — customer.subscription.created', () => {
     expect(rows[0].subscription_status).toBe('active');
     expect(rows[0].plan).toBe('starter');
     expect(rows[0].stripe_subscription_id).toBe(SUB_ID);
+  });
+
+  it('subscription.updated mit status=past_due reaktiviert KEINEN gesperrten Tenant', async () => {
+    const tenantId = await seedTenant(CUSTOMER_ID);
+    await db.execute(`UPDATE tenants SET subscription_status = 'past_due' WHERE id = ?`, [tenantId]);
+
+    const res = await postWebhook(
+      fakeEvent('customer.subscription.updated', fakeSubscription({ status: 'past_due' }))
+    );
+    expect(res.status).toBe(200);
+
+    const [rows] = await db.execute<any[]>(
+      'SELECT subscription_status FROM tenants WHERE id = ?',
+      [tenantId]
+    );
+    expect(rows[0].subscription_status).toBe('past_due');
+  });
+
+  it('subscription.updated mit status=canceled setzt cancelled', async () => {
+    const tenantId = await seedTenant(CUSTOMER_ID);
+
+    const res = await postWebhook(
+      fakeEvent('customer.subscription.updated', fakeSubscription({ status: 'canceled' }))
+    );
+    expect(res.status).toBe(200);
+
+    const [rows] = await db.execute<any[]>(
+      'SELECT subscription_status FROM tenants WHERE id = ?',
+      [tenantId]
+    );
+    expect(rows[0].subscription_status).toBe('cancelled');
   });
 
   it('Unbekannter Customer → 200, kein DB-Update', async () => {
