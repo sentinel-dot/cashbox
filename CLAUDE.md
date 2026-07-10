@@ -21,14 +21,9 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 5. ~~Bug-Fixes: JSON-Decode-Fehler, PIN-Login, Produkt-/Kategorie-Anzeige, Berichte, 409-Mapping~~ ✅
 6. Plus Jakarta Sans Font-Dateien bundlen (Info.plist UIAppFonts)
 
-**Bekannte offene Sicherheitslücken / Risiken (Audit 2026-07-10, mittlere Priorität — Details in `implementierungsplan.md` §17):**
-1. Stripe-Webhook setzt bei jedem Subscription-Update `'active'` (ignoriert `sub.status`) — reaktiviert gesperrte Tenants
-2. Storno-von-Storno nicht gesperrt (`cancelReceipt` prüft `raw_receipt_json.cancellation` nicht)
-3. Berichte rechnen in UTC — Umsätze 00–02 Uhr lokal landen am Vortag
-4. Rollenrechte: `staff` darf Produkte/Preise ändern, Sessions schließen, Berichte + Export abrufen
-5. `openSession`/`closeSession` ohne Lock (Race: doppelte Sessions/z_reports)
-6. `listReceipts` ohne `from`-Param umgeht das Plan-Limit; `addItem.quantity` ohne Obergrenze
-7. PIN: Kollision möglich, kein Uniqueness-Check; Onboarding-E-Mail-Race; iOS-Keychain ohne `kSecAttrAccessible`
+**Bekannte offene Sicherheitslücken:** keine ✅ (Audit 2026-07-10: alle kritischen + mittleren Findings behoben, siehe `implementierungsplan.md` §17)
+
+**Betriebshinweis:** Berichte nutzen `CONVERT_TZ(…, 'Europe/Berlin')` — der Produktions-MariaDB-Server braucht geladene Timezone-Tabellen (`mariadb-tzinfo-to-sql /usr/share/zoneinfo | mysql mysql`), sonst liefern alle Berichte 0.
 
 **Pilot-Ziel:** Shishabar-Test — kein festes Datum
 

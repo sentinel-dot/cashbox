@@ -1245,20 +1245,20 @@ if appVersion < min_app_version → 426 Upgrade Required
 **TSE-Robustheit** ✅ — 10s-Timeout auf Fiskaly-Calls, Offline-Queue-Retry (transient → pending statt failed), atomarer Claim + `processing_started_at` (V006), keine 1970-Timestamps, `tse_outages` wird befüllt, enqueueOffline-Fehler geloggt.
 **iOS-Ausfallsicherheit** ✅ — 401 → Token-Refresh + Retry im APIClient; minimaler SyncManager triggert Offline-Queue-Sync bei Online-Wechsel/Foreground/Login.
 
-### Offen — Audit 2026-07-10 (mittlere Priorität)
+### Mittlere Findings — Audit 2026-07-10 ✅ alle behoben
 
-1. **Stripe-Webhook-Status-Mapping**: `onSubscriptionCreatedOrUpdated` setzt immer `'active'`, ignoriert `sub.status` (`past_due`/`canceled`/`unpaid`) — gesperrter Tenant wird durch beliebiges Subscription-Update reaktiviert.
-2. **Storno-von-Storno möglich**: `cancelReceipt` prüft nicht, ob der Ziel-Bon selbst ein Storno-Bon ist (`raw_receipt_json.cancellation`).
-3. **Berichts-Timezone**: `DATE(created_at)` rechnet in UTC — Umsätze 00–02 Uhr lokal (Shishabar!) landen am Vortag. `CONVERT_TZ` mit Tenant-Timezone (Default `Europe/Berlin`).
-4. **Rollenrechte**: `staff` darf Produkte anlegen/löschen, Preise ändern, Sessions schließen, Berichte + DSFinV-K-Export abrufen. Guards ergänzen (owner+manager).
-5. **Session-Races**: `openSession`/`closeSession` ohne Lock — parallele Aufrufe → zwei offene Sessions bzw. doppelte z_reports.
-6. **listReceipts-Plan-Limit** greift nur wenn `from` gesetzt — ohne `from` volle Historie abrufbar.
-7. **`addItem.quantity` ohne Obergrenze** (Zod `max`).
-8. **PIN-Konzept**: erster bcrypt-Treffer gewinnt bei Kollision, kein Uniqueness-Check, Brute-Force nur per IP-Limit gebremst.
-9. **Onboarding-E-Mail-Race** (check-then-insert, global nicht unique).
-10. **Keychain (iOS)**: `kSecAttrAccessible` fehlt, OSStatus ignoriert.
-11. **Indizes**: `receipts(tenant_id, created_at)`, `orders(session_id, status)`, `offline_queue(tenant_id, status)`.
-12. **Kleinkram**: `removeItem` erfasst `reason` nicht; ungenutztes `syncRateLimit`; Reihenfolge `subscription.updated` vs. `invoice.payment_failed`.
+1. **Stripe-Webhook-Status-Mapping** ✅ — `sub.status` wird gemappt; Update-Events reaktivieren keine gesperrten Tenants mehr.
+2. **Storno-von-Storno** ✅ — 409 wenn Ziel-Bon selbst Gegenbuchung ist.
+3. **Berichts-Timezone** ✅ — `CONVERT_TZ(…, 'Europe/Berlin')` in Reports + Bon-Liste. **Prod-Voraussetzung: MariaDB-Timezone-Tabellen laden** (`mariadb-tzinfo-to-sql`).
+4. **Rollenrechte** ✅ — `requireRole('owner','manager')` auf Produkt-/Kategorien-/Modifier-Schreibrouten, Preisänderung, Berichte, Export; iOS-Sidebar blendet Bereiche für staff aus.
+5. **Session-Races** ✅ — openSession lockt Geräte-Zeile (FOR UPDATE), closeSession claimt atomar.
+6. **listReceipts-Plan-Limit** ✅ — Untergrenze gilt immer, auch ohne `from`.
+7. **quantity-Limit** ✅ — Zod `max(999)`.
+8. **PIN-Uniqueness** ✅ — 409 bei Kollision (create + update).
+9. **Onboarding-E-Mail-Race** ✅ — Advisory Lock (`GET_LOCK`) um Check+Insert.
+10. **Keychain (iOS)** ✅ — `kSecAttrAccessibleAfterFirstUnlock`, OSStatus-Rückgabe.
+11. **Indizes** ✅ — V007: `receipts(tenant_id, created_at)`, `orders(session_id, status)`, `offline_queue(tenant_id, status)`.
+12. **Kleinkram** ✅ — `removeItem` speichert optionalen `reason`; `syncRateLimit` auf Sync-Route verdrahtet.
 
 ### Kritisch — vor Go-live (Features)
 
