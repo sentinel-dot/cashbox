@@ -837,7 +837,8 @@ CDOfflineQueue (id, order_id, idempotency_key, payload, status, created_at)
 ## 8. Security
 
 ### Authentifizierung & Geräte
-- JWT + Refresh Token (kurze Laufzeit: 15min / 7 Tage)
+- JWT + Refresh Token (kurze Laufzeit: 15min / 7 Tage, rotierend)
+- Absolutes Session-Limit: `SESSION_MAX_HOURS` (Default 16h) — Refresh-Rotation verlängert die Session nicht darüber hinaus; `session_start`-Claim im Refresh-Token, Prüfung in `POST /auth/refresh` + Token-`exp` gedeckelt. Schicht-Modell: 1× Login pro Tag, danach „Sitzung abgelaufen"-Banner in der App (Alt-Tokens ohne Claim → 401)
 - Device Token: gehashter Token in DB, Klartext nur bei Ausstellung
 - Device-Revocation: `POST /devices/:id/revoke` → sofort wirksam (Middleware prüft `is_revoked`)
 - PIN-basierter Benutzerwechsel auf Gerät (nicht für sensitive Operationen)

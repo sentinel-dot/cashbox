@@ -24,18 +24,49 @@ export const pinSchema = z.object({
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function signTokens(payload: AuthPayload): { token: string; refreshToken: string } {
+const DEFAULT_SESSION_MAX_HOURS = 16;
+
+// Absolutes Session-Limit in Sekunden — Refresh-Rotation verlängert die Session
+// nicht über diesen Zeitraum hinaus (Schicht-Modell: 1x Login pro Tag).
+function sessionMaxSeconds(): number {
+  const hours = Number(process.env['SESSION_MAX_HOURS'] ?? DEFAULT_SESSION_MAX_HOURS);
+  return (Number.isFinite(hours) && hours >= 0 ? hours : DEFAULT_SESSION_MAX_HOURS) * 3600;
+}
+
+function parseDurationSeconds(value: string, fallback: number): number {
+  const match = /^(\d+)\s*(s|m|h|d)?$/.exec(value.trim());
+  if (!match) return fallback;
+  const units: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+  return Number(match[1]) * units[match[2] ?? 's']!;
+}
+
+function signTokens(
+  payload: AuthPayload,
+  sessionStart?: number
+): { token: string; refreshToken: string } {
   const secret = process.env['JWT_SECRET'];
   if (!secret) throw new Error('JWT_SECRET nicht konfiguriert.');
+
+  const now = Math.floor(Date.now() / 1000);
+  const start = sessionStart ?? now;
 
   const token = jwt.sign(payload, secret, {
     expiresIn: (process.env['JWT_EXPIRY'] ?? '15m') as any,
   });
 
+  // Refresh-Token läuft spätestens mit dem absoluten Session-Limit ab —
+  // damit ist es nach Ablauf auch kryptografisch tot, nicht nur per Handler-Check.
+  const baseRefreshSeconds = parseDurationSeconds(
+    process.env['JWT_REFRESH_EXPIRY'] ?? '7d',
+    7 * 86400
+  );
+  const remainingSeconds = start + sessionMaxSeconds() - now;
+  const refreshExpiresIn = Math.max(1, Math.min(baseRefreshSeconds, remainingSeconds));
+
   const refreshToken = jwt.sign(
-    { ...payload, type: 'refresh' },
+    { ...payload, type: 'refresh', session_start: start },
     secret,
-    { expiresIn: (process.env['JWT_REFRESH_EXPIRY'] ?? '7d') as any }
+    { expiresIn: refreshExpiresIn }
   );
 
   return { token, refreshToken };
@@ -125,7 +156,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  let payload: AuthPayload & { type?: string };
+  let payload: AuthPayload & { type?: string; session_start?: number };
   try {
     payload = jwt.verify(refresh_token, secret) as any;
   } catch {
@@ -135,6 +166,17 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 
   if (payload.type !== 'refresh') {
     res.status(401).json({ error: 'Kein Refresh-Token.' });
+    return;
+  }
+
+  // Absolutes Session-Limit: Rotation verlängert die Session nicht.
+  // Alt-Tokens ohne session_start (vor Einführung des Limits) → Re-Login.
+  const sessionStart = payload.session_start;
+  if (
+    typeof sessionStart !== 'number' ||
+    Math.floor(Date.now() / 1000) - sessionStart > sessionMaxSeconds()
+  ) {
+    res.status(401).json({ error: 'Sitzung abgelaufen — bitte neu anmelden.' });
     return;
   }
 
@@ -167,7 +209,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     role:     userRows[0].role,
   };
 
-  const { token, refreshToken } = signTokens(newPayload);
+  const { token, refreshToken } = signTokens(newPayload, sessionStart);
   res.json({ token, refreshToken });
 }
 

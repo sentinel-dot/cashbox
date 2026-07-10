@@ -291,6 +291,7 @@ npm run test:coverage        # Coverage-Report
 - Globaler Error Handler nutzt `logger.error` statt `console.error`
 
 ### Auth — kritische Backend-Details
+- **Token-Modell:** Access-JWT 15 min (`JWT_EXPIRY`), Refresh-Token 7 d rotierend (`JWT_REFRESH_EXPIRY`), **absolutes Session-Limit 16 h** (`SESSION_MAX_HOURS`, Schicht-Modell: 1× Login pro Tag). `session_start`-Claim im Refresh-Token wird bei Rotation unverändert weitergereicht; `/auth/refresh` gibt 401 wenn Limit überschritten oder Claim fehlt, Token-`exp` ist zusätzlich auf `session_start + Limit` gedeckelt. iOS zeigt danach automatisch das „Sitzung abgelaufen"-Banner (forceLogout)
 - `POST /auth/login` erwartet **auch `device_token`** — Gerät muss registriert sein (via `/onboarding/register` oder `/devices/register`)
 - Login/Register-Response: `{token, refreshToken, user: {id, name, role}}` — **kein `tenant`-Objekt**
 - iOS-Modell `AuthUser` ist deshalb schlanker als `User` (nur id, name, role)

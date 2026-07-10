@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import app from '../../app.js';
 import { db } from '../../db/index.js';
 
@@ -164,6 +165,80 @@ describe('POST /auth/refresh', () => {
   it('gibt 422 bei fehlendem refresh_token', async () => {
     const res = await request(app).post('/auth/refresh').send({});
     expect(res.status).toBe(422);
+  });
+
+  // ─── Absolutes Session-Limit (SESSION_MAX_HOURS, Default 16h) ────────────
+
+  async function loginAndGetIds() {
+    const loginRes = await request(app)
+      .post('/auth/login')
+      .send({ email: 'niko@test.de', password: 'geheim123', device_token: deviceToken });
+    expect(loginRes.status).toBe(200);
+    const payload = jwt.decode(loginRes.body.refreshToken) as any;
+    return { refreshToken: loginRes.body.refreshToken as string, payload };
+  }
+
+  it('Refresh-Token enthält session_start und läuft spätestens nach 16h ab', async () => {
+    const { payload } = await loginAndGetIds();
+
+    expect(typeof payload.session_start).toBe('number');
+    expect(payload.exp).toBeLessThanOrEqual(payload.session_start + 16 * 3600);
+  });
+
+  it('Rotation verlängert die Session nicht: session_start bleibt identisch', async () => {
+    const { refreshToken } = await loginAndGetIds();
+
+    const first = await request(app).post('/auth/refresh').send({ refresh_token: refreshToken });
+    expect(first.status).toBe(200);
+    const second = await request(app)
+      .post('/auth/refresh')
+      .send({ refresh_token: first.body.refreshToken });
+    expect(second.status).toBe(200);
+
+    const original = jwt.decode(refreshToken) as any;
+    const rotated  = jwt.decode(second.body.refreshToken) as any;
+    expect(rotated.session_start).toBe(original.session_start);
+  });
+
+  it('gibt 401 wenn session_start älter als das Session-Limit ist', async () => {
+    const { payload } = await loginAndGetIds();
+
+    const expired = jwt.sign(
+      {
+        userId:        payload.userId,
+        tenantId:      payload.tenantId,
+        deviceId:      payload.deviceId,
+        role:          payload.role,
+        type:          'refresh',
+        session_start: Math.floor(Date.now() / 1000) - 17 * 3600, // 17h alt
+      },
+      process.env['JWT_SECRET']!,
+      { expiresIn: '1h' }
+    );
+
+    const res = await request(app).post('/auth/refresh').send({ refresh_token: expired });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/Sitzung abgelaufen/);
+  });
+
+  it('gibt 401 bei Alt-Token ohne session_start-Claim', async () => {
+    const { payload } = await loginAndGetIds();
+
+    const legacy = jwt.sign(
+      {
+        userId:   payload.userId,
+        tenantId: payload.tenantId,
+        deviceId: payload.deviceId,
+        role:     payload.role,
+        type:     'refresh',
+      },
+      process.env['JWT_SECRET']!,
+      { expiresIn: '7d' }
+    );
+
+    const res = await request(app).post('/auth/refresh').send({ refresh_token: legacy });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/Sitzung abgelaufen/);
   });
 });
 
