@@ -98,19 +98,9 @@ class AuthStore: ObservableObject {
         cacheUsers(authUsers)
     }
 
-    // MARK: - Token-Refresh
-
-    func refreshToken() async throws {
-        struct Body: Encodable { let refreshToken: String }
-        guard let stored = KeychainHelper.load(key: "refreshToken") else {
-            throw AppError.unauthorized
-        }
-        let response: AuthResponse = try await api.post(
-            "/auth/refresh",
-            body: Body(refreshToken: stored)
-        )
-        await applyAuthResponse(response)
-    }
+    // Token-Refresh passiert transparent im APIClient (401 → /auth/refresh → Retry).
+    // Hinweis: /auth/refresh liefert nur {token, refreshToken} ohne user —
+    // ein AuthResponse-Decode würde hier scheitern.
 
     // MARK: - Logout
 

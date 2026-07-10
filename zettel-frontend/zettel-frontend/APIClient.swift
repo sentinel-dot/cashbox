@@ -67,7 +67,8 @@ class APIClient {
     private func request<T: Decodable, B: Encodable>(
         _ path: String,
         method: String,
-        body: B?
+        body: B?,
+        allowRefresh: Bool = true
     ) async throws -> T {
         guard let url = URL(string: baseURL + path) else {
             throw AppError.networkError("Ungültige URL: \(path)")
@@ -99,6 +100,14 @@ class APIClient {
             throw AppError.networkError("Keine HTTP-Antwort erhalten")
         }
 
+        // 401 mit vorhandenem Token: einmalig Refresh versuchen und Request
+        // wiederholen — statt den Kassierer mitten in der Schicht auszuloggen.
+        if http.statusCode == 401, allowRefresh, authToken != nil, path != "/auth/refresh" {
+            if await attemptTokenRefresh() {
+                return try await request(path, method: method, body: body, allowRefresh: false)
+            }
+        }
+
         try mapStatusCode(http.statusCode, data: data)
 
         do {
@@ -106,6 +115,37 @@ class APIClient {
         } catch {
             throw AppError.networkError("Antwort nicht verarbeitbar: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Token-Refresh (POST /auth/refresh liefert nur {token, refreshToken})
+
+    private var refreshTask: Task<Bool, Never>?
+
+    private func attemptTokenRefresh() async -> Bool {
+        // Laufenden Refresh mitbenutzen — parallele 401s lösen nur EINEN Refresh aus
+        if let running = refreshTask { return await running.value }
+
+        let task = Task<Bool, Never> { [weak self] in
+            guard let self, let stored = KeychainHelper.load(key: "refreshToken") else { return false }
+            struct Body: Encodable { let refreshToken: String }
+            struct RefreshResponse: Decodable { let token: String; let refreshToken: String }
+            do {
+                let resp: RefreshResponse = try await self.request(
+                    "/auth/refresh", method: "POST",
+                    body: Body(refreshToken: stored),
+                    allowRefresh: false
+                )
+                self.authToken = resp.token
+                KeychainHelper.save(resp.refreshToken, key: "refreshToken")
+                return true
+            } catch {
+                return false
+            }
+        }
+        refreshTask = task
+        let ok = await task.value
+        refreshTask = nil
+        return ok
     }
 
     private func mapStatusCode(_ code: Int, data: Data) throws {
