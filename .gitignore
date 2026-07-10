@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Xcode — User-State (Fensterlayout, Schemes pro User)
+xcuserdata/
+*.xcuserstate
