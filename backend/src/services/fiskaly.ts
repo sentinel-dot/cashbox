@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/index.js';
 import { writeAuditLog } from './audit.js';
+import { logger } from '../logger.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,10 @@ const FISKALY_API_SECRET = process.env['FISKALY_API_SECRET'] ?? '';
 let _token: string | null = null;
 let _tokenExpiry = 0;
 
+// Harte Obergrenze pro Fiskaly-Request — ein hängender TSE-Call darf die
+// Zahlung nicht blockieren; Timeout wirft ohne status → Offline-Fallback greift.
+const FISKALY_TIMEOUT_MS = 10_000;
+
 async function getToken(): Promise<string> {
   if (_token && Date.now() < _tokenExpiry - 60_000) return _token;
 
@@ -45,6 +50,7 @@ async function getToken(): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ api_key: FISKALY_API_KEY, api_secret: FISKALY_API_SECRET }),
+    signal: AbortSignal.timeout(FISKALY_TIMEOUT_MS),
   });
   if (!res.ok) throw Object.assign(new Error(`Fiskaly auth failed: ${res.status}`), { status: res.status });
 
@@ -60,6 +66,7 @@ async function fiskalyFetch(method: string, path: string, body?: unknown): Promi
     method,
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(FISKALY_TIMEOUT_MS),
   });
   const data = res.status !== 204 ? await res.json() : null;
   return { status: res.status, data };
@@ -165,8 +172,9 @@ function mapFiskalyResponse(data: any): Omit<TseTransactionResult, 'pending' | '
     tseSerialNumber:     data.tss_serial_number,
     tseSignature:        data.signature?.value,
     tseCounter:          data.signature?.counter,
-    tseTransactionStart: new Date((data.time_start ?? 0) * 1000),
-    tseTransactionEnd:   new Date((data.time_end   ?? 0) * 1000),
+    // Fehlender Timestamp → undefined (nie Epoch-0/1970 in receipts schreiben)
+    tseTransactionStart: data.time_start ? new Date(data.time_start * 1000) : undefined,
+    tseTransactionEnd:   data.time_end   ? new Date(data.time_end   * 1000) : undefined,
   };
 }
 
@@ -262,10 +270,37 @@ async function enqueueOffline(params: TseTransactionParams, idempotencyKey: stri
         vat7GrossCents:  params.vat7GrossCents,
         vat19GrossCents: params.vat19GrossCents,
         payments:        params.payments,
+        receiptType:     params.receiptType ?? 'RECEIPT',
       }),
       idempotencyKey,
       error,
     ]
+  );
+}
+
+// ─── TSE-Ausfall-Erfassung (KassenSichV: Ausfall >48h muss gemeldet werden) ───
+
+/** Öffnet einen Outage-Eintrag für Tenant+Device, falls keiner offen ist. */
+async function openTseOutage(tenantId: number, deviceId: number): Promise<void> {
+  const [open] = await db.execute<any[]>(
+    `SELECT id FROM tse_outages
+     WHERE tenant_id = ? AND device_id = ? AND ended_at IS NULL LIMIT 1`,
+    [tenantId, deviceId]
+  );
+  if (open.length === 0) {
+    await db.execute(
+      `INSERT INTO tse_outages (tenant_id, device_id, started_at) VALUES (?, ?, NOW())`,
+      [tenantId, deviceId]
+    );
+  }
+}
+
+/** Schließt offene Outage-Einträge nach erfolgreicher TSE-Transaktion (erlaubtes UPDATE). */
+async function closeTseOutage(tenantId: number, deviceId: number): Promise<void> {
+  await db.execute(
+    `UPDATE tse_outages SET ended_at = NOW()
+     WHERE tenant_id = ? AND device_id = ? AND ended_at IS NULL`,
+    [tenantId, deviceId]
   );
 }
 
@@ -306,6 +341,9 @@ export async function processTseTransaction(params: TseTransactionParams): Promi
       deviceId: params.deviceId,
     }).catch(() => {});
 
+    // Erfolg → offene TSE-Ausfälle für dieses Gerät schließen (best-effort)
+    closeTseOutage(params.tenantId, params.deviceId).catch(() => {});
+
     return { pending: false, idempotencyKey, ...tseData };
   } catch (err: any) {
     // 4xx Validierungsfehler: kein Fallback, direkt fehlschlagen
@@ -313,9 +351,26 @@ export async function processTseTransaction(params: TseTransactionParams): Promi
       throw err;
     }
 
-    // Netzwerkfehler / 5xx → Offline-Fallback
+    // Netzwerkfehler / 5xx / Timeout → Offline-Fallback
     const errorMessage = err.message ?? String(err);
-    await enqueueOffline(params, idempotencyKey, errorMessage).catch(() => {});
+    await enqueueOffline(params, idempotencyKey, errorMessage).catch((queueErr) => {
+      // KRITISCH: Bon bleibt tse_pending OHNE Queue-Eintrag → wird nie nachsigniert.
+      // Laut loggen, damit das Monitoring den verwaisten Bon findet (order_id + key).
+      logger.error(
+        {
+          err: queueErr,
+          tenant: params.tenantId,
+          device: params.deviceId,
+          order: params.orderId,
+          idempotency_key: idempotencyKey,
+          tse_error: errorMessage,
+        },
+        'enqueueOffline fehlgeschlagen — Bon bleibt unsigniert ohne Queue-Eintrag'
+      );
+    });
+
+    // TSE-Ausfall erfassen (KassenSichV-Meldepflicht bei >48h) — best-effort
+    openTseOutage(params.tenantId, params.deviceId).catch(() => {});
 
     writeAuditLog({
       tenantId: params.tenantId, userId: params.userId,

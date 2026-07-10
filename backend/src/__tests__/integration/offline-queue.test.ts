@@ -164,7 +164,7 @@ describe('POST /sync/offline-queue', () => {
   });
   afterEach(() => { /* cleanup: global afterEach in setup.ts */ });
 
-  it('verarbeitet pending-Eintrag (kein TSE konfiguriert → failed)', async () => {
+  it('verarbeitet pending-Eintrag (kein TSE erreichbar → bleibt pending für Retry)', async () => {
     const idempotencyKey = uuidv4();
     await seedQueueEntry(db, tenantId, userId, deviceId, sessionId, idempotencyKey);
 
@@ -175,8 +175,10 @@ describe('POST /sync/offline-queue', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.processed).toBe(1);
-    // Kein TSS konfiguriert → processTseTransaction gibt pending:true → failed
-    expect(res.body.failed).toBe(1);
+    // Kein TSS konfiguriert/erreichbar = transient → requeued, NICHT failed
+    // (KassenSichV: Bons müssen nachsigniert werden, failed wäre Endstation)
+    expect(res.body.requeued).toBe(1);
+    expect(res.body.failed).toBe(0);
     expect(res.body.succeeded).toBe(0);
 
     const [rows] = await db.execute<any[]>(
@@ -184,11 +186,11 @@ describe('POST /sync/offline-queue', () => {
        WHERE idempotency_key = ? AND tenant_id = ?`,
       [idempotencyKey, tenantId]
     );
-    expect(rows[0].status).toBe('failed');
+    expect(rows[0].status).toBe('pending');
     expect(rows[0].retry_count).toBe(1);
   });
 
-  it('Eintrag ohne receipt_id wird als failed markiert', async () => {
+  it('frischer Eintrag ohne receipt_id wird zurückgestellt (Zahlung läuft evtl. noch)', async () => {
     const idempotencyKey = uuidv4();
     await seedQueueEntry(db, tenantId, userId, deviceId, sessionId, idempotencyKey, false);
 
@@ -199,6 +201,34 @@ describe('POST /sync/offline-queue', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.processed).toBe(1);
+    expect(res.body.requeued).toBe(1);
+    expect(res.body.failed).toBe(0);
+
+    const [rows] = await db.execute<any[]>(
+      `SELECT status, error_message FROM offline_queue
+       WHERE idempotency_key = ? AND tenant_id = ?`,
+      [idempotencyKey, tenantId]
+    );
+    expect(rows[0].status).toBe('pending');
+    expect(rows[0].error_message).toContain('receipt_id');
+  });
+
+  it('alter Eintrag ohne receipt_id wird endgültig failed (Zahlung nie abgeschlossen)', async () => {
+    const idempotencyKey = uuidv4();
+    await seedQueueEntry(db, tenantId, userId, deviceId, sessionId, idempotencyKey, false);
+    // Eintrag künstlich altern lassen (> NO_RECEIPT_FAIL_MINUTES)
+    await db.execute(
+      `UPDATE offline_queue SET created_at = NOW() - INTERVAL 15 MINUTE
+       WHERE idempotency_key = ?`,
+      [idempotencyKey]
+    );
+
+    const res = await request(app)
+      .post('/sync/offline-queue')
+      .set('Authorization', `Bearer ${token}`)
+      .send();
+
+    expect(res.status).toBe(200);
     expect(res.body.failed).toBe(1);
 
     const [rows] = await db.execute<any[]>(
@@ -208,6 +238,58 @@ describe('POST /sync/offline-queue', () => {
     );
     expect(rows[0].status).toBe('failed');
     expect(rows[0].error_message).toContain('receipt_id');
+  });
+
+  it('stuck processing-Eintrag wird nach Timeout wieder pending (Crash-Recovery)', async () => {
+    const idempotencyKey = uuidv4();
+    await seedQueueEntry(db, tenantId, userId, deviceId, sessionId, idempotencyKey);
+    // Simulierter Crash: processing seit 10 Minuten
+    await db.execute(
+      `UPDATE offline_queue
+       SET status = 'processing', processing_started_at = NOW() - INTERVAL 10 MINUTE
+       WHERE idempotency_key = ?`,
+      [idempotencyKey]
+    );
+
+    const res = await request(app)
+      .post('/sync/offline-queue')
+      .set('Authorization', `Bearer ${token}`)
+      .send();
+    expect(res.status).toBe(200);
+    // Reset auf pending + im selben Lauf verarbeitet (kein TSS → requeued)
+    expect(res.body.processed).toBe(1);
+
+    const [rows] = await db.execute<any[]>(
+      `SELECT status FROM offline_queue WHERE idempotency_key = ?`,
+      [idempotencyKey]
+    );
+    expect(rows[0].status).toBe('pending');
+  });
+
+  it('frisch geclaimter processing-Eintrag wird NICHT zurückgesetzt', async () => {
+    const idempotencyKey = uuidv4();
+    await seedQueueEntry(db, tenantId, userId, deviceId, sessionId, idempotencyKey);
+    // Alter Eintrag (created_at 60 min), aber gerade eben geclaimt
+    await db.execute(
+      `UPDATE offline_queue
+       SET status = 'processing', processing_started_at = NOW(),
+           created_at = NOW() - INTERVAL 60 MINUTE
+       WHERE idempotency_key = ?`,
+      [idempotencyKey]
+    );
+
+    const res = await request(app)
+      .post('/sync/offline-queue')
+      .set('Authorization', `Bearer ${token}`)
+      .send();
+    expect(res.status).toBe(200);
+    expect(res.body.processed).toBe(0); // nicht angefasst
+
+    const [rows] = await db.execute<any[]>(
+      `SELECT status FROM offline_queue WHERE idempotency_key = ?`,
+      [idempotencyKey]
+    );
+    expect(rows[0].status).toBe('processing');
   });
 
   it('leere Queue: processed=0, pending_remaining=0', async () => {

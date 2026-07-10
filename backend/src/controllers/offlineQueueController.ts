@@ -5,6 +5,9 @@ import { writeAuditLog } from '../services/audit.js';
 
 // Stuck-'processing'-Einträge nach 5 Min zurücksetzen (Crash-Recovery)
 const STUCK_THRESHOLD_MINUTES = 5;
+// Einträge ohne receipt_id erst nach dieser Frist endgültig failen —
+// payOrder verknüpft die receipt_id erst nach Abschluss der DB-Transaktion
+const NO_RECEIPT_FAIL_MINUTES = 10;
 const BATCH_SIZE = 20;
 
 // ─── GET /sync/offline-queue ──────────────────────────────────────────────────
@@ -40,18 +43,22 @@ export async function syncOfflineQueue(req: Request, res: Response): Promise<voi
   const deviceId = req.auth!.deviceId;
   const userId   = req.auth!.userId;
 
-  // Stuck 'processing'-Einträge zurücksetzen (Crash-Recovery, UPDATE erlaubt)
+  // Stuck 'processing'-Einträge zurücksetzen (Crash-Recovery, UPDATE erlaubt).
+  // Maßgeblich ist der Claim-Zeitpunkt (processing_started_at), nicht created_at —
+  // sonst würde ein alter, gerade geclaimter Eintrag sofort wieder freigegeben.
   await db.execute(
     `UPDATE offline_queue
      SET status = 'pending', error_message = 'Reset nach processing-Timeout'
      WHERE tenant_id = ? AND status = 'processing'
-       AND created_at < NOW() - INTERVAL ? MINUTE`,
+       AND processing_started_at IS NOT NULL
+       AND processing_started_at < NOW() - INTERVAL ? MINUTE`,
     [tenantId, STUCK_THRESHOLD_MINUTES]
   );
 
   // Pending-Einträge laden mit TSE-Konfiguration des Original-Geräts
   const [entries] = await db.execute<any[]>(
-    `SELECT q.id, q.device_id, q.order_id, q.idempotency_key, q.payload_json, q.retry_count,
+    `SELECT q.id, q.device_id, q.order_id, q.idempotency_key, q.payload_json,
+            q.retry_count, q.created_at,
             d.tse_client_id,
             t.fiskaly_tss_id
      FROM offline_queue q
@@ -63,14 +70,17 @@ export async function syncOfflineQueue(req: Request, res: Response): Promise<voi
     [tenantId, BATCH_SIZE]
   );
 
-  const result = { processed: 0, succeeded: 0, failed: 0 };
+  const result = { processed: 0, succeeded: 0, failed: 0, requeued: 0 };
 
   for (const entry of entries) {
-    // Als 'processing' markieren (UPDATE erlaubt)
-    await db.execute(
-      `UPDATE offline_queue SET status = 'processing' WHERE id = ? AND tenant_id = ?`,
+    // Atomarer Claim — paralleler Sync-Aufruf darf denselben Eintrag nicht doppelt verarbeiten
+    const [claim] = await db.execute<any>(
+      `UPDATE offline_queue
+       SET status = 'processing', processing_started_at = NOW()
+       WHERE id = ? AND tenant_id = ? AND status = 'pending'`,
       [entry.id, tenantId]
     );
+    if (claim.affectedRows !== 1) continue; // bereits von anderem Aufruf geclaimt
 
     const payload = typeof entry.payload_json === 'string'
       ? JSON.parse(entry.payload_json)
@@ -78,16 +88,29 @@ export async function syncOfflineQueue(req: Request, res: Response): Promise<voi
 
     result.processed++;
 
-    // Kein receipt_id → Zahlung wurde nie abgeschlossen, TSE-TX wäre waisig
+    // Kein receipt_id → Zahlung (noch) nicht abgeschlossen. payOrder trägt die
+    // receipt_id erst nach Commit der Zahlungs-TX ein — frische Einträge daher
+    // zurückstellen, erst nach Frist endgültig failen (TSE-TX wäre sonst waisig).
     if (!payload.receipt_id) {
-      await db.execute(
-        `UPDATE offline_queue
-         SET status = 'failed', retry_count = retry_count + 1,
-             error_message = 'Keine receipt_id — Zahlung nicht abgeschlossen'
-         WHERE id = ? AND tenant_id = ?`,
-        [entry.id, tenantId]
-      );
-      result.failed++;
+      const ageMs = Date.now() - new Date(entry.created_at).getTime();
+      if (ageMs >= NO_RECEIPT_FAIL_MINUTES * 60_000) {
+        await db.execute(
+          `UPDATE offline_queue
+           SET status = 'failed', retry_count = retry_count + 1,
+               error_message = 'Keine receipt_id — Zahlung nicht abgeschlossen'
+           WHERE id = ? AND tenant_id = ?`,
+          [entry.id, tenantId]
+        );
+        result.failed++;
+      } else {
+        await db.execute(
+          `UPDATE offline_queue
+           SET status = 'pending', error_message = 'Wartet auf receipt_id (Zahlung läuft noch)'
+           WHERE id = ? AND tenant_id = ?`,
+          [entry.id, tenantId]
+        );
+        result.requeued++;
+      }
       continue;
     }
 
@@ -102,6 +125,7 @@ export async function syncOfflineQueue(req: Request, res: Response): Promise<voi
         vat7GrossCents:  payload.vat7GrossCents,
         vat19GrossCents: payload.vat19GrossCents,
         payments:        payload.payments,
+        receiptType:     payload.receiptType ?? 'RECEIPT',
         idempotencyKey:  entry.idempotency_key,
       });
 
@@ -147,27 +171,31 @@ export async function syncOfflineQueue(req: Request, res: Response): Promise<voi
         }).catch(() => {});
 
       } else {
-        // TSE noch nicht erreichbar — Eintrag zurück auf failed (erneut pending setzen für Retry möglich)
+        // TSE noch nicht erreichbar — transient: zurück auf 'pending', damit der
+        // nächste Sync-Lauf erneut versucht (KassenSichV: Bons MÜSSEN nachsigniert werden)
         await db.execute(
           `UPDATE offline_queue
-           SET status = 'failed', retry_count = retry_count + 1,
+           SET status = 'pending', retry_count = retry_count + 1,
                error_message = 'TSE nicht erreichbar'
            WHERE id = ? AND tenant_id = ?`,
           [entry.id, tenantId]
         );
-        result.failed++;
+        result.requeued++;
       }
 
     } catch (err: any) {
-      // 4xx / unerwarteter Fehler — als failed markieren
+      const message = (err.message ?? String(err)).slice(0, 500);
+      // 4xx-Validierungsfehler sind endgültig → failed.
+      // Alles andere (Netzwerk, 5xx, Timeout) ist transient → pending für Retry.
+      const isPermanent = err.status && err.status >= 400 && err.status < 500
+        && err.status !== 408 && err.status !== 429;
       await db.execute(
         `UPDATE offline_queue
-         SET status = 'failed', retry_count = retry_count + 1,
-             error_message = ?
+         SET status = ?, retry_count = retry_count + 1, error_message = ?
          WHERE id = ? AND tenant_id = ?`,
-        [(err.message ?? String(err)).slice(0, 500), entry.id, tenantId]
+        [isPermanent ? 'failed' : 'pending', message, entry.id, tenantId]
       );
-      result.failed++;
+      if (isPermanent) result.failed++; else result.requeued++;
     }
   }
 
