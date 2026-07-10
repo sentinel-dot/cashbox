@@ -21,7 +21,14 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 5. ~~Bug-Fixes: JSON-Decode-Fehler, PIN-Login, Produkt-/Kategorie-Anzeige, Berichte, 409-Mapping~~ ✅
 6. Plus Jakarta Sans Font-Dateien bundlen (Info.plist UIAppFonts)
 
-**Bekannte offene Sicherheitslücken:** keine ✅
+**Bekannte offene Sicherheitslücken / Risiken (Audit 2026-07-10, mittlere Priorität — Details in `implementierungsplan.md` §17):**
+1. Stripe-Webhook setzt bei jedem Subscription-Update `'active'` (ignoriert `sub.status`) — reaktiviert gesperrte Tenants
+2. Storno-von-Storno nicht gesperrt (`cancelReceipt` prüft `raw_receipt_json.cancellation` nicht)
+3. Berichte rechnen in UTC — Umsätze 00–02 Uhr lokal landen am Vortag
+4. Rollenrechte: `staff` darf Produkte/Preise ändern, Sessions schließen, Berichte + Export abrufen
+5. `openSession`/`closeSession` ohne Lock (Race: doppelte Sessions/z_reports)
+6. `listReceipts` ohne `from`-Param umgeht das Plan-Limit; `addItem.quantity` ohne Obergrenze
+7. PIN: Kollision möglich, kein Uniqueness-Check; Onboarding-E-Mail-Race; iOS-Keychain ohne `kSecAttrAccessible`
 
 **Pilot-Ziel:** Shishabar-Test — kein festes Datum
 
@@ -62,10 +69,13 @@ Dasselbe gilt für das **Frontend (SwiftUI):** Nach jeder Implementierung (neuer
 - **Erlaubte UPDATEs** (operative Zustandsfelder, keine Buchungsdaten):
   - `orders.status` (`open` → `paid` / `cancelled`) und `orders.closed_at`
   - `cash_register_sessions.status`, `.closed_at`, `.closing_cash_cents`, `.expected_cash_cents`, `.difference_cents`
-  - `offline_queue.status`, `.retry_count`, `.error_message`, `.synced_at`, `.payload_json`
+  - `offline_queue.status`, `.retry_count`, `.error_message`, `.synced_at`, `.payload_json`, `.processing_started_at`
   - `tse_outages.ended_at`, `.notified_at`, `.reported_to_finanzamt`
-- Storno = neue Gegenbuchung in `cancellations` + neue TSE-Transaktion, nicht Zeile ändern
-- Preisänderung = neuer Eintrag in `product_price_history`, **nie** `UPDATE products SET price_cents`; Route: `POST /products/:id/price`
+  - `receipts.tse_*` + `.tse_pending` (nur Nachsignierung via Offline-Queue — keine Beträge)
+  - `products.price_cents` / `.vat_rate_*` (nur in `changePrice` NACH dem `product_price_history`-INSERT)
+- Storno = neue Gegenbuchung in `cancellations` + neue TSE-Transaktion, nicht Zeile ändern.
+  **Storno-Bon trägt negierte Beträge** (`vat_*`, `total_gross_cents`) **+ negative `payments`-Zeilen** je Original-Zahlungsmittel — so netten alle `SUM()`-Aggregationen (Berichte, Z-Bericht, Kassenbestand) automatisch aus. Items im `raw_receipt_json` bleiben der positive Original-Snapshot.
+- Preisänderung **nur** über `POST /products/:id/price`: schreibt zuerst den GoBD-Pflicht-Eintrag in `product_price_history` (INSERT-only via auditDb), danach `UPDATE products SET price_cents` (operativer Preis — addItem/listProducts lesen diese Spalte). Direktes `price_cents` via `PATCH /products/:id` bleibt verboten (Route-Guard).
 - **Order-Item entfernen** = `INSERT INTO order_item_removals` (wer, wann, warum) — `order_items`-Zeile bleibt erhalten; Queries filtern via `NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)`
 - Bon-Nummer vergeben → TX schlägt fehl → Receipt mit `status='voided'` anlegen, niemals skippen
 
@@ -254,18 +264,20 @@ npm run test:coverage        # Coverage-Report
 | `KategorienView.swift` | Kategorienliste mit Farbchips, KategorieFormSheet (Name + Farb-Preset + HEX-Input + Sort-Order), Delete-Confirmation | ✅ |
 | `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Tischverwaltung (Tab "Tische"), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
 | `TischverwaltungView.swift` | Tische & Zonen verwalten: Liste, ZoneFormSheet, TischFormSheet (Zone-Picker), Deaktivieren-Confirm, CRUD via TableStore | ✅ |
+| `SyncManager.swift` | Minimaler Offline-Queue-Trigger: POST /sync/offline-queue bei Online-Wechsel/Foreground/Login (max. 3 Runden), pendingCount @Published. Vollausbau Phase 3 | ✅ |
 
 ### Noch nicht implementiert ❌ (SwiftUI)
 | Screen | Abhängigkeiten | Phase |
 |--------|----------------|-------|
 | Bon-PDF senden | GET /receipts/:id/pdf + ShareSheet | Phase 5 |
-| SyncManager | Offline-Queue-Status-UI, Retry-Logic | Phase 3 |
+| SyncManager Vollausbau | Retry-UI, Fehler-Detailansicht | Phase 3 |
 
 ### SwiftUI — Offene Punkte
 | Punkt | Details |
 |-------|---------|
 | Plus Jakarta Sans | Font-Dateien bundlen + Info.plist UIAppFonts + Font.jakarta() umstellen |
-| SyncManager | Offline-Queue-Status, Retry-Logic (Phase 3) |
+| SyncManager Vollausbau | `SyncManager.swift` (minimal) existiert: triggert POST /sync/offline-queue bei Online-Wechsel/Foreground/Login, hält pendingCount. Fehlt: Retry-UI, Banner-Verdrahtung (Phase 3) |
+| Token-Refresh | ✅ APIClient refresht bei 401 automatisch (POST /auth/refresh) und wiederholt den Request; Force-Logout erst wenn Refresh scheitert |
 
 ### Offene Backend-Punkte (dokumentiert, noch nicht implementiert)
 | Bereich | Details | Priorität |
@@ -326,14 +338,17 @@ src/
 │                          validationMiddleware
 ├── services/
 │   ├── audit.ts        -- audit_log INSERT via audit_insert_user
-│   ├── fiskaly.ts      -- TSE-Operationen + Offline-Fallback (enqueueOffline)
+│   ├── fiskaly.ts      -- TSE-Operationen + Offline-Fallback (enqueueOffline);
+│   │                      10s-Timeout je Request; befüllt tse_outages
+│   │                      (Offline-Fallback öffnet, Erfolg schließt Eintrag)
 │   ├── priceHistory.ts -- product_price_history INSERT
 │   ├── receipts.ts     -- Bon-Generierung + Pflichtfeld-Prüfung
 │   └── sequences.ts    -- receipt_sequences FOR UPDATE
 ├── db/
 │   ├── migrations/     -- V001__initial_schema, V002__order_items_soft_delete,
 │   │                      V003__onboarding_trial_stripe, V004__tenants_subscription_period_end,
-│   │                      V005__shishabar_seed (Pilot-Testdaten: Tenant, Users, Produkte, Tische)
+│   │                      V005__shishabar_seed (Pilot-Testdaten: Tenant, Users, Produkte, Tische),
+│   │                      V006__offline_queue_processing_started_at (atomarer Sync-Claim)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/

@@ -1236,6 +1236,30 @@ if appVersion < min_app_version → 426 Upgrade Required
 **`past_due` Grace Period** ✅
 `subscriptionMiddleware.ts` prüft jetzt `subscription_current_period_end + GRACE_PERIOD_DAYS` gegen `now` → 402 nach Ablauf. Behoben 2026-03-16.
 
+### Kritisch — Audit 2026-07-10 ✅ behoben
+
+**Preisänderung wirkungslos** ✅ — `POST /products/:id/price` schrieb nur Historie, `products.price_cents` (von addItem/listProducts gelesen) blieb unverändert. Jetzt: Historie-INSERT + operatives UPDATE.
+**Storno ohne Gegenbuchung** ✅ — Storno-Bons jetzt mit negierten Beträgen + negativen payments-Zeilen; Z-Bericht/closeSession aggregieren über `receipts.session_id`.
+**Cent-Verlust Preiseingabe (iOS)** ✅ — `parseCents` in ProdukteView rundet jetzt (`19,99` → 1999 statt 1998).
+**Pay-Race** ✅ — payOrder/splitBill re-validieren Items nach dem FOR-UPDATE-Lock; addItem/removeItem serialisieren via Order-Lock.
+**TSE-Robustheit** ✅ — 10s-Timeout auf Fiskaly-Calls, Offline-Queue-Retry (transient → pending statt failed), atomarer Claim + `processing_started_at` (V006), keine 1970-Timestamps, `tse_outages` wird befüllt, enqueueOffline-Fehler geloggt.
+**iOS-Ausfallsicherheit** ✅ — 401 → Token-Refresh + Retry im APIClient; minimaler SyncManager triggert Offline-Queue-Sync bei Online-Wechsel/Foreground/Login.
+
+### Offen — Audit 2026-07-10 (mittlere Priorität)
+
+1. **Stripe-Webhook-Status-Mapping**: `onSubscriptionCreatedOrUpdated` setzt immer `'active'`, ignoriert `sub.status` (`past_due`/`canceled`/`unpaid`) — gesperrter Tenant wird durch beliebiges Subscription-Update reaktiviert.
+2. **Storno-von-Storno möglich**: `cancelReceipt` prüft nicht, ob der Ziel-Bon selbst ein Storno-Bon ist (`raw_receipt_json.cancellation`).
+3. **Berichts-Timezone**: `DATE(created_at)` rechnet in UTC — Umsätze 00–02 Uhr lokal (Shishabar!) landen am Vortag. `CONVERT_TZ` mit Tenant-Timezone (Default `Europe/Berlin`).
+4. **Rollenrechte**: `staff` darf Produkte anlegen/löschen, Preise ändern, Sessions schließen, Berichte + DSFinV-K-Export abrufen. Guards ergänzen (owner+manager).
+5. **Session-Races**: `openSession`/`closeSession` ohne Lock — parallele Aufrufe → zwei offene Sessions bzw. doppelte z_reports.
+6. **listReceipts-Plan-Limit** greift nur wenn `from` gesetzt — ohne `from` volle Historie abrufbar.
+7. **`addItem.quantity` ohne Obergrenze** (Zod `max`).
+8. **PIN-Konzept**: erster bcrypt-Treffer gewinnt bei Kollision, kein Uniqueness-Check, Brute-Force nur per IP-Limit gebremst.
+9. **Onboarding-E-Mail-Race** (check-then-insert, global nicht unique).
+10. **Keychain (iOS)**: `kSecAttrAccessible` fehlt, OSStatus ignoriert.
+11. **Indizes**: `receipts(tenant_id, created_at)`, `orders(session_id, status)`, `offline_queue(tenant_id, status)`.
+12. **Kleinkram**: `removeItem` erfasst `reason` nicht; ungenutztes `syncRateLimit`; Reihenfolge `subscription.updated` vs. `invoice.payment_failed`.
+
 ### Kritisch — vor Go-live (Features)
 
 **E-Mail-Service (kein Transactional-Mail implementiert)**
@@ -1372,3 +1396,4 @@ process.on('SIGTERM', async () => {
 | 2.6 | SwiftUI Phase 1 gestartet: LoginView ✅ implementiert. Neue Files: DesignSystem.swift (alle Tokens aus Design System v1.2), AppError.swift, Models.swift, AuthStore.swift, NetworkMonitor.swift, OfflineBanner.swift, LoginView.swift, ContentView.swift (Auth-Router), zettel_frontendApp.swift. Screen-Bauplan und Phasenstatus aktualisiert. |
 | 2.7 | Frontend-Backend-Integration: APIClient.swift (HTTP-Client, JWT+DeviceToken-Header, snake_case encoder), KeychainHelper.swift, RegisterView.swift (Onboarding-Formular mit Inline-Validation + Passwort-Stärke-Anzeige). AuthResponse-Modell an echtes Backend-Format angepasst (AuthUser statt User, kein tenant). login() um device_token ergänzt. Pino-Logging im Backend (pino + pino-http, src/logger.ts, Request-Logging in app.ts). |
 | 2.8 | Sicherheitsanalyse + Priorisierung: Refresh-Token Security Bug dokumentiert (Abschnitt 8), past_due Grace Period Bug dokumentiert, subscriptionMiddleware Performance-Problem dokumentiert. Neue Punkte in Abschnitt 17 (Kritisch/Wichtig/Nice-to-have) und Abschnitt 18 (priorisierte Reihenfolge). Veraltete Einträge korrigiert (Structured Logging ✅, .env.example ✅). |
+| 2.9 | Vollaudit 2026-07-10: 4 kritische Bugs behoben (Preisänderung wirkungslos, Storno ohne Gegenbuchung, iOS-Cent-Verlust, Pay-Race) + TSE-Ausfallsicherheit (Fiskaly-Timeout, Offline-Queue-Retry/atomarer Claim/V006 processing_started_at, tse_outages-Erfassung, iOS Token-Refresh + SyncManager-Trigger). Regeländerung: `POST /products/:id/price` aktualisiert jetzt auch `products.price_cents` (Historie bleibt Pflicht); Storno = negative Gegenbuchung. 12 mittlere Findings in §17 dokumentiert. |
