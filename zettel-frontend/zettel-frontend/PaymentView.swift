@@ -18,6 +18,8 @@ struct PaymentView: View {
     enum PayMode { case bar, karte, gemischt }
     @State private var payMode       = PayMode.bar
     @State private var barRaw        = ""   // Ziffernfolge in Cent, z.B. "5000" = 50,00 €
+    // „Passend" ist der häufigste Fall → Betrag vorbelegen; erste Eingabe ersetzt ihn
+    @State private var barIsPrefill  = false
     @State private var isLoading     = false
     @State private var error:        AppError?
     @State private var showError     = false
@@ -34,7 +36,7 @@ struct PaymentView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
 
                 PTopBar(
@@ -50,11 +52,12 @@ struct PaymentView: View {
                     Rectangle().fill(DS.C.brdAdaptive).frame(width: 1)
 
                     PPaymentRight(
-                        payMode:    $payMode,
-                        barRaw:     $barRaw,
-                        totalCents: total,
-                        isLoading:  isLoading,
-                        onPay:      { Task { await performPayment() } }
+                        payMode:      $payMode,
+                        barRaw:       $barRaw,
+                        barIsPrefill: $barIsPrefill,
+                        totalCents:   total,
+                        isLoading:    isLoading,
+                        onPay:        { Task { await performPayment() } }
                     )
                     .frame(maxWidth: .infinity)
                 }
@@ -77,7 +80,19 @@ struct PaymentView: View {
                 .presentationDetents([.large])
             }
         }
-        .onChange(of: payMode) { barRaw = "" }
+        .onAppear { applyBarPrefill() }
+        .onChange(of: payMode) { applyBarPrefill() }
+    }
+
+    /// Bar-Modus: Betrag mit „passend" vorbelegen — 0-Tap-Default für den häufigsten Fall
+    private func applyBarPrefill() {
+        if payMode == .bar {
+            barRaw = String(total)
+            barIsPrefill = true
+        } else {
+            barRaw = ""
+            barIsPrefill = false
+        }
     }
 
     // MARK: - Actions
@@ -125,9 +140,9 @@ private struct PTopBar: View {
             Button(action: onClose) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                     Text("Bestellung")
-                        .font(DS.F.bodyMed)
+                        .dsFont(.bodyMed)
                 }
                 .foregroundColor(DS.C.accT)
                 .padding(.horizontal, 16)
@@ -140,14 +155,13 @@ private struct PTopBar: View {
             Spacer()
 
             Text("Bezahlen · \(tableName ?? "Schnellkasse")")
-                .font(DS.F.bodyBold)
+                .dsFont(.bodyBold)
                 .foregroundColor(DS.C.text)
 
             Spacer()
 
             Text("Bestellung #\(orderId)")
-                .font(DS.F.caption)
-                .monospacedDigit()
+                .dsFont(.caption, monoDigits: true)
                 .foregroundColor(DS.C.text2)
                 .frame(minWidth: 120, alignment: .trailing)
                 .padding(.trailing, DS.S.pagePad)
@@ -199,10 +213,10 @@ private struct POrderSummary: View {
             // Header
             VStack(alignment: .leading, spacing: 2) {
                 Text("Bestellübersicht")
-                    .font(DS.F.bodyBold)
+                    .dsFont(.bodyBold)
                     .foregroundColor(DS.C.text)
                 Text("\(tableLabel) · \(itemCount) Position\(itemCount == 1 ? "" : "en")")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -238,7 +252,7 @@ private struct POrderSummary: View {
                 Rectangle().fill(DS.C.brdAdaptive).frame(height: 1).padding(.vertical, 2)
                 HStack(alignment: .firstTextBaseline) {
                     Text("Gesamt")
-                        .font(DS.F.bodyBold)
+                        .dsFont(.bodyBold)
                         .foregroundColor(DS.C.text)
                     Spacer()
                     MoneyText(cents: order.totalCents, size: 24, weight: .bold)
@@ -259,12 +273,11 @@ private struct PSummaryRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text2)
             Spacer()
             Text(euroString(cents))
-                .font(DS.F.money(15, weight: .medium))
-                .monospacedDigit()
+                .dsFont(.money(15, weight: .medium))
                 .foregroundColor(DS.C.text)
         }
     }
@@ -275,19 +288,18 @@ private struct POSItemRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(item.quantity)×")
-                .font(DS.F.money(15, weight: .semibold))
-                .monospacedDigit()
+                .dsFont(.money(15, weight: .semibold))
                 .foregroundColor(DS.C.text2)
                 .frame(width: 30, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
-                    .font(.system(size: 15, weight: .semibold))
+                    .dsFont(.raw(15, weight: .semibold))
                     .foregroundColor(DS.C.text)
                     .lineLimit(1)
                 if !item.modifiers.isEmpty {
                     Text(item.modifiers.map { $0.name }.joined(separator: " · "))
-                        .font(.system(size: 13))
+                        .dsFont(.raw(13))
                         .foregroundColor(DS.C.text2)
                         .lineLimit(1)
                 }
@@ -303,8 +315,9 @@ private struct POSItemRow: View {
 // MARK: - Payment Right Panel
 
 private struct PPaymentRight: View {
-    @Binding var payMode:   PaymentView.PayMode
-    @Binding var barRaw:    String
+    @Binding var payMode:      PaymentView.PayMode
+    @Binding var barRaw:       String
+    @Binding var barIsPrefill: Bool
     let totalCents: Int
     let isLoading:  Bool
     let onPay:      () -> Void
@@ -331,6 +344,7 @@ private struct PPaymentRight: View {
                     PBarView(
                         totalCents: totalCents,
                         barRaw:     $barRaw,
+                        isPrefill:  $barIsPrefill,
                         canPay:     canPayBar,
                         isLoading:  isLoading,
                         onPay:      onPay
@@ -382,10 +396,10 @@ private struct PMethodCard: View {
         Button(action: onTap) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .semibold))
+                    .dsFont(.raw(22, weight: .semibold))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                 Text(label)
-                    .font(.system(size: 15, weight: .semibold))
+                    .dsFont(.raw(15, weight: .semibold))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text)
                     .lineLimit(1)
             }
@@ -411,6 +425,7 @@ private struct PMethodCard: View {
 private struct PBarView: View {
     let totalCents: Int
     @Binding var barRaw: String
+    @Binding var isPrefill: Bool
     let canPay:    Bool
     let isLoading: Bool
     let onPay:     () -> Void
@@ -465,8 +480,7 @@ private struct PBarView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         DSSectionLabel(text: "Gegeben")
                         Text(barRaw.isEmpty ? "—" : euroString(barCents))
-                            .font(DS.F.moneyDisplay(34))
-                            .monospacedDigit()
+                            .dsFont(.moneyDisplay(34))
                             .foregroundColor(givenColor)
                     }
                 }
@@ -480,10 +494,9 @@ private struct PBarView: View {
                     HStack(spacing: 8) {
                         ForEach(quickAmounts, id: \.self) { amount in
                             let exact = (amount == totalCents)
-                            Button { barRaw = String(amount) } label: {
+                            Button { barRaw = String(amount); isPrefill = false } label: {
                                 Text(exact ? "Passend" : euroString(amount))
-                                    .font(DS.F.money(15, weight: .semibold))
-                                    .monospacedDigit()
+                                    .dsFont(.money(15, weight: .semibold))
                                     .foregroundColor(exact ? DS.C.accT : DS.C.text)
                                     .padding(.horizontal, 16)
                                     .frame(height: 40)
@@ -502,12 +515,11 @@ private struct PBarView: View {
                 // Wechselgeld
                 HStack {
                     Text("Wechselgeld")
-                        .font(DS.F.sub)
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                     Spacer()
                     Text(changeText)
-                        .font(DS.F.money(18, weight: .bold))
-                        .monospacedDigit()
+                        .dsFont(.money(18, weight: .bold))
                         .foregroundColor(changeColor)
                 }
                 .padding(.horizontal, 20)
@@ -515,10 +527,15 @@ private struct PBarView: View {
 
                 Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
 
-                // Numpad
+                // Numpad — erste Eingabe ersetzt den „passend"-Vorschlag
                 PNumpad { key in
-                    if key == "del" { if !barRaw.isEmpty { barRaw.removeLast() } }
-                    else if barRaw.count < 8 { barRaw += key }
+                    if key == "del" {
+                        if isPrefill { barRaw = ""; isPrefill = false }
+                        else if !barRaw.isEmpty { barRaw.removeLast() }
+                    } else {
+                        if isPrefill { barRaw = ""; isPrefill = false }
+                        if barRaw.count < 8 { barRaw += key }
+                    }
                 }
                 .padding(16)
             }
@@ -537,6 +554,11 @@ private struct PKarteView: View {
     let isLoading:  Bool
     let onPay:      () -> Void
 
+    // Es gibt (Phase 1) keine Terminal-Integration — die Kasse erfasst die
+    // Kartenzahlung nur. Damit unter Zeitdruck kein Bon vor der echten
+    // Terminal-Genehmigung gebucht wird: explizite Bestätigung als Gate.
+    @State private var terminalApproved = false
+
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 0) {
@@ -546,12 +568,12 @@ private struct PKarteView: View {
                             .fill(DS.C.accBg)
                             .frame(width: 64, height: 64)
                         Image(systemName: "creditcard")
-                            .font(.system(size: 26, weight: .medium))
+                            .dsFont(.icon(26))
                             .foregroundColor(DS.C.accT)
                     }
                     MoneyText(cents: totalCents, size: 40, weight: .bold)
-                    Text("Karte am Terminal vorzeigen.\nZahlung wird direkt vom Terminal bestätigt.")
-                        .font(DS.F.sub)
+                    Text("Betrag am Kartenterminal eingeben und die Zahlung dort durchführen.\nDie Kasse erfasst die Zahlung nur — sie läuft über dein Terminal.")
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -563,45 +585,38 @@ private struct PKarteView: View {
 
                 Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
 
-                HStack(spacing: 10) {
-                    PKartePulse()
-                    Text("Warte auf Kartenzahlung …")
-                        .font(DS.F.subMed)
-                        .foregroundColor(DS.C.brassText)
-                    Spacer()
+                Button {
+                    withAnimation(DS.M.fast) { terminalApproved.toggle() }
+                    Haptics.selection()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: terminalApproved ? "checkmark.circle.fill" : "circle")
+                            .dsFont(.icon(24))
+                            .foregroundColor(terminalApproved ? DS.C.acc : DS.C.text2)
+                        Text("Terminal hat die Zahlung genehmigt")
+                            .dsFont(.bodyMed)
+                            .foregroundColor(DS.C.text)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(terminalApproved ? DS.C.accBg : DS.C.sur)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .background(DS.C.sur)
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(terminalApproved ? [.isButton, .isSelected] : .isButton)
             }
             .clipShape(RoundedRectangle(cornerRadius: DS.R.card))
             .overlay(RoundedRectangle(cornerRadius: DS.R.card).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
 
             PConfirmBtn(
-                enabled:   true,
+                enabled:   terminalApproved,
                 isLoading: isLoading,
-                label:     "Kartenzahlung bestätigen",
+                label:     terminalApproved ? "Kartenzahlung erfassen" : "Erst am Terminal bestätigen",
                 onTap:     onPay
             )
         }
-    }
-}
-
-private struct PKartePulse: View {
-    @State private var opacity: Double = 1.0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Circle()
-            .fill(DS.C.brass)
-            .frame(width: 10, height: 10)
-            .opacity(opacity)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
-                    opacity = 0.3
-                }
-            }
+        .onAppear { terminalApproved = false }
     }
 }
 
@@ -633,7 +648,7 @@ private struct PGemischtView: View {
                 // Gesamt
                 HStack {
                     Text("Zu zahlen gesamt")
-                        .font(DS.F.sub)
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                     Spacer()
                     MoneyText(cents: totalCents, size: 20, weight: .bold)
@@ -648,15 +663,14 @@ private struct PGemischtView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
                             Image(systemName: "banknote")
-                                .font(.system(size: 15, weight: .semibold))
+                                .dsFont(.raw(15, weight: .semibold))
                                 .foregroundColor(DS.C.accT)
                             Text("Bar")
-                                .font(DS.F.subBold)
+                                .dsFont(.subBold)
                                 .foregroundColor(DS.C.text)
                         }
                         Text(barRaw.isEmpty ? "—" : euroString(barCents))
-                            .font(DS.F.money(24, weight: .bold))
-                            .monospacedDigit()
+                            .dsFont(.money(24, weight: .bold))
                             .foregroundColor(isOverflow ? DS.C.dangerText : DS.C.text)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                             .frame(height: 44)
@@ -667,7 +681,7 @@ private struct PGemischtView: View {
                                     .strokeBorder(isOverflow ? DS.C.danger : DS.C.acc, lineWidth: 1.5)
                             )
                         Text(isOverflow ? "Bar-Betrag über Gesamtsumme" : "Über Numpad eingeben")
-                            .font(DS.F.caption)
+                            .dsFont(.caption)
                             .foregroundColor(isOverflow ? DS.C.dangerText : DS.C.text2)
                     }
                     .padding(16)
@@ -678,22 +692,21 @@ private struct PGemischtView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
                             Image(systemName: "creditcard")
-                                .font(.system(size: 15, weight: .semibold))
+                                .dsFont(.raw(15, weight: .semibold))
                                 .foregroundColor(DS.C.text2)
                             Text("Karte")
-                                .font(DS.F.subBold)
+                                .dsFont(.subBold)
                                 .foregroundColor(DS.C.text)
                         }
                         Text(!barRaw.isEmpty && !isOverflow ? euroString(cardCents) : "—")
-                            .font(DS.F.money(24, weight: .bold))
-                            .monospacedDigit()
+                            .dsFont(.money(24, weight: .bold))
                             .foregroundColor(DS.C.text2)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                             .frame(height: 44)
                             .padding(.horizontal, 12)
                             .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.sur2))
                         Text("Restbetrag, automatisch")
-                            .font(DS.F.caption)
+                            .dsFont(.caption)
                             .foregroundColor(DS.C.text2)
                     }
                     .padding(16)
@@ -708,8 +721,7 @@ private struct PGemischtView: View {
                         ForEach(quickAmounts, id: \.self) { amount in
                             Button { barRaw = String(amount) } label: {
                                 Text("\(amount / 100) € bar")
-                                    .font(DS.F.money(15, weight: .semibold))
-                                    .monospacedDigit()
+                                    .dsFont(.money(15, weight: .semibold))
                                     .foregroundColor(DS.C.text)
                                     .padding(.horizontal, 16)
                                     .frame(height: 40)
@@ -779,10 +791,12 @@ private struct PNumKeyBtn: View {
     let onTap:  () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            Haptics.tap()
+            onTap()
+        } label: {
             Text(label)
-                .font(DS.F.money(22, weight: .semibold))
-                .monospacedDigit()
+                .dsFont(.money(22, weight: .semibold))
                 .foregroundColor(DS.C.text)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -795,14 +809,18 @@ private struct PNumDelBtn: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            Haptics.tap()
+            onTap()
+        } label: {
             Image(systemName: "delete.left")
-                .font(.system(size: 19, weight: .semibold))
+                .dsFont(.raw(19, weight: .semibold))
                 .foregroundColor(DS.C.text2)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PNumKeyStyle())
+        .accessibilityLabel("Letzte Ziffer löschen")
     }
 }
 
@@ -822,7 +840,7 @@ private struct PConfirmBtn: View {
                 } else {
                     HStack(spacing: 9) {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 15, weight: .semibold))
+                            .dsFont(.raw(15, weight: .semibold))
                         Text(label)
                     }
                 }
@@ -854,24 +872,17 @@ private struct ReceiptSummarySheet: View {
             .padding(.top, 12)
 
             VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(DS.C.accBg)
-                        .frame(width: 72, height: 72)
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(DS.C.accT)
-                }
+                DSSuccessCheckmark()
                 Text("Zahlung erfolgreich")
-                    .font(DS.F.title)
+                    .dsFont(.title)
                     .foregroundColor(DS.C.text)
                 Text("Bon #\(result.receiptNumber)\(tableName.map { " · \($0)" } ?? "")")
-                    .font(DS.F.sub)
-                    .monospacedDigit()
+                    .dsFont(.sub, monoDigits: true)
                     .foregroundColor(DS.C.text2)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 32)
+            .onAppear { Haptics.success() }
 
             Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
 
@@ -885,10 +896,10 @@ private struct ReceiptSummarySheet: View {
                                 HStack {
                                     HStack(spacing: 9) {
                                         Image(systemName: p.method.icon)
-                                            .font(.system(size: 15))
+                                            .dsFont(.raw(15))
                                             .foregroundColor(DS.C.text2)
                                         Text(p.method.displayName)
-                                            .font(DS.F.sub)
+                                            .dsFont(.sub)
                                             .foregroundColor(DS.C.text)
                                     }
                                     Spacer()
@@ -932,10 +943,10 @@ private struct ReceiptSummarySheet: View {
                     if result.tsePending {
                         HStack(spacing: 9) {
                             Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 14))
+                                .dsFont(.raw(14))
                                 .foregroundColor(DS.C.brassText)
                             Text("TSE-Signatur ausstehend — wird nachgeholt sobald online")
-                                .font(DS.F.caption)
+                                .dsFont(.caption)
                                 .foregroundColor(DS.C.brassText)
                         }
                         .padding(14)
@@ -976,12 +987,11 @@ private struct RSVatRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 15, weight: bold ? .semibold : .regular))
+                .dsFont(.raw(15, weight: bold ? .semibold : .regular))
                 .foregroundColor(dim ? DS.C.text2 : DS.C.text)
             Spacer()
             Text(euroString(value))
-                .font(DS.F.money(15, weight: bold ? .bold : .medium))
-                .monospacedDigit()
+                .dsFont(.money(15, weight: bold ? .bold : .medium))
                 .foregroundColor(bold ? DS.C.accT : (dim ? DS.C.text2 : DS.C.text))
         }
     }

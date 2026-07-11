@@ -19,7 +19,7 @@ struct ZBerichtView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
                 ZToolbar(report: report)
                 if sessionStore.isLoading {
@@ -51,45 +51,26 @@ private struct ZToolbar: View {
             if let r = report {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text")
-                        .font(.system(size: 14, weight: .medium))
+                        .dsFont(.raw(14, weight: .medium))
                         .foregroundColor(DS.C.text2)
                     Text("Z-Bericht #\(r.zReportId) · Session #\(r.sessionId)")
-                        .font(DS.F.subBold)
-                        .monospacedDigit()
+                        .dsFont(.subBold, monoDigits: true)
                         .foregroundColor(DS.C.text)
                 }
             } else {
                 Text("Kein Z-Bericht")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
-            // Aktionen (Phase 5)
-            HStack(spacing: 8) {
-                Button {
-                    // PDF export — Phase 5
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "doc")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("PDF exportieren")
-                    }
-                }
-                .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
-                .disabled(report == nil)
-
-                Button {
-                    // DSFinV-K export — Phase 5
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "arrow.down.to.line")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("DSFinV-K")
-                    }
-                }
-                .buttonStyle(DSSecondaryButton(height: 42, fullWidth: false))
-                .disabled(report == nil)
-            }
+            // Export (PDF + DSFinV-K) kommt in einer späteren Phase — bis dahin
+            // keine aktiv aussehenden Buttons, die nichts tun.
+            DSPill(
+                label: "Export (PDF & Steuerprüfung) — bald verfügbar",
+                fg: DS.C.text2,
+                bg: DS.C.sur2,
+                showDot: false
+            )
         }
         .padding(.horizontal, DS.S.pagePad)
         .frame(height: DS.S.topbarHeight + 8)
@@ -218,10 +199,10 @@ private struct ZDocHeader: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("cashbox")
-                    .font(.system(size: 17, weight: .bold))
+                    .dsFont(.raw(17, weight: .bold))
                     .foregroundColor(DS.C.text)
                 Text("Z-Bericht #\(report.zReportId) · Session #\(report.sessionId)")
-                    .font(.system(size: 13, design: .monospaced))
+                    .dsFont(.mono(13))
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
@@ -266,10 +247,10 @@ private struct ZDocMetaCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .dsFont(.raw(11, weight: .medium))
                 .foregroundColor(DS.C.text2)
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .dsFont(.mono(14, weight: .semibold))
                 .foregroundColor(DS.C.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -323,11 +304,11 @@ private struct ZDocRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 14, weight: bold ? .semibold : .regular))
+                .dsFont(.raw(14, weight: bold ? .semibold : .regular))
                 .foregroundColor(bold ? DS.C.text : DS.C.text2)
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .dsFont(.mono(14, weight: .semibold))
                 .foregroundColor(valueColor ?? DS.C.text)
         }
         .padding(.horizontal, 24)
@@ -342,11 +323,11 @@ private struct ZDocTotalRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 15, weight: .bold))
+                .dsFont(.raw(15, weight: .bold))
                 .foregroundColor(DS.C.text)
             Spacer()
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .monospaced))
+                .dsFont(.mono(17, weight: .bold))
                 .foregroundColor(DS.C.accT)
         }
         .padding(.horizontal, 24)
@@ -371,10 +352,10 @@ private struct ZDocTSESection: View {
             DSSectionLabel(text: "TSE-Signatur (Fiskaly)")
             HStack(spacing: 8) {
                 Image(systemName: "clock")
-                    .font(.system(size: 13))
+                    .dsFont(.raw(13))
                     .foregroundColor(DS.C.brassText)
                 Text("TSE-Aktivierung ausstehend — Signatur nach Fiskaly-Inbetriebnahme verfügbar.")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.brassText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -394,15 +375,15 @@ private struct ZDocFooter: View {
     var body: some View {
         HStack(alignment: .center) {
             Text("Dieser Z-Bericht ist unveränderlich (GoBD). Aufbewahrungspflicht: 10 Jahre.")
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             HStack(spacing: 5) {
                 Image(systemName: "lock")
-                    .font(.system(size: 10, weight: .semibold))
+                    .dsFont(.raw(10, weight: .semibold))
                 Text("Unveränderlich")
-                    .font(DS.F.label)
+                    .dsFont(.label)
             }
             .foregroundColor(DS.C.text2)
             .padding(.horizontal, 10)
@@ -423,10 +404,10 @@ private struct ZSessionListPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Alle Z-Berichte")
-                    .font(DS.F.bodyBold)
+                    .dsFont(.bodyBold)
                     .foregroundColor(DS.C.text)
                 Text("Unveränderlich · GoBD-konform")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
             .padding(16)
@@ -449,13 +430,13 @@ private struct ZSessionListPanel: View {
 
                     VStack(spacing: 8) {
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 22, weight: .medium))
+                            .dsFont(.raw(22, weight: .medium))
                             .foregroundColor(DS.C.text2)
                         Text("Ältere Z-Berichte")
-                            .font(DS.F.subBold)
+                            .dsFont(.subBold)
                             .foregroundColor(DS.C.text)
                         Text("Über den Berichte-Screen abrufbar.")
-                            .font(DS.F.caption)
+                            .dsFont(.caption)
                             .foregroundColor(DS.C.text2)
                             .multilineTextAlignment(.center)
                     }
@@ -480,33 +461,29 @@ private struct ZSlpItem: View {
                     .fill(isActive ? DS.C.accBg : DS.C.sur2)
                     .frame(width: 36, height: 36)
                 Image(systemName: "doc.text")
-                    .font(.system(size: 14, weight: .medium))
+                    .dsFont(.raw(14, weight: .medium))
                     .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
             }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Z-Bericht #\(report.zReportId)")
-                    .font(DS.F.subBold)
-                    .monospacedDigit()
+                    .dsFont(.subBold, monoDigits: true)
                     .foregroundColor(DS.C.text)
                 Text("Session #\(report.sessionId) · \(report.totalOrders) Bons")
-                    .font(DS.F.caption)
-                    .monospacedDigit()
+                    .dsFont(.caption, monoDigits: true)
                     .foregroundColor(DS.C.text2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 1) {
                 Text(euroString(report.totalRevenueCents))
-                    .font(DS.F.money(14, weight: .semibold))
-                    .monospacedDigit()
+                    .dsFont(.money(14, weight: .semibold))
                     .foregroundColor(DS.C.text)
                 let diffText = report.differenceCents == 0
                     ? "± 0,00 €"
                     : (report.differenceCents > 0 ? "+ " : "− ") + euroString(abs(report.differenceCents))
                 Text(diffText)
-                    .font(DS.F.caption)
-                    .monospacedDigit()
+                    .dsFont(.caption, monoDigits: true)
                     .foregroundColor(
                         report.differenceCents == 0
                             ? DS.C.successText

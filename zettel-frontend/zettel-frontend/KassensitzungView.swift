@@ -17,6 +17,9 @@ struct KassensitzungView: View {
     @State private var showZReport       = false
     @State private var error:            AppError?
     @State private var showError         = false
+    // Live gezählter Kasseninhalt (KassenstandCard) — hier gehalten, damit er
+    // das Abschluss-Sheet vorbefüllt („wird bei Abschluss gespeichert").
+    @State private var countedCashText   = ""
 
     // Pre-fill für Abschluss-Modal
     private var expectedCash: Int {
@@ -31,14 +34,15 @@ struct KassensitzungView: View {
             DS.C.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
-                    OfflineBanner().transition(.move(edge: .top).combined(with: .opacity))
+                    OfflineBanner().dsBannerTransition()
                 }
                 if sessionStore.isLoading && sessionStore.currentSession == nil {
                     Spacer(); ProgressView().progressViewStyle(.circular).scaleEffect(1.2); Spacer()
                 } else if sessionStore.hasOpenSession {
                     ActiveSessionView(
                         showCloseSheet:    $showCloseSheet,
-                        showMovementSheet: $showMovementSheet
+                        showMovementSheet: $showMovementSheet,
+                        countedCashText:   $countedCashText
                     )
                 } else {
                     NoSessionView()
@@ -49,7 +53,7 @@ struct KassensitzungView: View {
         .animation(DS.M.slow, value: sessionStore.hasOpenSession)
         .task { await sessionStore.loadCurrent() }
         .sheet(isPresented: $showCloseSheet) {
-            CloseSessionSheet(expectedCents: expectedCash) { closingCents in
+            CloseSessionSheet(expectedCents: expectedCash, prefillText: countedCashText) { closingCents in
                 await performClose(closingCents: closingCents)
             }
         }
@@ -90,6 +94,7 @@ private struct ActiveSessionView: View {
     @EnvironmentObject var sessionStore: SessionStore
     @Binding var showCloseSheet:    Bool
     @Binding var showMovementSheet: Bool
+    @Binding var countedCashText:   String
 
     var body: some View {
         guard let session = sessionStore.currentSession else { return AnyView(EmptyView()) }
@@ -104,9 +109,10 @@ private struct ActiveSessionView: View {
                     ActivePageHeader(session: session, onClose: { showCloseSheet = true })
 
                     VStack(alignment: .leading, spacing: 16) {
-                        // KPI-Reihe
+                        // KPI-Reihe — „Erwarteter Kassenstand" lebt kanonisch in der
+                        // Kassenstand-Karte darunter (dort wird gezählt), nicht doppelt hier
                         LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4),
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
                             spacing: 12
                         ) {
                             KPICard(
@@ -126,12 +132,6 @@ private struct ActiveSessionView: View {
                                 sub:   "\(session.movements.filter { $0.type == .withdrawal }.count) Entnahmen",
                                 prefix: withdrawalTotal > 0 ? "−" : nil
                             )
-                            KPICard(
-                                label: "Erwarteter Kassenstand",
-                                cents: expectedCash,
-                                sub:   "berechnet",
-                                accent: true
-                            )
                         }
 
                         // Haupt-Spalten
@@ -141,7 +141,8 @@ private struct ActiveSessionView: View {
                                     openingCents:    session.openingCashCents,
                                     depositTotal:    depositTotal,
                                     withdrawalTotal: withdrawalTotal,
-                                    expectedCash:    expectedCash
+                                    expectedCash:    expectedCash,
+                                    currentCashText: $countedCashText
                                 )
                                 EinlagenCard(
                                     movements: session.movements,
@@ -177,7 +178,7 @@ private struct ActivePageHeader: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 12) {
                     Text("Kassensitzung")
-                        .font(DS.F.title)
+                        .dsFont(.title)
                         .foregroundColor(DS.C.text)
                     DSPill(
                         label: "Offen seit \(formatTimeOnly(session.openedAt))",
@@ -186,7 +187,7 @@ private struct ActivePageHeader: View {
                     )
                 }
                 Text("Geöffnet von \(session.openedByName)")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
             }
 
@@ -195,7 +196,7 @@ private struct ActivePageHeader: View {
             Button(action: onClose) {
                 HStack(spacing: 8) {
                     Image(systemName: "lock")
-                        .font(.system(size: 14, weight: .semibold))
+                        .dsFont(.raw(14, weight: .semibold))
                     Text("Schicht abschließen")
                 }
             }
@@ -223,7 +224,7 @@ private struct KPICard: View {
             HStack(spacing: 4) {
                 if let prefix {
                     Text(prefix)
-                        .font(DS.F.money(24, weight: .bold))
+                        .dsFont(.money(24, weight: .bold))
                         .foregroundColor(accent ? DS.C.accT : DS.C.text)
                 }
                 MoneyText(cents: cents, size: 24, weight: .bold,
@@ -232,7 +233,7 @@ private struct KPICard: View {
                     .minimumScaleFactor(0.7)
             }
             Text(sub)
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -248,9 +249,10 @@ private struct KassenstandCard: View {
     let withdrawalTotal: Int
     let expectedCash:    Int
 
-    // Live-Eingabe Kasseninhalt (pre-fills close modal)
-    @State private var currentCashText = ""
-    @State private var inputFocused    = false
+    // Live-Eingabe Kasseninhalt — State liegt in KassensitzungView und
+    // befüllt von dort das Abschluss-Sheet vor
+    @Binding var currentCashText: String
+    @State private var inputFocused = false
 
     private var currentCents: Int? {
         let c = currentCashText.replacingOccurrences(of: ",", with: ".")
@@ -289,7 +291,7 @@ private struct KassenstandCard: View {
             // Input-Zeile
             HStack(spacing: 12) {
                 Text("Aktueller Kasseninhalt:")
-                    .font(DS.F.subMed)
+                    .dsFont(.subMed)
                     .foregroundColor(DS.C.text2)
                     .fixedSize()
                 HStack(spacing: 8) {
@@ -302,7 +304,7 @@ private struct KassenstandCard: View {
                         isFocused:    $inputFocused
                     )
                     Text("€")
-                        .font(DS.F.sub)
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                 }
                 .padding(.horizontal, 12)
@@ -313,7 +315,7 @@ private struct KassenstandCard: View {
                 .animation(DS.M.fast, value: inputFocused)
 
                 Text("wird bei Abschluss gespeichert")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
                 Spacer()
             }
@@ -334,13 +336,12 @@ private struct KsCel: View {
         VStack(alignment: .leading, spacing: 5) {
             DSSectionLabel(text: label)
             Text(value)
-                .font(DS.F.money(20, weight: .bold))
-                .monospacedDigit()
+                .dsFont(.money(20, weight: .bold))
                 .foregroundColor(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(sub)
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
         }
         .padding(.horizontal, 16)
@@ -361,9 +362,9 @@ private struct EinlagenCard: View {
                 Button(action: onAdd) {
                     HStack(spacing: 6) {
                         Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
+                            .dsFont(.raw(12, weight: .bold))
                         Text("Hinzufügen")
-                            .font(DS.F.captionBold)
+                            .dsFont(.captionBold)
                     }
                     .foregroundColor(DS.C.accT)
                     .padding(.horizontal, 14)
@@ -379,17 +380,18 @@ private struct EinlagenCard: View {
                     Spacer()
                     VStack(spacing: 8) {
                         Image(systemName: "arrow.up.arrow.down")
-                            .font(.system(size: 22, weight: .medium))
+                            .dsFont(.raw(22, weight: .medium))
                             .foregroundColor(DS.C.text2)
                         Text("Keine Bewegungen")
-                            .font(DS.F.sub)
+                            .dsFont(.sub)
                             .foregroundColor(DS.C.text2)
                     }
                     .padding(.vertical, 28)
                     Spacer()
                 }
             } else {
-                VStack(spacing: 0) {
+                // Lazy — Bewegungslisten wachsen über eine Schicht beliebig
+                LazyVStack(spacing: 0) {
                     ForEach(Array(movements.enumerated()), id: \.offset) { idx, movement in
                         MovementRow(movement: movement)
                         if idx < movements.count - 1 {
@@ -414,22 +416,21 @@ private struct MovementRow: View {
                     .fill(isDeposit ? DS.C.accBg : DS.C.brassBg)
                     .frame(width: 34, height: 34)
                 Image(systemName: isDeposit ? "arrow.up" : "arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
+                    .dsFont(.raw(13, weight: .semibold))
                     .foregroundColor(isDeposit ? DS.C.accT : DS.C.brassText)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(movement.reason)
-                    .font(DS.F.subMed)
+                    .dsFont(.subMed)
                     .foregroundColor(DS.C.text)
                     .lineLimit(1)
                 Text(movement.type.displayName)
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             Text("\(isDeposit ? "+" : "−") \(euroString(movement.amountCents))")
-                .font(DS.F.money(15, weight: .semibold))
-                .monospacedDigit()
+                .dsFont(.money(15, weight: .semibold))
                 .foregroundColor(isDeposit ? DS.C.accT : DS.C.brassText)
         }
         .padding(.horizontal, 16)
@@ -448,7 +449,6 @@ private struct ZahlungsartenCard: View {
     private var withdrawalTotal: Int {
         session.movements.filter { $0.type == .withdrawal }.reduce(0) { $0 + $1.amountCents }
     }
-    private var expectedCash: Int { session.openingCashCents + depositTotal - withdrawalTotal }
 
     var body: some View {
         SecCard {
@@ -474,18 +474,7 @@ private struct ZahlungsartenCard: View {
                 value:  "− \(euroString(withdrawalTotal))",
                 count:  "\(session.movements.filter { $0.type == .withdrawal }.count) Entnahmen"
             )
-            // Total row
-            HStack {
-                Text("Erwarteter Bestand")
-                    .font(DS.F.subBold)
-                    .foregroundColor(DS.C.text)
-                Spacer()
-                MoneyText(cents: expectedCash, size: 18, weight: .bold, color: DS.C.accT)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(DS.C.sur2.opacity(0.5))
-            .overlay(Rectangle().frame(height: 1).foregroundColor(DS.C.brdAdaptive), alignment: .top)
+            // Kein „Erwarteter Bestand" hier — kanonische Stelle ist die Kassenstand-Karte
         }
     }
 }
@@ -499,20 +488,19 @@ private struct PaymentRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .dsFont(.raw(15, weight: .medium))
                 .foregroundColor(DS.C.text2)
                 .frame(width: 24)
             Text(label)
-                .font(DS.F.subMed)
+                .dsFont(.subMed)
                 .foregroundColor(DS.C.text)
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
                 Text(value)
-                    .font(DS.F.money(15, weight: .semibold))
-                    .monospacedDigit()
+                    .dsFont(.money(15, weight: .semibold))
                     .foregroundColor(DS.C.text)
                 Text(count)
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
         }
@@ -549,12 +537,11 @@ private struct InfoRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text2)
             Spacer()
             Text(value)
-                .font(DS.F.subBold)
-                .monospacedDigit()
+                .dsFont(.subBold, monoDigits: true)
                 .foregroundColor(DS.C.text)
         }
         .padding(.horizontal, 16)
@@ -592,11 +579,11 @@ private struct SecCardHead<Trailing: View>: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.F.bodyBold)
+                    .dsFont(.bodyBold)
                     .foregroundColor(DS.C.text)
                 if let s = sub {
                     Text(s)
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
             }
@@ -632,16 +619,16 @@ private struct NoSessionView: View {
                         .fill(DS.C.accBg)
                         .frame(width: 60, height: 60)
                     Image(systemName: "building.columns")
-                        .font(.system(size: 24, weight: .semibold))
+                        .dsFont(.raw(24, weight: .semibold))
                         .foregroundColor(DS.C.accT)
                 }
                 Spacer().frame(height: 20)
                 Text("Kasse öffnen")
-                    .font(DS.F.title)
+                    .dsFont(.title)
                     .foregroundColor(DS.C.text)
                 Spacer().frame(height: 6)
                 Text("Zähle den aktuellen Bargeldbestand und gib ihn ein, um die Schicht zu starten.")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer().frame(height: 28)
@@ -658,7 +645,7 @@ private struct NoSessionView: View {
                         isFocused:     $fieldFocused
                     )
                     Text("€")
-                        .font(DS.F.heading)
+                        .dsFont(.heading)
                         .foregroundColor(DS.C.text2)
                 }
                 .padding(.horizontal, 16).frame(height: 60)
@@ -671,8 +658,7 @@ private struct NoSessionView: View {
                 Spacer().frame(height: 10)
                 if let cents = openingCents {
                     Text("= \(euroString(cents))")
-                        .font(DS.F.sub)
-                        .monospacedDigit()
+                        .dsFont(.sub, monoDigits: true)
                         .foregroundColor(DS.C.text2).transition(.opacity)
                 }
                 Spacer().frame(height: 24)
@@ -684,7 +670,7 @@ private struct NoSessionView: View {
                         else {
                             HStack(spacing: 8) {
                                 Image(systemName: "lock.open")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .dsFont(.raw(15, weight: .semibold))
                                 Text("Kasse öffnen")
                             }
                         }
@@ -721,6 +707,7 @@ private struct NoSessionView: View {
 
 private struct CloseSessionSheet: View {
     let expectedCents: Int
+    var prefillText:   String = ""
     let onClose:       (Int) async -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -764,7 +751,7 @@ private struct CloseSessionSheet: View {
                             isFocused:     $cashFocused
                         )
                         Text("€")
-                            .font(DS.F.sub)
+                            .dsFont(.sub)
                             .foregroundColor(DS.C.text2)
                     }
                     .padding(.horizontal, 14).frame(height: DS.S.inputHeight)
@@ -778,28 +765,28 @@ private struct CloseSessionSheet: View {
                     VStack(spacing: 8) {
                         HStack {
                             Text("Erwarteter Bestand")
-                                .font(DS.F.sub).foregroundColor(DS.C.text2)
+                                .dsFont(.sub).foregroundColor(DS.C.text2)
                             Spacer()
                             Text(euroString(expectedCents))
-                                .font(DS.F.money(15, weight: .semibold)).monospacedDigit()
+                                .dsFont(.money(15, weight: .semibold))
                                 .foregroundColor(DS.C.text)
                         }
                         HStack {
                             Text("Gezählt")
-                                .font(DS.F.sub).foregroundColor(DS.C.text2)
+                                .dsFont(.sub).foregroundColor(DS.C.text2)
                             Spacer()
                             Text(euroString(closingCents ?? 0))
-                                .font(DS.F.money(15, weight: .semibold)).monospacedDigit()
+                                .dsFont(.money(15, weight: .semibold))
                                 .foregroundColor(DS.C.text)
                         }
                         Divider()
                         HStack {
                             Text("Differenz — \(diffSubtext)")
-                                .font(DS.F.subBold)
+                                .dsFont(.subBold)
                                 .foregroundColor(differenceCents >= 0 ? DS.C.accT : DS.C.dangerText)
                             Spacer()
                             Text(diffText)
-                                .font(DS.F.money(16, weight: .bold)).monospacedDigit()
+                                .dsFont(.money(16, weight: .bold))
                                 .foregroundColor(differenceCents >= 0 ? DS.C.accT : DS.C.dangerText)
                         }
                     }
@@ -845,7 +832,7 @@ private struct CloseSessionSheet: View {
                         if isLoading { ProgressView().progressViewStyle(.circular).tint(.white) }
                         else { Text("Abschließen & Z-Bericht") }
                     }
-                    .font(.system(size: 16, weight: .semibold))
+                    .dsFont(.raw(16, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 20)
                     .frame(height: 48)
@@ -861,7 +848,13 @@ private struct CloseSessionSheet: View {
         .background(DS.C.sur)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
-        .onAppear { cashFocused = true }
+        // Dateneingabe — kein versehentliches Weg-Wischen (Abbrechen ist der Ausweg)
+        .interactiveDismissDisabled(!closingCashText.isEmpty)
+        .onAppear {
+            // Live gezählter Kasseninhalt aus der KassenstandCard — keine Doppelzählung
+            if closingCashText.isEmpty { closingCashText = prefillText }
+            cashFocused = true
+        }
     }
 }
 
@@ -892,23 +885,10 @@ private struct AddMovementSheet: View {
                 // Typ
                 VStack(alignment: .leading, spacing: 8) {
                     DSSectionLabel(text: "Typ")
-                    HStack(spacing: 8) {
-                        ForEach([MovementType.deposit, MovementType.withdrawal], id: \.self) { type in
-                            let sel = selectedType == type
-                            Button {
-                                withAnimation(DS.M.fast) { selectedType = type }
-                            } label: {
-                                Text(type.displayName)
-                                    .font(DS.F.subBold)
-                                    .foregroundColor(sel ? DS.C.accT : DS.C.text2)
-                                    .frame(maxWidth: .infinity).frame(height: 44)
-                                    .background(RoundedRectangle(cornerRadius: DS.R.button).fill(sel ? DS.C.accBg : DS.C.sur2))
-                                    .overlay(RoundedRectangle(cornerRadius: DS.R.button).strokeBorder(sel ? DS.C.acc : Color.clear, lineWidth: 1.5))
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    DSSegmentedControl(selection: $selectedType, options: [
+                        (value: MovementType.deposit,    label: MovementType.deposit.displayName),
+                        (value: MovementType.withdrawal, label: MovementType.withdrawal.displayName),
+                    ])
                 }
 
                 // Betrag
@@ -924,7 +904,7 @@ private struct AddMovementSheet: View {
                             isFocused:     $amountFocused
                         )
                         Text("€")
-                            .font(DS.F.sub)
+                            .dsFont(.sub)
                             .foregroundColor(DS.C.text2)
                     }
                     .padding(.horizontal, 14).frame(height: DS.S.inputHeight)
@@ -977,6 +957,8 @@ private struct AddMovementSheet: View {
         .background(DS.C.sur)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
+        // Dateneingabe — kein versehentliches Weg-Wischen
+        .interactiveDismissDisabled(!amountText.isEmpty || !reason.isEmpty)
         .onAppear { amountFocused = true }
     }
 }
@@ -990,12 +972,12 @@ private struct SheetHeader: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(DS.F.heading)
+                .dsFont(.heading)
                 .foregroundColor(DS.C.text)
             Spacer()
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
+                    .dsFont(.raw(13, weight: .semibold))
                     .foregroundColor(DS.C.text2)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(DS.C.sur2))
@@ -1021,18 +1003,18 @@ private struct ZReportSummarySheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     HStack(spacing: 14) {
-                        ZStack {
-                            Circle().fill(DS.C.successBg).frame(width: 48, height: 48)
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 19, weight: .bold)).foregroundColor(DS.C.successText)
-                        }
+                        DSSuccessCheckmark(size: 48)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Kasse geschlossen")
-                                .font(DS.F.heading).foregroundColor(DS.C.text)
-                            Text("Z-Bericht #\(result.zReportId)")
-                                .font(DS.F.sub).monospacedDigit().foregroundColor(DS.C.text2)
+                            Text(result.differenceCents == 0 ? "Kasse stimmt" : "Kasse geschlossen")
+                                .dsFont(.heading).foregroundColor(DS.C.text)
+                            Text(result.differenceCents == 0
+                                 ? "± 0,00 € · Z-Bericht #\(result.zReportId)"
+                                 : "Z-Bericht #\(result.zReportId)")
+                                .dsFont(.sub, monoDigits: true)
+                                .foregroundColor(result.differenceCents == 0 ? DS.C.accT : DS.C.text2)
                         }
                     }
+                    .onAppear { Haptics.success() }
 
                     VStack(spacing: 0) {
                         ZReportRow(label: "Umsatz gesamt",   value: euroString(result.totalRevenueCents), bold: true)
@@ -1067,11 +1049,10 @@ private struct ZReportRow: View {
     var valueColor: Color = DS.C.text; var bold: Bool = false
     var body: some View {
         HStack {
-            Text(label).font(DS.F.sub).foregroundColor(DS.C.text2)
+            Text(label).dsFont(.sub).foregroundColor(DS.C.text2)
             Spacer()
             Text(value)
-                .font(DS.F.money(15, weight: bold ? .bold : .medium))
-                .monospacedDigit()
+                .dsFont(.money(15, weight: bold ? .bold : .medium))
                 .foregroundColor(valueColor)
         }
         .padding(.vertical, 6)

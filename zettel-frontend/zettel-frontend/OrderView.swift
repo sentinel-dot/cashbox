@@ -34,7 +34,7 @@ struct OrderView: View {
                 VStack(spacing: 0) {
                     if !networkMonitor.isOnline {
                         OfflineBanner()
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .dsBannerTransition()
                     }
 
                     OTopBar(
@@ -200,9 +200,9 @@ private struct OTopBar: View {
             Button(action: onClose) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                     Text("Tische")
-                        .font(DS.F.bodyMed)
+                        .dsFont(.bodyMed)
                 }
                 .foregroundColor(DS.C.accT)
                 .padding(.horizontal, 16)
@@ -216,7 +216,7 @@ private struct OTopBar: View {
 
             // Mitte: Tisch-Name
             Text(tableName ?? "Schnellkasse")
-                .font(DS.F.bodyBold)
+                .dsFont(.bodyBold)
                 .foregroundColor(DS.C.text)
 
             Spacer()
@@ -225,8 +225,7 @@ private struct OTopBar: View {
             HStack {
                 if let id = orderId {
                     Text("Bestellung #\(id)")
-                        .font(DS.F.caption)
-                        .monospacedDigit()
+                        .dsFont(.caption, monoDigits: true)
                         .foregroundColor(DS.C.text2)
                 }
             }
@@ -262,9 +261,18 @@ private struct OProductCatalog: View {
             )
 
             if productStore.isLoading {
-                Spacer()
-                ProgressView().progressViewStyle(.circular)
-                Spacer()
+                // Skeleton im echten Katalog-Layout statt zentriertem Spinner
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                        spacing: 12
+                    ) {
+                        ForEach(0..<9, id: \.self) { _ in
+                            DSSkeleton(height: 110, cornerRadius: DS.R.card)
+                        }
+                    }
+                    .padding(16)
+                }
             } else if filteredProducts.isEmpty {
                 DSEmptyState(
                     icon: "tag.slash",
@@ -343,7 +351,7 @@ private struct OCategoryPill: View {
                         .frame(width: 8, height: 8)
                 }
                 Text(label)
-                    .font(.system(size: 15, weight: .semibold))
+                    .dsFont(.raw(15, weight: .semibold))
                     .foregroundColor(isActive ? .white : DS.C.text)
                     .fixedSize()
             }
@@ -367,7 +375,7 @@ private struct OProductCard: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(product.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .dsFont(.raw(16, weight: .semibold))
                     .foregroundColor(DS.C.text)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -376,7 +384,7 @@ private struct OProductCard: View {
 
                 if let catName = product.category?.name {
                     Text(catName)
-                        .font(.system(size: 13, weight: .regular))
+                        .dsFont(.raw(13, weight: .regular))
                         .foregroundColor(DS.C.text2)
                         .lineLimit(1)
                 }
@@ -390,7 +398,7 @@ private struct OProductCard: View {
 
                     if product.hasRequiredModifiers {
                         Text("Optionen")
-                            .font(.system(size: 12, weight: .semibold))
+                            .dsFont(.raw(12, weight: .semibold))
                             .foregroundColor(DS.C.accT)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -442,7 +450,7 @@ private struct OCartPanel: View {
             // Header
             HStack {
                 Text("Bestellung")
-                    .font(DS.F.bodyBold)
+                    .dsFont(.bodyBold)
                     .foregroundColor(DS.C.text)
                 Spacer()
                 if orderStore.isLoading {
@@ -454,7 +462,7 @@ private struct OCartPanel: View {
                 if !items.isEmpty {
                     Button(action: onClear) {
                         Text("Stornieren")
-                            .font(DS.F.captionBold)
+                            .dsFont(.captionBold)
                             .foregroundColor(DS.C.dangerText)
                             .frame(minHeight: 44)
                             .contentShape(Rectangle())
@@ -516,15 +524,15 @@ private struct OCartEmpty: View {
                     .fill(DS.C.sur2)
                     .frame(width: 56, height: 56)
                 Image(systemName: "cart")
-                    .font(.system(size: 22, weight: .medium))
+                    .dsFont(.raw(22, weight: .medium))
                     .foregroundColor(DS.C.text2)
             }
             Text("Noch keine Positionen")
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text2)
                 .multilineTextAlignment(.center)
             Text("Produkt links antippen, um zu starten.")
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -537,19 +545,21 @@ private struct OCartItemRow: View {
     let onRemove: () -> Void
     let onAdd:    () -> Void
 
+    @State private var showRemoveConfirm = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Name + Preis
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.productName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                         .foregroundColor(DS.C.text)
                         .lineLimit(1)
 
                     if !item.modifiers.isEmpty {
                         Text(item.modifiers.map { $0.name }.joined(separator: " · "))
-                            .font(.system(size: 13))
+                            .dsFont(.raw(13))
                             .foregroundColor(DS.C.text2)
                             .lineLimit(1)
                     }
@@ -561,18 +571,35 @@ private struct OCartItemRow: View {
             }
 
             // Menge: − n +
-            HStack(spacing: 0) {
-                OQtyButton(icon: "minus", isDanger: item.quantity == 1, onTap: onRemove)
+            HStack(spacing: 8) {
+                OQtyButton(
+                    icon: "minus",
+                    isDanger: item.quantity == 1,
+                    accessibilityLabel: item.quantity == 1 ? "Position entfernen" : "Menge verringern",
+                    onTap: {
+                        // Letzte Einheit = Position verschwindet → kurze Rückfrage
+                        if item.quantity == 1 { showRemoveConfirm = true } else { onRemove() }
+                    }
+                )
 
                 Text("\(item.quantity)")
-                    .font(.system(size: 16, weight: .bold))
-                    .monospacedDigit()
+                    .dsFont(.raw(16, weight: .bold), monoDigits: true)
                     .foregroundColor(DS.C.text)
                     .frame(minWidth: 36, alignment: .center)
+                    .accessibilityLabel("Menge \(item.quantity)")
 
-                OQtyButton(icon: "plus", isDanger: false, onTap: onAdd)
+                OQtyButton(icon: "plus", isDanger: false,
+                           accessibilityLabel: "Menge erhöhen", onTap: onAdd)
 
                 Spacer()
+            }
+            .confirmationDialog(
+                "\"\(item.productName)\" entfernen?",
+                isPresented: $showRemoveConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Entfernen", role: .destructive) { onRemove() }
+                Button("Behalten", role: .cancel) {}
             }
         }
         .padding(.horizontal, 18)
@@ -583,21 +610,25 @@ private struct OCartItemRow: View {
 private struct OQtyButton: View {
     let icon:     String
     let isDanger: Bool
+    var accessibilityLabel: String = ""
     let onTap:    () -> Void
 
     var body: some View {
         Button(action: onTap) {
             Image(systemName: isDanger && icon == "minus" ? "trash" : icon)
-                .font(.system(size: 14, weight: .semibold))
+                .dsFont(.raw(14, weight: .semibold))
                 .foregroundColor(isDanger ? DS.C.dangerText : DS.C.text)
                 .frame(width: DS.S.qtyButton, height: DS.S.qtyButton)
                 .background(
                     RoundedRectangle(cornerRadius: DS.R.control)
                         .fill(isDanger ? DS.C.dangerBg : DS.C.sur2)
                 )
+                // Trefferfläche ≥ 44pt — Optik bleibt 38pt
+                .frame(width: DS.S.touchTarget, height: DS.S.touchTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(OCardPressStyle())
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -614,15 +645,14 @@ private struct OCartFooter: View {
             VStack(spacing: 14) {
                 HStack {
                     Text("\(itemCount) Position\(itemCount == 1 ? "" : "en") · \(articleCount) Artikel")
-                        .font(DS.F.caption)
-                        .monospacedDigit()
+                        .dsFont(.caption, monoDigits: true)
                         .foregroundColor(DS.C.text2)
                     Spacer()
                 }
 
                 HStack(alignment: .firstTextBaseline) {
                     Text("Gesamt")
-                        .font(DS.F.bodyBold)
+                        .dsFont(.bodyBold)
                         .foregroundColor(DS.C.text)
                     Spacer()
                     MoneyText(cents: total, size: 26, weight: .bold)
@@ -631,7 +661,7 @@ private struct OCartFooter: View {
                 Button(action: onBezahlen) {
                     HStack(spacing: 8) {
                         Image(systemName: "creditcard")
-                            .font(.system(size: 16, weight: .semibold))
+                            .dsFont(.raw(16, weight: .semibold))
                         Text("Bezahlen")
                     }
                 }
@@ -679,12 +709,11 @@ private struct ModifierSelectionSheet: View {
             ZStack(alignment: .topTrailing) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(product.name)
-                        .font(DS.F.heading)
+                        .dsFont(.heading)
                         .foregroundColor(DS.C.text)
 
                     Text("Basispreis \(euroString(product.priceCents))")
-                        .font(DS.F.sub)
-                        .monospacedDigit()
+                        .dsFont(.sub, monoDigits: true)
                         .foregroundColor(DS.C.text2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -694,7 +723,7 @@ private struct ModifierSelectionSheet: View {
 
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .dsFont(.raw(13, weight: .semibold))
                         .foregroundColor(DS.C.text2)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(DS.C.sur2))
@@ -733,7 +762,7 @@ private struct ModifierSelectionSheet: View {
                         MoneyText(cents: totalCents, size: 22, weight: .bold)
                         if !requiredGroupsSatisfied {
                             Text("Pflichtoptionen auswählen")
-                                .font(DS.F.caption)
+                                .dsFont(.caption)
                                 .foregroundColor(DS.C.dangerText)
                         }
                     }
@@ -770,21 +799,21 @@ private struct MGroupSection: View {
             // Group header: name + badge
             HStack {
                 Text(group.name)
-                    .font(DS.F.bodyBold)
+                    .dsFont(.bodyBold)
                     .foregroundColor(DS.C.text)
 
                 Spacer()
 
                 if group.isRequired {
                     Text("Pflicht")
-                        .font(DS.F.captionBold)
+                        .dsFont(.captionBold)
                         .foregroundColor(DS.C.brassText)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(DS.C.brassBg))
                 } else {
                     Text("Optional")
-                        .font(DS.F.captionBold)
+                        .dsFont(.captionBold)
                         .foregroundColor(DS.C.text2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -861,7 +890,7 @@ private struct MOptionRow: View {
                             .frame(width: 22, height: 22)
                         if isSelected {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .bold))
+                                .dsFont(.raw(11, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -869,14 +898,13 @@ private struct MOptionRow: View {
                 .frame(width: 22, height: 22)
 
                 Text(option.name)
-                    .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                    .dsFont(.raw(16, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(DS.C.text)
 
                 Spacer()
 
                 Text(option.priceDeltaCents > 0 ? "+ \(euroString(option.priceDeltaCents))" : "inklusive")
-                    .font(.system(size: 15, weight: .medium))
-                    .monospacedDigit()
+                    .dsFont(.raw(15, weight: .medium), monoDigits: true)
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
             }
             .padding(.horizontal, 16)

@@ -28,7 +28,7 @@ struct ReceiptView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
 
                 RTopBar(receipt: receipt, onClose: { dismiss() })
@@ -81,9 +81,9 @@ private struct RTopBar: View {
             Button(action: onClose) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                     Text("Zurück")
-                        .font(DS.F.bodyMed)
+                        .dsFont(.bodyMed)
                 }
                 .foregroundColor(DS.C.accT)
                 .padding(.horizontal, 16)
@@ -96,7 +96,7 @@ private struct RTopBar: View {
             Spacer()
 
             Text("Bon")
-                .font(DS.F.bodyBold)
+                .dsFont(.bodyBold)
                 .foregroundColor(DS.C.text)
 
             Spacer()
@@ -154,20 +154,20 @@ private struct RSuccessCol: View {
                     .fill(DS.C.successBg)
                     .frame(width: 72, height: 72)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 28, weight: .bold))
+                    .dsFont(.raw(28, weight: .bold))
                     .foregroundColor(DS.C.successText)
             }
 
             VStack(spacing: 6) {
                 Text("Zahlung erfolgreich")
-                    .font(DS.F.heading)
+                    .dsFont(.heading)
                     .foregroundColor(DS.C.text)
                     .multilineTextAlignment(.center)
 
                 MoneyText(cents: totalCents, size: 32, weight: .bold, color: DS.C.accT)
 
                 Text("\(formatDate(receipt.createdAt)) · \(formatTime(receipt.createdAt))\n\(payMethod)")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
@@ -179,7 +179,7 @@ private struct RSuccessCol: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.text")
-                            .font(.system(size: 14, weight: .semibold))
+                            .dsFont(.icon(14, weight: .semibold))
                         Text("PDF senden")
                     }
                 }
@@ -190,12 +190,18 @@ private struct RSuccessCol: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "printer")
-                            .font(.system(size: 14, weight: .semibold))
+                            .dsFont(.icon(14, weight: .semibold))
                         Text("Bon drucken")
                     }
                 }
                 .buttonStyle(DSSecondaryButton(height: 46))
                 .disabled(true)  // Phase 5
+
+                Text("Bald verfügbar — der Bon ist digital gespeichert und jederzeit abrufbar.")
+                    .dsFont(.caption)
+                    .foregroundColor(DS.C.text2)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 2)
             }
 
             Rectangle()
@@ -207,7 +213,7 @@ private struct RSuccessCol: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                     Text("Neue Bestellung")
                 }
             }
@@ -254,11 +260,11 @@ private struct RReceiptDoc: View {
             // Header: Betrieb + Adresse (zentriert)
             VStack(spacing: 5) {
                 Text(snap?.tenant.name ?? "cashbox")
-                    .font(.system(size: 17, weight: .bold))
+                    .dsFont(.raw(17, weight: .bold))
                     .foregroundColor(DS.C.text)
                 if let tenant = snap?.tenant {
                     Text(tenantAddressLine(tenant))
-                        .font(.system(size: 12))
+                        .dsFont(.raw(12))
                         .foregroundColor(DS.C.text2)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -311,11 +317,11 @@ private struct RReceiptDoc: View {
             // Gesamt
             HStack {
                 Text("Gesamt")
-                    .font(.system(size: 15, weight: .bold))
+                    .dsFont(.raw(15, weight: .bold))
                     .foregroundColor(DS.C.text)
                 Spacer()
                 Text(euroString(totalCents))
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .dsFont(.mono(18, weight: .bold))
                     .foregroundColor(DS.C.text)
             }
             .padding(.horizontal, 16)
@@ -344,7 +350,7 @@ private struct RReceiptDoc: View {
                             .strokeBorder(DS.C.brdAdaptive, lineWidth: 1.5)
                             .frame(width: 72, height: 72)
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 22, weight: .medium))
+                            .dsFont(.raw(22, weight: .medium))
                             .foregroundColor(DS.C.brassText)
                     }
                 } else if let sig = receipt.tseSignature, let qrImg = generateQR(sig) {
@@ -363,13 +369,13 @@ private struct RReceiptDoc: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("TSE-Signatur (KassenSichV)")
-                        .font(.system(size: 11, weight: .semibold))
+                        .dsFont(.raw(11, weight: .semibold))
                         .foregroundColor(DS.C.text2)
                         .padding(.bottom, 2)
 
                     if receipt.tsePending {
                         Text("Ausstehend — wird nachsigniert")
-                            .font(.system(size: 12))
+                            .dsFont(.raw(12))
                             .foregroundColor(DS.C.brassText)
                     } else {
                         if let sn = receipt.tseSerialNumber {
@@ -397,8 +403,8 @@ private struct RReceiptDoc: View {
             RDashedLine().padding(.horizontal, 16)
 
             // Footer
-            Text("Vielen Dank für Ihren Besuch! · \(snap?.tenant.name ?? "cashbox")")
-                .font(.system(size: 12))
+            Text("Vielen Dank für den Besuch! · \(snap?.tenant.name ?? "cashbox")")
+                .dsFont(.raw(12))
                 .foregroundColor(DS.C.text2)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
@@ -426,11 +432,11 @@ private struct RTotalRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 13))
+                .dsFont(.raw(13))
                 .foregroundColor(DS.C.text2)
             Spacer()
             Text(euroString(cents))
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .dsFont(.mono(13, weight: .semibold))
                 .foregroundColor(DS.C.text)
         }
     }
@@ -454,15 +460,15 @@ private struct RItemRows: View {
                 HStack(alignment: .top, spacing: 0) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.item.productName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .dsFont(.raw(14, weight: .semibold))
                             .foregroundColor(DS.C.text)
                         Text("\(row.item.quantity) × \(euroString(row.item.productPriceCents))")
-                            .font(.system(size: 12, design: .monospaced))
+                            .dsFont(.mono(12))
                             .foregroundColor(DS.C.text2)
                     }
                     Spacer()
                     Text(euroString(row.item.subtotalCents))
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .dsFont(.mono(14, weight: .semibold))
                         .foregroundColor(DS.C.text)
                 }
                 .padding(.vertical, 6)
@@ -478,10 +484,10 @@ private struct RMetaCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .dsFont(.raw(11, weight: .medium))
                 .foregroundColor(DS.C.text2)
             Text(value)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .dsFont(.mono(13, weight: .semibold))
                 .foregroundColor(DS.C.text)
                 .lineLimit(1)
         }
@@ -496,11 +502,11 @@ private struct RTseRow: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(key)
-                .font(.system(size: 11))
+                .dsFont(.raw(11))
                 .foregroundColor(DS.C.text2)
                 .frame(minWidth: 60, alignment: .leading)
             Text(value)
-                .font(.system(size: 11, design: .monospaced))
+                .dsFont(.mono(11))
                 .foregroundColor(DS.C.text)
         }
     }

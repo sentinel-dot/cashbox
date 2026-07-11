@@ -62,8 +62,6 @@ struct TableOverviewView: View {
     @EnvironmentObject var reportStore:    ReportStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
 
-    @AppStorage("prefersDarkMode") private var prefersDarkMode = false
-
     @State private var selectedNav:       NavItem = .tische
     @State private var selectedTable:     SelectedTable? = nil
     @State private var showSchnellkasse:  Bool = false
@@ -87,7 +85,7 @@ struct TableOverviewView: View {
 
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
 
                 HStack(spacing: 0) {
@@ -106,7 +104,6 @@ struct TableOverviewView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .preferredColorScheme(prefersDarkMode ? .dark : .light)
         .animation(DS.M.base, value: networkMonitor.isOnline)
         .task {
             async let t: () = tableStore.loadTables()
@@ -158,7 +155,17 @@ private struct AppTopBar: View {
     @EnvironmentObject var authStore:    AuthStore
     @EnvironmentObject var sessionStore: SessionStore
     @Binding var selectedNav: NavItem
-    @AppStorage("prefersDarkMode") private var prefersDarkMode = false
+    @AppStorage(DSAppearance.storageKey) private var appearanceRaw = DSAppearance.system.rawValue
+
+    private var appearance: DSAppearance { DSAppearance(rawValue: appearanceRaw) ?? .system }
+
+    private var appearanceIcon: String {
+        switch appearance {
+        case .system: return "circle.lefthalf.filled"
+        case .light:  return "sun.max"
+        case .dark:   return "moon"
+        }
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -166,7 +173,7 @@ private struct AppTopBar: View {
             HStack(spacing: 10) {
                 AppBrandMark()
                 Text("cashbox")
-                    .font(.system(size: DS.T.topbarAppName, weight: .bold))
+                    .dsFont(.raw(18, weight: .bold))
                     .foregroundColor(DS.C.text)
             }
             .padding(.horizontal, 16)
@@ -191,26 +198,31 @@ private struct AppTopBar: View {
                             .fill(DS.C.sur2)
                             .frame(width: 32, height: 32)
                         Text(String(user.name.prefix(1)).uppercased())
-                            .font(DS.F.captionBold)
+                            .dsFont(.captionBold)
                             .foregroundColor(DS.C.text)
                     }
                     Text(user.name)
-                        .font(DS.F.subMed)
+                        .dsFont(.subMed)
                         .foregroundColor(DS.C.text)
                 }
                 Spacer().frame(width: 16)
             }
 
-            // Dark mode toggle — Icon-Button, 44pt Trefferfläche
+            // Darstellung: System → Hell → Dunkel (zyklisch), 44pt Trefferfläche
             Button {
-                withAnimation(DS.M.base) { prefersDarkMode.toggle() }
+                let all = DSAppearance.allCases
+                let idx = all.firstIndex(of: appearance) ?? 0
+                withAnimation(DS.M.base) {
+                    appearanceRaw = all[(idx + 1) % all.count].rawValue
+                }
             } label: {
-                Image(systemName: prefersDarkMode ? "sun.max" : "moon")
-                    .font(.system(size: 16, weight: .medium))
+                Image(systemName: appearanceIcon)
+                    .dsFont(.raw(16, weight: .medium))
                     .foregroundColor(DS.C.text2)
                     .frame(width: DS.S.touchTarget, height: DS.S.touchTarget)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Darstellung wechseln, aktuell \(appearance.label)")
 
             Spacer().frame(width: 10)
         }
@@ -357,17 +369,16 @@ private struct SidebarNavRow: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 Image(systemName: item.icon)
-                    .font(.system(size: 17, weight: isSelected ? .semibold : .regular))
+                    .dsFont(.raw(17, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                     .frame(width: 24)
                 Text(item.label)
-                    .font(.system(size: DS.T.navItem, weight: isSelected ? .semibold : .medium))
+                    .dsFont(.raw(16, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(DS.F.captionBold)
-                        .monospacedDigit()
+                        .dsFont(.captionBold, monoDigits: true)
                         .foregroundColor(isSelected ? DS.C.accT : DS.C.text2)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -402,7 +413,7 @@ private struct SidebarKPIs: View {
                 DSSectionLabel(text: "Umsatz heute")
                 if reportStore.isLoading {
                     Text("…")
-                        .font(DS.F.moneyDisplay(30))
+                        .dsFont(.moneyDisplay(30))
                         .foregroundColor(DS.C.text2)
                 } else {
                     MoneyText(
@@ -416,15 +427,13 @@ private struct SidebarKPIs: View {
                 VStack(alignment: .leading, spacing: 3) {
                     DSSectionLabel(text: "Tische")
                     Text("\(tableStore.occupiedCount)/\(tableStore.tables.count)")
-                        .font(.system(size: 21, weight: .bold))
-                        .monospacedDigit()
+                        .dsFont(.raw(21, weight: .bold), monoDigits: true)
                         .foregroundColor(DS.C.text)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     DSSectionLabel(text: "Schicht")
                     Text(sessionStore.hasOpenSession ? shiftDuration : "–")
-                        .font(.system(size: 21, weight: .bold))
-                        .monospacedDigit()
+                        .dsFont(.raw(21, weight: .bold), monoDigits: true)
                         .foregroundColor(DS.C.text)
                 }
             }
@@ -476,10 +485,10 @@ private struct SidebarLogout: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 16, weight: .regular))
+                    .dsFont(.raw(16, weight: .regular))
                     .frame(width: 24)
                 Text("Abmelden")
-                    .font(DS.F.subMed)
+                    .dsFont(.subMed)
             }
             .foregroundColor(DS.C.text2)
             .padding(.horizontal, 20)
@@ -554,11 +563,19 @@ private struct TableGridContent: View {
                 NoSessionBanner()
             }
 
-            // Tisch-Grid
+            // Tisch-Grid — Ladezustand als Skeleton im echten Kachel-Layout
             if tableStore.isLoading {
-                Spacer()
-                ProgressView().progressViewStyle(.circular).scaleEffect(1.2)
-                Spacer()
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
+                        spacing: 14
+                    ) {
+                        ForEach(0..<6, id: \.self) { _ in
+                            DSSkeleton(height: 176, cornerRadius: DS.R.card)
+                        }
+                    }
+                    .padding(DS.S.pagePad)
+                }
             } else if tableStore.tables.isEmpty {
                 DSEmptyState(
                     icon: "square.grid.2x2",
@@ -609,9 +626,9 @@ private struct NoSessionBanner: View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(DS.C.brass)
-                .font(.system(size: 14))
+                .dsFont(.raw(14))
             Text("Keine offene Kassensitzung — Bestellungen können erst nach Kasseneröffnung erstellt werden.")
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.brassText)
             Spacer()
         }
@@ -634,22 +651,22 @@ private struct SchnellkasseButton: View {
         Button(action: onTap) {
             HStack(spacing: 14) {
                 Image(systemName: "bolt.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .dsFont(.raw(18, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 40, height: 40)
                     .background(Circle().fill(Color.white.opacity(0.16)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Schnellkasse")
-                        .font(.system(size: DS.T.quickLabel, weight: .bold))
+                        .dsFont(.raw(17, weight: .bold))
                         .foregroundColor(.white)
                     Text("Ohne Tisch — Direktverkauf")
-                        .font(.system(size: DS.T.quickSub, weight: .regular))
+                        .dsFont(.raw(14, weight: .regular))
                         .foregroundColor(.white.opacity(0.75))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .semibold))
+                    .dsFont(.raw(15, weight: .semibold))
                     .foregroundColor(.white.opacity(0.75))
             }
             .padding(.horizontal, 20)
@@ -705,15 +722,18 @@ private struct ZonePill: View {
     var body: some View {
         Button(action: onTap) {
             Text(label)
-                .font(.system(size: DS.T.zonePill, weight: .semibold))
+                .dsFont(.raw(14, weight: .semibold))
                 .foregroundColor(isSelected ? .white : DS.C.text)
                 .padding(.horizontal, 16)
                 .frame(height: 38)
                 .background(Capsule().fill(isSelected ? DS.C.acc : DS.C.sur2))
-                .contentShape(Capsule())
+                // Trefferfläche ≥ 44pt — Optik bleibt 38pt
+                .frame(minHeight: DS.S.touchTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .animation(DS.M.fast, value: isSelected)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -758,7 +778,7 @@ private struct TableCard: View {
                 // Kopf: Tischname + Status-Pill
                 HStack(alignment: .center) {
                     Text(table.name)
-                        .font(DS.F.heading)
+                        .dsFont(.heading)
                         .foregroundColor(DS.C.text)
                         .lineLimit(1)
                     Spacer()
@@ -771,7 +791,7 @@ private struct TableCard: View {
                 if status != .frei {
                     MoneyText(
                         cents: table.totalOpenCents,
-                        size: DS.T.tableAmount,
+                        size: 40,
                         weight: .bold,
                         color: status == .zahlung ? DS.C.brassText : DS.C.text
                     )
@@ -779,7 +799,7 @@ private struct TableCard: View {
                     .lineLimit(1)
                 } else {
                     Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .medium))
+                        .dsFont(.raw(22, weight: .medium))
                         .foregroundColor(DS.C.text2.opacity(0.6))
                 }
 
@@ -802,7 +822,7 @@ private struct TableCard: View {
                             .foregroundColor(status == .zahlung ? DS.C.brassText.opacity(0.8) : DS.C.text2)
                     }
                 }
-                .font(.system(size: DS.T.tableMeta, weight: .medium))
+                .dsFont(.raw(14, weight: .medium))
             }
             .padding(DS.S.cardPad)
             .frame(maxWidth: .infinity, minHeight: 176, alignment: .leading)
@@ -814,6 +834,21 @@ private struct TableCard: View {
             .contentShape(RoundedRectangle(cornerRadius: DS.R.card))
         }
         .buttonStyle(TableCardPressStyle())
+        // VoiceOver: ein Element mit kombinierter Ansage statt vier Einzelteilen
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var accessibilitySummary: String {
+        switch status {
+        case .frei:
+            return "Tisch \(table.name), frei"
+        case .besetzt:
+            return "Tisch \(table.name), besetzt, \(euroAccessibilityLabel(table.totalOpenCents))"
+        case .zahlung:
+            return "Tisch \(table.name), Zahlung angefordert, \(euroAccessibilityLabel(table.totalOpenCents))"
+        }
     }
 
     @ViewBuilder
@@ -821,7 +856,7 @@ private struct TableCard: View {
         switch status {
         case .frei:
             Text("Frei")
-                .font(DS.F.captionBold)
+                .dsFont(.captionBold)
                 .foregroundColor(DS.C.text2)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
@@ -859,7 +894,8 @@ struct AppBrandMark: View {
             RoundedRectangle(cornerRadius: DS.R.brandMark)
                 .fill(DS.C.acc)
                 .frame(width: size, height: size)
-            // Kassenlade-Glyphe: Rechteck mit Münzschlitz
+            // Kassenlade-Glyphe — proportional zum festen Logo-Rahmen,
+            // skaliert bewusst NICHT mit Dynamic Type (dokumentierte Ausnahme)
             Image(systemName: "eurosign")
                 .font(.system(size: size * 0.5, weight: .bold))
                 .foregroundColor(.white)
