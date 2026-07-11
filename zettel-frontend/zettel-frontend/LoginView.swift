@@ -10,7 +10,7 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var authStore:      AuthStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
-    @AppStorage("usesDarkMode") private var usesDarkMode = false
+    @AppStorage(DSAppearance.storageKey) private var appearanceRaw = DSAppearance.system.rawValue
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -19,24 +19,23 @@ struct LoginView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
                 if let reason = authStore.sessionExpiredReason {
                     SessionExpiredBanner(message: reason) {
                         authStore.sessionExpiredReason = nil
                     }
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .dsBannerTransition()
                 }
 
                 HStack(spacing: 0) {
-                    BrandPanel(usesDarkMode: $usesDarkMode)
+                    BrandPanel(appearanceRaw: $appearanceRaw)
                     LoginPanel()
                         .frame(width: DS.S.formPanelWidth)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .preferredColorScheme(usesDarkMode ? .dark : .light)
         .animation(DS.M.base, value: networkMonitor.isOnline)
         .animation(DS.M.slow, value: authStore.sessionExpiredReason != nil)
     }
@@ -45,10 +44,20 @@ struct LoginView: View {
 // MARK: - Brand Panel (Linke Spalte — Nacht-Olive, committed)
 
 private struct BrandPanel: View {
-    @Binding var usesDarkMode: Bool
+    @Binding var appearanceRaw: String
 
     // Helle Akzentfarbe auf dunklem Panel (Ledger Green, Dark-Variante)
-    private let leaf = Color(hex: "AECB6E")
+    private let leaf = DS.C.brandLeaf
+
+    private var appearance: DSAppearance { DSAppearance(rawValue: appearanceRaw) ?? .system }
+
+    private var appearanceIcon: String {
+        switch appearance {
+        case .system: return "circle.lefthalf.filled"
+        case .light:  return "sun.max"
+        case .dark:   return "moon"
+        }
+    }
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -76,11 +85,11 @@ private struct BrandPanel: View {
                         .fill(leaf)
                         .frame(width: 34, height: 34)
                     Image(systemName: "eurosign")
-                        .font(.system(size: 16, weight: .bold))
+                        .dsFont(.raw(16, weight: .bold))
                         .foregroundColor(Color(hex: "1C2413"))
                 }
                 Text("cashbox")
-                    .font(.system(size: 19, weight: .bold))
+                    .dsFont(.raw(19, weight: .bold))
                     .foregroundColor(.white)
             }
 
@@ -89,7 +98,7 @@ private struct BrandPanel: View {
             // Tagline
             (Text(greeting + "\n").foregroundColor(.white)
              + Text("bereit für die\nneue Schicht.").foregroundColor(leaf))
-                .font(.system(size: 34, weight: .bold))
+                .dsFont(.raw(34, weight: .bold))
                 .lineSpacing(3)
 
             Spacer()
@@ -97,17 +106,27 @@ private struct BrandPanel: View {
             // Meta + Dark-Mode-Toggle
             VStack(alignment: .leading, spacing: 16) {
                 Text(dateTimeString)
-                    .font(.system(size: 14))
+                    .dsFont(.raw(14))
                     .foregroundColor(.white.opacity(0.55))
 
-                HStack(spacing: 10) {
-                    Text("Dark Mode")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.55))
-                    Toggle("", isOn: $usesDarkMode)
-                        .labelsHidden()
-                        .tint(leaf.opacity(0.6))
+                // Darstellung: System → Hell → Dunkel (zyklisch)
+                Button {
+                    let all = DSAppearance.allCases
+                    let idx = all.firstIndex(of: appearance) ?? 0
+                    appearanceRaw = all[(idx + 1) % all.count].rawValue
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: appearanceIcon)
+                            .dsFont(.icon(13))
+                        Text("Darstellung: \(appearance.label)")
+                            .dsFont(.raw(14))
+                    }
+                    .foregroundColor(.white.opacity(0.55))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Darstellung wechseln, aktuell \(appearance.label)")
             }
         }
         .padding(44)
@@ -125,16 +144,16 @@ private struct SessionExpiredBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.trianglebadge.exclamationmark.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .dsFont(.raw(14, weight: .semibold))
                 .foregroundColor(.white)
             Text(message)
-                .font(.system(size: 14, weight: .medium))
+                .dsFont(.raw(14, weight: .medium))
                 .foregroundColor(.white)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .dsFont(.raw(12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
@@ -229,12 +248,12 @@ private struct PINPanel: View {
                     .padding(.bottom, 22)
 
                 // PIN eingeben
-                Text("Hallo, \(selectedUser.map { $0.name } ?? "Gast") 👋")
-                    .font(DS.F.heading)
+                Text(selectedUser.map { "Hallo, \($0.name)" } ?? "PIN-Anmeldung")
+                    .dsFont(.heading)
                     .foregroundColor(DS.C.text)
                     .padding(.bottom, 4)
                 Text("Gib deinen 4-stelligen PIN ein.")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
                     .padding(.bottom, 18)
 
@@ -256,7 +275,7 @@ private struct PINPanel: View {
 
                 // Fehlertext
                 Text(pinErrorMsg ?? " ")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.dangerText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.bottom, 10)
@@ -280,7 +299,7 @@ private struct PINPanel: View {
                     onSwitchToPassword()
                 } label: {
                     Text("PIN vergessen? Mit Passwort anmelden →")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
@@ -377,16 +396,16 @@ private struct UserCard: View {
                         .fill(selected ? DS.C.acc : avatarBg)
                         .frame(width: DS.S.avatarSize, height: DS.S.avatarSize)
                     Text(String(user.name.prefix(1)).uppercased())
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                         .foregroundColor(selected ? .white : avatarFg)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(user.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .dsFont(.raw(16, weight: .semibold))
                         .foregroundColor(selected ? DS.C.accT : DS.C.text)
                     Text(user.role.displayName)
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
 
@@ -401,7 +420,7 @@ private struct UserCard: View {
                         .frame(width: 20, height: 20)
                     if selected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
+                            .dsFont(.raw(9, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -443,17 +462,16 @@ private struct NumpadButton: View {
                             .tint(DS.C.accT)
                     } else if digit == "⌫" {
                         Image(systemName: "delete.left")
-                            .font(.system(size: 19, weight: .medium))
+                            .dsFont(.raw(19, weight: .medium))
                             .foregroundColor(DS.C.text2)
                     } else {
                         VStack(spacing: 1) {
                             Text(digit)
-                                .font(.system(size: 22, weight: .semibold))
-                                .monospacedDigit()
+                                .dsFont(.raw(22, weight: .semibold), monoDigits: true)
                                 .foregroundColor(DS.C.text)
                             if let sub {
                                 Text(sub)
-                                    .font(.system(size: 9, weight: .medium))
+                                    .dsFont(.raw(9, weight: .medium))
                                     .foregroundColor(DS.C.text2)
                                     .tracking(1)
                             }
@@ -511,9 +529,9 @@ private struct EmailPasswordPanel: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 13, weight: .semibold))
+                                .dsFont(.raw(13, weight: .semibold))
                             Text("Zur PIN-Anmeldung")
-                                .font(DS.F.subMed)
+                                .dsFont(.subMed)
                         }
                         .foregroundColor(DS.C.accT)
                         .frame(minHeight: 44)
@@ -524,12 +542,12 @@ private struct EmailPasswordPanel: View {
                 }
 
                 Text("Mit Passwort anmelden")
-                    .font(DS.F.title)
+                    .dsFont(.title)
                     .foregroundColor(DS.C.text)
                     .padding(.bottom, 6)
 
                 Text("Melde dich mit deinen Zugangsdaten an.")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
                     .padding(.bottom, 26)
 
@@ -549,11 +567,10 @@ private struct EmailPasswordPanel: View {
 
                 HStack {
                     Spacer()
-                    Button("Passwort vergessen?") {}
-                        .font(DS.F.sub)
-                        .foregroundColor(DS.C.accT)
-                        .buttonStyle(.plain)
-                        .frame(minHeight: 44)
+                    // Kein Self-Service-Reset (kommt später) — der ehrliche Weg:
+                    Text("Passwort vergessen? support@cashbox.de")
+                        .dsFont(.caption)
+                        .foregroundColor(DS.C.text2)
                 }
                 .padding(.bottom, 10)
 
@@ -574,12 +591,12 @@ private struct EmailPasswordPanel: View {
 
                 HStack(spacing: 4) {
                     Text("Noch kein Konto?")
-                        .font(DS.F.sub)
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                     Button("Jetzt registrieren →") {
                         showRegister = true
                     }
-                    .font(DS.F.subBold)
+                    .dsFont(.subBold)
                     .foregroundColor(DS.C.accT)
                     .buttonStyle(.plain)
                     .frame(minHeight: 44)
@@ -613,34 +630,16 @@ private struct EmailPasswordPanel: View {
 
 // MARK: - Login Text Field
 
+// Dünner Alias auf DSTextField (eine Feld-Quelle app-weit)
 private struct LoginTextField: View {
     let placeholder:     String
     @Binding var text:   String
     var keyboardType:    UIKeyboardType = .default
     var textContentType: UITextContentType? = nil
 
-    @State private var isFocused = false
-
     var body: some View {
-        NoAssistantTextField(
-            placeholder:            placeholder,
-            text:                   $text,
-            keyboardType:           keyboardType,
-            uiFont:                 UIFont.systemFont(ofSize: 16),
-            uiTextColor:            UIColor(DS.C.text),
-            textContentType:        textContentType,
-            autocapitalizationType: .none,
-            autocorrectionType:     .no,
-            isFocused:              $isFocused
-        )
-        .padding(.horizontal, 14)
-        .frame(height: DS.S.inputHeight)
-        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.R.input)
-                .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
-        )
-        .animation(DS.M.fast, value: isFocused)
+        DSTextField(placeholder: placeholder, text: $text,
+                    keyboard: keyboardType, contentType: textContentType)
     }
 }
 
@@ -648,40 +647,11 @@ private struct LoginTextField: View {
 
 private struct LoginPasswordField: View {
     @Binding var password:     String
-    @Binding var showPassword: Bool
-
-    @State private var isFocused = false
+    @Binding var showPassword: Bool   // Alt-API — Reveal übernimmt DSTextField intern
 
     var body: some View {
-        HStack(spacing: 8) {
-            NoAssistantTextField(
-                placeholder:     "Passwort",
-                text:            $password,
-                uiFont:          UIFont.systemFont(ofSize: 16),
-                uiTextColor:     UIColor(DS.C.text),
-                isSecure:        !showPassword,
-                textContentType: .password,
-                isFocused:       $isFocused
-            )
-            Button {
-                showPassword.toggle()
-            } label: {
-                Image(systemName: showPassword ? "eye.slash" : "eye")
-                    .font(.system(size: 16))
-                    .foregroundColor(DS.C.text2)
-                    .frame(width: 40, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 14)
-        .frame(height: DS.S.inputHeight)
-        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.R.input)
-                .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
-        )
-        .animation(DS.M.fast, value: isFocused)
+        DSTextField(placeholder: "Passwort", text: $password,
+                    isSecure: true, contentType: .password)
     }
 }
 

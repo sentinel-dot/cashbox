@@ -27,7 +27,7 @@ struct KategorienView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
 
                 KategorienToolbar(count: productStore.allCategories.count, onAdd: { showAddModal = true })
@@ -132,17 +132,17 @@ private struct KategorienToolbar: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Kategorien")
-                    .font(DS.F.heading)
+                    .dsFont(.heading)
                     .foregroundColor(DS.C.text)
                 Text("\(count) Kategorie\(count == 1 ? "" : "n") · Reihenfolge bestimmt die Anzeige an der Kasse")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             Button(action: onAdd) {
                 HStack(spacing: 7) {
                     Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
+                        .dsFont(.raw(14, weight: .bold))
                     Text("Kategorie hinzufügen")
                 }
             }
@@ -165,7 +165,7 @@ private struct KategorienListe: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 10) {
+            LazyVStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(categories.enumerated()), id: \.element.id) { index, cat in
                     let prodCount = products.filter { $0.category?.id == cat.id }.count
                     KategorieCard(
@@ -207,17 +207,16 @@ private struct KategorieCard: View {
                         .fill(accentColor)
                         .frame(width: 44, height: 44)
                     Image(systemName: "tag.fill")
-                        .font(.system(size: 16))
+                        .dsFont(.raw(16))
                         .foregroundColor(.white.opacity(0.9))
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(category.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .dsFont(.raw(16, weight: .semibold))
                         .foregroundColor(isSelected ? DS.C.accT : DS.C.text)
                     Text("\(prodCount) Produkt\(prodCount == 1 ? "" : "e") · Sortierung \(sortOrder)")
-                        .font(DS.F.caption)
-                        .monospacedDigit()
+                        .dsFont(.caption, monoDigits: true)
                         .foregroundColor(DS.C.text2)
                 }
 
@@ -225,7 +224,7 @@ private struct KategorieCard: View {
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 14, weight: .medium))
+                        .dsFont(.raw(14, weight: .medium))
                         .foregroundColor(DS.C.dangerText)
                         .frame(width: 40, height: 40)
                         .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.dangerBg.opacity(0.6)))
@@ -234,7 +233,7 @@ private struct KategorieCard: View {
                 .buttonStyle(.plain)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .dsFont(.raw(13, weight: .semibold))
                     .foregroundColor(DS.C.text2.opacity(0.6))
             }
             .padding(.horizontal, 16)
@@ -297,7 +296,9 @@ private struct DetailContent: View {
     @State private var sortText   = ""
     @State private var nameFocused = false
 
-    private let colorPresets = ["1a6fff","3aada0","d4a017","7c5cbf","e05a2b","3a6b35","c0112a","888780"]
+    // Datenfarben in der Ledger-Signatur: gedämpfte, erdige Mitteltöne —
+    // unterscheidbar, aber kein Regenbogen neben dem Restrained-Grün
+    private let colorPresets = ["4a7310","9a6a0b","b4552d","9e2f42","6e5a9e","3a7ca5","2e8c81","6b7267"]
 
     private var assignedProducts: [Product] {
         products.filter { $0.category?.id == category.id }
@@ -314,10 +315,10 @@ private struct DetailContent: View {
                     .frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name.isEmpty ? category.name : name)
-                        .font(DS.F.heading)
+                        .dsFont(.heading)
                         .foregroundColor(DS.C.text)
                     Text("\(assignedProducts.count) Produkt\(assignedProducts.count == 1 ? "" : "e") zugewiesen")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 Spacer()
@@ -332,21 +333,8 @@ private struct DetailContent: View {
 
                     // Name
                     DetailField(label: "Name") {
-                        NoAssistantTextField(
-                            placeholder: "z.B. Getränke",
-                            text:        $name,
-                            uiFont:      UIFont.systemFont(ofSize: 16),
-                            uiTextColor: UIColor(DS.C.text),
-                            isFocused:   $nameFocused
-                        )
-                        .padding(.horizontal, 14)
-                        .frame(height: DS.S.inputHeight)
-                        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.R.input)
-                                .strokeBorder(nameFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: nameFocused ? 1.5 : 1)
-                        )
-                        .animation(DS.M.fast, value: nameFocused)
+                        DSTextField(placeholder: "z.B. Getränke", text: $name,
+                                    capitalization: .sentences, autocorrection: .default)
                     }
 
                     // Farbe
@@ -370,13 +358,13 @@ private struct DetailContent: View {
                                     .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
                             }
                             Text(colorHex.isEmpty ? "Eigener HEX-Wert" : colorHex.uppercased())
-                                .font(.system(size: 13, design: .monospaced))
+                                .dsFont(.mono(13))
                                 .foregroundColor(colorHex.isEmpty ? DS.C.text2 : DS.C.text)
                             Spacer()
                             if !colorHex.isEmpty {
                                 Button { colorHex = "" } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 15))
+                                        .dsFont(.raw(15))
                                         .foregroundColor(DS.C.text2)
                                         .frame(width: 32, height: 32)
                                         .contentShape(Rectangle())
@@ -395,14 +383,14 @@ private struct DetailContent: View {
                             FlexWrap(spacing: 6) {
                                 ForEach(shown) { p in
                                     Text(p.name)
-                                        .font(DS.F.caption)
+                                        .dsFont(.caption)
                                         .foregroundColor(DS.C.text)
                                         .padding(.horizontal, 12).padding(.vertical, 6)
                                         .background(Capsule().fill(DS.C.sur2))
                                 }
                                 if rest > 0 {
                                     Text("+ \(rest) weitere")
-                                        .font(DS.F.caption)
+                                        .dsFont(.caption)
                                         .foregroundColor(DS.C.text2)
                                         .padding(.horizontal, 12).padding(.vertical, 6)
                                         .background(Capsule().fill(DS.C.sur2))
@@ -472,7 +460,7 @@ private struct DetailColorSwatch: View {
                     )
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .dsFont(.raw(12, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
@@ -528,7 +516,9 @@ private struct NeueKategorieSheet: View {
     @State private var isSaving   = false
     @State private var nameFocused = false
 
-    private let colorPresets = ["1a6fff","3aada0","d4a017","7c5cbf","e05a2b","3a6b35","c0112a","888780"]
+    // Datenfarben in der Ledger-Signatur: gedämpfte, erdige Mitteltöne —
+    // unterscheidbar, aber kein Regenbogen neben dem Restrained-Grün
+    private let colorPresets = ["4a7310","9a6a0b","b4552d","9e2f42","6e5a9e","3a7ca5","2e8c81","6b7267"]
 
     var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -537,12 +527,12 @@ private struct NeueKategorieSheet: View {
             // Header
             HStack {
                 Text("Neue Kategorie")
-                    .font(DS.F.heading)
+                    .dsFont(.heading)
                     .foregroundColor(DS.C.text)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .dsFont(.raw(13, weight: .semibold))
                         .foregroundColor(DS.C.text2)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(DS.C.sur2))
@@ -557,22 +547,9 @@ private struct NeueKategorieSheet: View {
             // Body
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    DSSectionLabel(text: "Name")
-                    NoAssistantTextField(
-                        placeholder: "z.B. Heißgetränke",
-                        text:        $name,
-                        uiFont:      UIFont.systemFont(ofSize: 16),
-                        uiTextColor: UIColor(DS.C.text),
-                        isFocused:   $nameFocused
-                    )
-                    .padding(.horizontal, 14)
-                    .frame(height: DS.S.inputHeight)
-                    .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.R.input)
-                            .strokeBorder(nameFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: nameFocused ? 1.5 : 1)
-                    )
-                    .animation(DS.M.fast, value: nameFocused)
+                    DSTextField(label: "Name",
+                                placeholder: "z.B. Heißgetränke", text: $name,
+                                capitalization: .sentences, autocorrection: .default)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -629,6 +606,8 @@ private struct NeueKategorieSheet: View {
         .background(DS.C.sur)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
+        // Formular — kein versehentliches Weg-Wischen
+        .interactiveDismissDisabled(!name.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 }
 

@@ -37,7 +37,7 @@ struct ProdukteView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
 
                 ProdukteToolbar(
@@ -54,9 +54,15 @@ struct ProdukteView: View {
                 )
 
                 if productStore.isLoading && productStore.products.isEmpty {
-                    Spacer()
-                    ProgressView().progressViewStyle(.circular)
-                    Spacer()
+                    // Skeleton als Tabellenzeilen statt zentriertem Spinner
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 10) {
+                            ForEach(0..<8, id: \.self) { _ in
+                                DSSkeleton(height: 56, cornerRadius: DS.R.control)
+                            }
+                        }
+                        .padding(DS.S.pagePad)
+                    }
                 } else if filtered.isEmpty {
                     DSEmptyState(
                         icon: searchText.isEmpty ? "tag.slash" : "magnifyingglass",
@@ -151,12 +157,13 @@ struct ProdukteView: View {
             )
         }
         // Aktiv/Inaktiv bestätigen
-        .alert(
+        .confirmationDialog(
             togglingProduct?.isActive == true ? "Produkt deaktivieren?" : "Produkt aktivieren?",
             isPresented: Binding(
                 get: { togglingProduct != nil },
                 set: { if !$0 { togglingProduct = nil } }
-            )
+            ),
+            titleVisibility: .visible
         ) {
             Button("Abbrechen", role: .cancel) { togglingProduct = nil }
             Button(
@@ -208,7 +215,7 @@ private struct ProdukteToolbar: View {
             // Suchfeld
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
+                    .dsFont(.raw(14))
                     .foregroundColor(DS.C.text2)
                 NoAssistantTextField(
                     placeholder: "Produkt suchen …",
@@ -220,7 +227,7 @@ private struct ProdukteToolbar: View {
                 if !searchText.isEmpty {
                     Button { searchText = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .dsFont(.raw(15))
                             .foregroundColor(DS.C.text2)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
@@ -257,7 +264,7 @@ private struct ProdukteToolbar: View {
             Button(action: onAdd) {
                 HStack(spacing: 7) {
                     Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
+                        .dsFont(.raw(14, weight: .bold))
                     Text("Produkt hinzufügen")
                 }
             }
@@ -281,7 +288,7 @@ private struct ToolbarFilterPill: View {
             HStack(spacing: 6) {
                 if let hex = color { Circle().fill(Color(hex: hex)).frame(width: 8, height: 8) }
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .dsFont(.raw(14, weight: .semibold))
                     .foregroundColor(isActive ? .white : DS.C.text)
             }
             .padding(.horizontal, 14)
@@ -324,8 +331,7 @@ private struct StatCell: View {
         VStack(alignment: .leading, spacing: 2) {
             DSSectionLabel(text: label)
             Text(value)
-                .font(.system(size: 19, weight: .bold))
-                .monospacedDigit()
+                .dsFont(.raw(19, weight: .bold), monoDigits: true)
                 .foregroundColor(isAccent ? DS.C.accT : DS.C.text)
         }
         .padding(.horizontal, DS.S.pagePad)
@@ -381,7 +387,7 @@ private struct ProdukteTableHeader: View {
             Text("")
                 .frame(width: 140)
         }
-        .font(DS.F.label)
+        .dsFont(.label)
         .textCase(.uppercase)
         .kerning(0.7)
         .foregroundColor(DS.C.text2)
@@ -401,7 +407,7 @@ private struct ProdukteTableRow: View {
         HStack(spacing: 0) {
             // Produktname
             Text(product.name)
-                .font(.system(size: 16, weight: .semibold))
+                .dsFont(.raw(16, weight: .semibold))
                 .foregroundColor(product.isActive ? DS.C.text : DS.C.text2)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -413,7 +419,7 @@ private struct ProdukteTableRow: View {
                     Circle().fill(Color(hex: hex)).frame(width: 8, height: 8)
                 }
                 Text(product.category?.name ?? "—")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
                     .lineLimit(1)
             }
@@ -421,14 +427,13 @@ private struct ProdukteTableRow: View {
 
             // Preis
             Text(euroString(product.priceCents))
-                .font(DS.F.money(16, weight: .semibold))
-                .monospacedDigit()
+                .dsFont(.money(16, weight: .semibold))
                 .foregroundColor(DS.C.text)
                 .frame(width: 110, alignment: .trailing)
 
             // MwSt
             Text("\(product.vatRateInhouse) %")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .dsFont(.mono(13, weight: .semibold))
                 .foregroundColor(DS.C.text2)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -481,7 +486,7 @@ private struct RowActionButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .dsFont(.raw(14, weight: .medium))
                 .foregroundColor(isDanger ? DS.C.dangerText : DS.C.text2)
                 .frame(width: 40, height: 40)
                 .background(RoundedRectangle(cornerRadius: DS.R.control).fill(DS.C.sur2.opacity(0.7)))
@@ -555,6 +560,8 @@ fileprivate struct ProduktFormSheet: View {
         .background(DS.C.sur)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+        // Formular — kein versehentliches Weg-Wischen (X ist der Ausweg)
+        .interactiveDismissDisabled(true)
         .onAppear {
             activeTab = initialTab
             if let p = product {
@@ -576,18 +583,18 @@ fileprivate struct ProduktFormSheet: View {
                     .fill(DS.C.accBg)
                     .frame(width: 40, height: 40)
                 Image(systemName: isEdit ? "pencil" : "plus")
-                    .font(.system(size: 16, weight: .semibold))
+                    .dsFont(.raw(16, weight: .semibold))
                     .foregroundColor(DS.C.accT)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(isEdit ? (product?.name ?? "Produkt") : "Neues Produkt")
-                    .font(DS.F.heading)
+                    .dsFont(.heading)
                     .foregroundColor(DS.C.text)
                 Text(isEdit
                      ? "Produkt bearbeiten · Erstellt \(formatCreatedAt(product?.createdAt))"
                      : "Produkt anlegen")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
 
@@ -595,7 +602,7 @@ fileprivate struct ProduktFormSheet: View {
 
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
+                    .dsFont(.raw(13, weight: .semibold))
                     .foregroundColor(DS.C.text2)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(DS.C.sur2))
@@ -617,7 +624,7 @@ fileprivate struct ProduktFormSheet: View {
                     withAnimation(DS.M.base) { activeTab = tab }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 15, weight: activeTab == tab ? .semibold : .medium))
+                        .dsFont(.raw(15, weight: activeTab == tab ? .semibold : .medium))
                         .foregroundColor(activeTab == tab ? DS.C.accT : DS.C.text2)
                         .padding(.horizontal, 16)
                         .frame(height: 46)
@@ -680,10 +687,10 @@ fileprivate struct ProduktFormSheet: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Produkt aktiv")
-                        .font(DS.F.subBold)
+                        .dsFont(.subBold)
                         .foregroundColor(DS.C.text)
                     Text("Inaktive Produkte erscheinen nicht im Kassenbetrieb")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 Spacer()
@@ -705,11 +712,11 @@ fileprivate struct ProduktFormSheet: View {
             // GoBD-Hinweis
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 14))
+                    .dsFont(.raw(14))
                     .foregroundColor(DS.C.brassText)
                     .padding(.top, 1)
                 Text("Preisänderungen werden als neue Einträge in der Preishistorie gespeichert (GoBD). Bestehende Bons bleiben unverändert.")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.brassText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -721,30 +728,17 @@ fileprivate struct ProduktFormSheet: View {
                 VStack(alignment: .leading, spacing: 6) {
                     PFField(label: "Neuer Preis (€)", placeholder: "0,00", text: $newPriceText, keyboardType: .decimalPad)
                     Text("Änderung erzeugt neuen Historieneintrag")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 8) {
                     DSSectionLabel(text: "MwSt. Inhaus")
-                    HStack(spacing: 8) {
-                        ForEach(["7", "19"], id: \.self) { rate in
-                            Button {
-                                withAnimation(DS.M.fast) { vatRateInhouse = rate }
-                            } label: {
-                                Text("\(rate) %")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .monospacedDigit()
-                                    .foregroundColor(vatRateInhouse == rate ? .white : DS.C.text)
-                                    .padding(.horizontal, 18)
-                                    .frame(height: 44)
-                                    .background(RoundedRectangle(cornerRadius: DS.R.button).fill(vatRateInhouse == rate ? DS.C.acc : DS.C.sur2))
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    DSSegmentedControl(selection: $vatRateInhouse, options: [
+                        (value: "7", label: "7 %"),
+                        (value: "19", label: "19 %"),
+                    ])
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -755,7 +749,7 @@ fileprivate struct ProduktFormSheet: View {
                 onChangePrice?(changePriceCents, priceReason)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "lock.doc").font(.system(size: 14))
+                    Image(systemName: "lock.doc").dsFont(.raw(14))
                     Text("Preis speichern")
                 }
             }
@@ -771,7 +765,7 @@ fileprivate struct ProduktFormSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             MoneyText(cents: p.priceCents, size: 16, weight: .bold, color: DS.C.accT)
                             Text("Aktueller Preis")
-                                .font(DS.F.caption)
+                                .dsFont(.caption)
                                 .foregroundColor(DS.C.text2)
                         }
                         Spacer()
@@ -814,23 +808,10 @@ fileprivate struct ProduktFormSheet: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 DSSectionLabel(text: "MwSt. Inhaus")
-                HStack(spacing: 8) {
-                    ForEach(["7", "19"], id: \.self) { rate in
-                        Button {
-                            withAnimation(DS.M.fast) { vatRateInhouse = rate }
-                        } label: {
-                            Text("\(rate) %")
-                                .font(.system(size: 15, weight: .semibold))
-                                .monospacedDigit()
-                                .foregroundColor(vatRateInhouse == rate ? .white : DS.C.text)
-                                .padding(.horizontal, 22)
-                                .frame(height: 44)
-                                .background(RoundedRectangle(cornerRadius: DS.R.button).fill(vatRateInhouse == rate ? DS.C.acc : DS.C.sur2))
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                DSSegmentedControl(selection: $vatRateInhouse, options: [
+                    (value: "7", label: "7 %"),
+                    (value: "19", label: "19 %"),
+                ])
             }
 
             if !categories.isEmpty {
@@ -862,7 +843,7 @@ fileprivate struct ProduktFormSheet: View {
                 } label: {
                     HStack(spacing: 7) {
                         Image(systemName: product?.isActive == true ? "xmark.circle" : "checkmark.circle")
-                            .font(.system(size: 14))
+                            .dsFont(.raw(14))
                         Text(product?.isActive == true ? "Deaktivieren" : "Aktivieren")
                     }
                 }
@@ -942,10 +923,10 @@ private struct ModifierGroupCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.name)
-                        .font(DS.F.subBold)
+                        .dsFont(.subBold)
                         .foregroundColor(DS.C.text)
                     Text(metaText)
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 Spacer()
@@ -965,12 +946,11 @@ private struct ModifierGroupCard: View {
                     ForEach(group.options) { opt in
                         HStack(spacing: 5) {
                             Text(opt.name)
-                                .font(DS.F.caption)
+                                .dsFont(.caption)
                                 .foregroundColor(DS.C.text)
                             if opt.priceDeltaCents != 0 {
                                 Text("+ \(euroString(opt.priceDeltaCents))")
-                                    .font(DS.F.money(12, weight: .medium))
-                                    .monospacedDigit()
+                                    .dsFont(.money(12, weight: .medium))
                                     .foregroundColor(DS.C.accT)
                             }
                         }
@@ -990,33 +970,17 @@ private struct ModifierGroupCard: View {
 
 // MARK: - Shared Sub-Components
 
+// Dünner Alias auf DSTextField (eine Feld-Quelle app-weit)
 private struct PFField: View {
     let label:       String
     let placeholder: String
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
-    @State private var isFocused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DSSectionLabel(text: label)
-            NoAssistantTextField(
-                placeholder:  placeholder,
-                text:         $text,
-                keyboardType: keyboardType,
-                uiFont:       UIFont.systemFont(ofSize: 16),
-                uiTextColor:  UIColor(DS.C.text),
-                isFocused:    $isFocused
-            )
-            .padding(.horizontal, 14)
-            .frame(height: DS.S.inputHeight)
-            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
-            )
-            .animation(DS.M.fast, value: isFocused)
-        }
+        DSTextField(label: label, placeholder: placeholder, text: $text,
+                    keyboard: keyboardType,
+                    capitalization: .sentences, autocorrection: .default)
     }
 }
 
@@ -1031,7 +995,7 @@ private struct CatChip: View {
             HStack(spacing: 6) {
                 if let hex = color { Circle().fill(Color(hex: hex)).frame(width: 8, height: 8) }
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .dsFont(.raw(14, weight: .semibold))
                     .foregroundColor(isActive ? .white : DS.C.text)
             }
             .padding(.horizontal, 14)

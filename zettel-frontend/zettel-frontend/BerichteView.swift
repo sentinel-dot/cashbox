@@ -31,13 +31,23 @@ struct BerichteView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
                 BToolbar(range: $range, customFrom: $customFrom, customTo: $customTo)
                 if reportStore.isLoading {
-                    Spacer()
-                    ProgressView().progressViewStyle(.circular).scaleEffect(1.2)
-                    Spacer()
+                    // Skeleton im echten Berichts-Layout (KPI-Reihe + Karten)
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 16) {
+                            HStack(spacing: 12) {
+                                ForEach(0..<4, id: \.self) { _ in
+                                    DSSkeleton(height: 96, cornerRadius: DS.R.card)
+                                }
+                            }
+                            DSSkeleton(height: 220, cornerRadius: DS.R.card)
+                            DSSkeleton(height: 180, cornerRadius: DS.R.card)
+                        }
+                        .padding(DS.S.pagePad)
+                    }
                 } else {
                     BContent(range: range)
                 }
@@ -83,11 +93,11 @@ private struct BToolbar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(BRange.allCases, id: \.self) { r in
-                RangePill(label: r.rawValue, isActive: range == r) {
-                    withAnimation(DS.M.base) { range = r }
-                }
-            }
+            DSSegmentedControl(
+                selection: $range,
+                options: BRange.allCases.map { (value: $0, label: $0.rawValue) }
+            )
+            .frame(maxWidth: 420)
             Spacer()
             if range == .custom {
                 HStack(spacing: 6) {
@@ -95,7 +105,7 @@ private struct BToolbar: View {
                         .labelsHidden()
                         .datePickerStyle(.compact)
                     Text("–")
-                        .font(DS.F.sub)
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                     DatePicker("", selection: $customTo, in: customFrom...Date(), displayedComponents: .date)
                         .labelsHidden()
@@ -104,21 +114,11 @@ private struct BToolbar: View {
                 .transition(.opacity)
             } else {
                 Text(toolbarDateLabel)
-                    .font(DS.F.caption)
-                    .monospacedDigit()
+                    .dsFont(.caption, monoDigits: true)
                     .foregroundColor(DS.C.text2)
             }
-            // Export (Phase 5)
-            Button {
-                // DSFinV-K export — Phase 5
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Exportieren")
-                }
-            }
-            .buttonStyle(DSSecondaryButton(height: 42, fullWidth: false))
+            // Export (PDF/DSFinV-K) kommt später — kein toter Button
+            DSPill(label: "Export bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
         }
         .padding(.horizontal, DS.S.pagePad)
         .frame(height: DS.S.topbarHeight + 8)
@@ -163,7 +163,7 @@ private struct RangePill: View {
     var body: some View {
         Button(action: onTap) {
             Text(label)
-                .font(.system(size: 14, weight: .semibold))
+                .dsFont(.raw(14, weight: .semibold))
                 .foregroundColor(isActive ? .white : DS.C.text)
                 .padding(.horizontal, 14)
                 .frame(height: 38)
@@ -279,13 +279,12 @@ private struct BKPICard: View {
             DSSectionLabel(text: label)
                 .lineLimit(1)
             Text(value)
-                .font(DS.F.money(22, weight: .bold))
-                .monospacedDigit()
+                .dsFont(.money(22, weight: .bold))
                 .foregroundColor(color)
                 .minimumScaleFactor(0.65)
                 .lineLimit(1)
             Text(sub ?? " ")
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -355,13 +354,12 @@ private struct BBarCol: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: max(4, frac * maxH))
             Text(bFmtShortCents(day.totalGrossCents))
-                .font(.system(size: 11, weight: .semibold))
-                .monospacedDigit()
+                .dsFont(.raw(11, weight: .semibold), monoDigits: true)
                 .foregroundColor(isToday ? DS.C.accT : DS.C.text2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
-                .font(.system(size: 11, weight: isToday ? .semibold : .regular))
+                .dsFont(.raw(11, weight: isToday ? .semibold : .regular))
                 .foregroundColor(isToday ? DS.C.accT : DS.C.text2)
         }
         .frame(maxWidth: .infinity)
@@ -377,7 +375,7 @@ private struct DayTableCard: View {
     var body: some View {
         BSecCard {
             BSecHead(title: "Tagesübersicht", sub: "Letzte \(days.count) Tage")
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(Array(days.reversed().enumerated()), id: \.offset) { idx, day in
                     let isToday = idx == 0
                     let frac    = maxVal > 0 ? CGFloat(day.totalGrossCents) / CGFloat(maxVal) : 0
@@ -426,17 +424,16 @@ private struct BDayRow: View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(dayName)
-                    .font(DS.F.subMed)
+                    .dsFont(.subMed)
                     .foregroundColor(isToday ? DS.C.accT : DS.C.text)
                 Text(dayDateStr)
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             HStack(spacing: 16) {
                 Text("\(day.receiptCount) Tx")
-                    .font(DS.F.caption)
-                    .monospacedDigit()
+                    .dsFont(.caption, monoDigits: true)
                     .foregroundColor(DS.C.text2)
                     .frame(width: 50, alignment: .trailing)
                 GeometryReader { geo in
@@ -454,8 +451,7 @@ private struct BDayRow: View {
                 }
                 .frame(width: 90)
                 Text(euroString(day.totalGrossCents))
-                    .font(DS.F.money(15, weight: .semibold))
-                    .monospacedDigit()
+                    .dsFont(.money(15, weight: .semibold))
                     .foregroundColor(isToday ? DS.C.accT : DS.C.text)
                     .frame(width: 96, alignment: .trailing)
             }
@@ -496,13 +492,12 @@ private struct TodayStat: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(DS.F.money(18, weight: .bold))
-                .monospacedDigit()
+                .dsFont(.money(18, weight: .bold))
                 .foregroundColor(danger ? DS.C.dangerText : DS.C.text)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity)
@@ -517,7 +512,7 @@ private struct BSessionsCard: View {
     var body: some View {
         BSecCard {
             BSecHead(title: "Kassensitzungen", sub: "\(sessions.count) Sitzung\(sessions.count == 1 ? "" : "en")")
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(sessions) { s in
                     BSessionRow(session: s)
                     if s.id != sessions.last?.id {
@@ -548,22 +543,20 @@ private struct BSessionRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Sitzung #\(session.id)")
-                    .font(DS.F.subBold)
-                    .monospacedDigit()
+                    .dsFont(.subBold, monoDigits: true)
                     .foregroundColor(DS.C.text)
                 Text("Geöffnet \(openedTime) Uhr")
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
             Spacer()
             if let diff = session.differenceCents {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(diff == 0 ? "± 0,00 €" : (diff > 0 ? "+ " : "") + euroString(diff))
-                        .font(DS.F.money(14, weight: .semibold))
-                        .monospacedDigit()
+                        .dsFont(.money(14, weight: .semibold))
                         .foregroundColor(diff == 0 ? DS.C.successText : DS.C.dangerText)
                     Text("Kassendifferenz")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
             }
@@ -646,17 +639,15 @@ private struct PaySplitRow: View {
         HStack(spacing: 8) {
             Circle().fill(color).frame(width: 9, height: 9)
             Text(label)
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text)
             Spacer()
             Text("\(pct) %")
-                .font(DS.F.caption)
-                .monospacedDigit()
+                .dsFont(.caption, monoDigits: true)
                 .foregroundColor(DS.C.text2)
                 .frame(width: 42, alignment: .trailing)
             Text(euroString(cents))
-                .font(DS.F.money(14, weight: .semibold))
-                .monospacedDigit()
+                .dsFont(.money(14, weight: .semibold))
                 .foregroundColor(DS.C.text)
                 .frame(width: 86, alignment: .trailing)
         }
@@ -698,12 +689,11 @@ private struct MwStCard: View {
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     HStack {
                         Text("MwSt gesamt")
-                            .font(DS.F.subBold)
+                            .dsFont(.subBold)
                             .foregroundColor(DS.C.text)
                         Spacer()
                         Text(euroString(vatTotal))
-                            .font(DS.F.money(16, weight: .bold))
-                            .monospacedDigit()
+                            .dsFont(.money(16, weight: .bold))
                             .foregroundColor(DS.C.accT)
                     }
                     .padding(.horizontal, 16)
@@ -712,7 +702,7 @@ private struct MwStCard: View {
                 }
                 if vatTotal == 0 {
                     Text("Keine Steuerdaten")
-                        .font(DS.F.sub)
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.text2)
                         .padding(16)
                 }
@@ -730,17 +720,15 @@ private struct BVatRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text)
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
                 Text(euroString(gross))
-                    .font(DS.F.money(15, weight: .semibold))
-                    .monospacedDigit()
+                    .dsFont(.money(15, weight: .semibold))
                     .foregroundColor(DS.C.text)
                 Text("Netto \(euroString(net)) · MwSt \(euroString(tax))")
-                    .font(DS.F.caption)
-                    .monospacedDigit()
+                    .dsFont(.caption, monoDigits: true)
                     .foregroundColor(DS.C.text2)
             }
         }
@@ -757,10 +745,10 @@ private struct StornosCard: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 16))
+                .dsFont(.raw(16))
                 .foregroundColor(DS.C.dangerText)
             Text("\(count) Stornierung\(count == 1 ? "" : "en") heute")
-                .font(DS.F.subBold)
+                .dsFont(.subBold)
                 .foregroundColor(DS.C.dangerText)
             Spacer()
         }
@@ -811,12 +799,12 @@ private struct BSecHead: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(DS.F.bodyBold)
+                .dsFont(.bodyBold)
                 .foregroundColor(DS.C.text)
             Spacer()
             if let s = sub {
                 Text(s)
-                    .font(DS.F.caption)
+                    .dsFont(.caption)
                     .foregroundColor(DS.C.text2)
             }
         }

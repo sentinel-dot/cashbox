@@ -62,13 +62,13 @@ private struct OCheckItem: Identifiable {
 
 private let kCheckItems: [OCheckItem] = [
     OCheckItem(id: 0, title: "AVV unterzeichnen",
-               description: "Auftragsverarbeitungsvertrag gem. DSGVO Art. 28. In-App-Unterzeichnung mit Zeitstempel.",
+               description: "Auftragsverarbeitungsvertrag gem. DSGVO Art. 28 — erhältst du von cashbox per E-Mail zur Unterschrift.",
                badge: "Pflicht", required: true),
     OCheckItem(id: 1, title: "ELSTER-Meldung einreichen",
                description: "Neue Kassensysteme müssen beim zuständigen Finanzamt über ELSTER gemeldet werden.",
                badge: "Pflicht · vor Go-live", required: true),
-    OCheckItem(id: 2, title: "Verfahrensdokumentation herunterladen",
-               description: "Auto-generiertes PDF mit deinen Betriebsdaten. Muss aufbewahrt und dem Finanzamt auf Anfrage vorgelegt werden.",
+    OCheckItem(id: 2, title: "Verfahrensdokumentation aufbewahren",
+               description: "PDF mit deinen Betriebsdaten — wird dir vor dem Go-live bereitgestellt. Muss aufbewahrt und dem Finanzamt auf Anfrage vorgelegt werden.",
                badge: "Pflicht · GoBD", required: true),
     OCheckItem(id: 3, title: "Steuerberater informieren",
                description: "Empfohlen: Steuerberater über das neue Kassensystem und die TSE-Nutzung informieren.",
@@ -81,7 +81,6 @@ struct OnboardingView: View {
     @EnvironmentObject var authStore:      AuthStore
     @EnvironmentObject var networkMonitor: NetworkMonitor
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("usesDarkMode") private var usesDarkMode = false
 
     @State private var currentStep = 1
 
@@ -94,11 +93,9 @@ struct OnboardingView: View {
     @State private var businessName = ""
     @State private var address      = ""
     @State private var taxNumber    = ""
-    @State private var vatId        = ""
 
     // Step 3
     @State private var deviceName = "iPad Theke"
-    @State private var location   = ""
 
     // Step 4
     @State private var selectedPlan: OPlan = .pro
@@ -111,43 +108,70 @@ struct OnboardingView: View {
     @State private var error:      AppError?
     @State private var showError = false
 
+    // Abbrechen — mit Rückfrage, sobald etwas eingegeben wurde
+    @State private var showCancelConfirm = false
+
+    private var hasPartialInput: Bool {
+        currentStep > 1 || !email.isEmpty || !password.isEmpty
+            || !businessName.isEmpty || !address.isEmpty || !taxNumber.isEmpty
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            StepperPanel(currentStep: currentStep, usesDarkMode: $usesDarkMode)
+            StepperPanel(currentStep: currentStep)
                 .frame(width: 280)
             Rectangle().fill(DS.C.brdAdaptive).frame(width: 1)
             ContentPanel(
                 currentStep:  currentStep,
                 email:        $email,  password: $password, showPW: $showPW,
                 businessName: $businessName, address: $address,
-                taxNumber:    $taxNumber, vatId: $vatId,
-                deviceName:   $deviceName, location: $location,
+                taxNumber:    $taxNumber,
+                deviceName:   $deviceName,
                 selectedPlan: $selectedPlan,
                 checkedItems: $checkedItems,
                 isLoading:    isLoading,
                 canContinue:  canContinue,
                 onNext:       handleNext,
-                onBack:       { if currentStep > 1 { currentStep -= 1 } }
+                onBack:       { if currentStep > 1 { currentStep -= 1 } },
+                onCancel:     {
+                    if hasPartialInput { showCancelConfirm = true } else { dismiss() }
+                }
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DS.C.bg)
-        .preferredColorScheme(usesDarkMode ? .dark : .light)
         .alert("Fehler", isPresented: $showError) {
             Button("OK") { error = nil }
         } message: {
             Text(error?.localizedDescription ?? "Unbekannter Fehler")
         }
+        .confirmationDialog(
+            "Einrichtung abbrechen?",
+            isPresented: $showCancelConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Abbrechen und Eingaben verwerfen", role: .destructive) { dismiss() }
+            Button("Weiter einrichten", role: .cancel) {}
+        } message: {
+            Text("Deine bisherigen Eingaben gehen verloren.")
+        }
+    }
+
+    private var emailIsValid: Bool {
+        email.trimmingCharacters(in: .whitespaces)
+            .range(of: #"^\S+@\S+\.\S{2,}$"#, options: .regularExpression) != nil
     }
 
     private var canContinue: Bool {
         !isLoading && {
             switch currentStep {
-            case 1: return email.contains("@") && email.contains(".") && password.count >= 8
+            case 1: return emailIsValid && password.count >= 8
             case 2: return !businessName.trimmingCharacters(in: .whitespaces).isEmpty
                         && !address.trimmingCharacters(in: .whitespaces).isEmpty
                         && !taxNumber.trimmingCharacters(in: .whitespaces).isEmpty
             case 3: return !deviceName.trimmingCharacters(in: .whitespaces).isEmpty
+            // Pflicht-Checkliste ist Pflicht — Copy und Verhalten decken sich
+            case 5: return kCheckItems.filter(\.required).allSatisfy { checkedItems.contains($0.id) }
             default: return true
             }
         }()
@@ -184,7 +208,6 @@ struct OnboardingView: View {
 
 private struct StepperPanel: View {
     let currentStep: Int
-    @Binding var usesDarkMode: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -192,7 +215,7 @@ private struct StepperPanel: View {
             HStack(spacing: 10) {
                 AppBrandMark(size: 28)
                 Text("cashbox")
-                    .font(.system(size: 17, weight: .bold))
+                    .dsFont(.raw(17, weight: .bold))
                     .foregroundColor(DS.C.text)
             }
             .padding(.bottom, 32)
@@ -218,10 +241,10 @@ private struct StepperPanel: View {
                         // Label
                         VStack(alignment: .leading, spacing: 2) {
                             Text(step.name)
-                                .font(.system(size: 15, weight: .semibold))
+                                .dsFont(.raw(15, weight: .semibold))
                                 .foregroundColor(nameColor(step.id))
                             Text(step.sub)
-                                .font(DS.F.caption)
+                                .dsFont(.caption)
                                 .foregroundColor(DS.C.text2)
                         }
                         .padding(.top, 5)
@@ -235,17 +258,8 @@ private struct StepperPanel: View {
             // Bottom
             Rectangle().fill(DS.C.brdAdaptive).frame(height: 1).padding(.bottom, 14)
             Text("Fragen? support@cashbox.de")
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
-                .padding(.bottom, 12)
-            HStack(spacing: 10) {
-                Text("Dark Mode")
-                    .font(DS.F.caption)
-                    .foregroundColor(DS.C.text2)
-                Toggle("", isOn: $usesDarkMode)
-                    .labelsHidden()
-                    .tint(DS.C.acc)
-            }
         }
         .padding(DS.S.pagePad)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -273,12 +287,11 @@ private struct OStepCircle: View {
                 .frame(width: 32, height: 32)
             if number < currentStep {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .dsFont(.raw(11, weight: .bold))
                     .foregroundColor(DS.C.accT)
             } else {
                 Text("\(number)")
-                    .font(.system(size: 14, weight: .semibold))
-                    .monospacedDigit()
+                    .dsFont(.raw(14, weight: .semibold), monoDigits: true)
                     .foregroundColor(fg)
             }
         }
@@ -308,14 +321,15 @@ private struct ContentPanel: View {
     let currentStep: Int
     @Binding var email: String;    @Binding var password: String; @Binding var showPW: Bool
     @Binding var businessName: String; @Binding var address: String
-    @Binding var taxNumber: String;    @Binding var vatId: String
-    @Binding var deviceName: String;   @Binding var location: String
+    @Binding var taxNumber: String
+    @Binding var deviceName: String
     @Binding var selectedPlan: OPlan
     @Binding var checkedItems: Set<Int>
     let isLoading:   Bool
     let canContinue: Bool
     let onNext:      () -> Void
     let onBack:      () -> Void
+    let onCancel:    () -> Void
 
     private var title: String { kTitles[currentStep]?.0 ?? "" }
     private var subtitle: String { kTitles[currentStep]?.1 ?? "" }
@@ -323,17 +337,29 @@ private struct ContentPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Schritt \(currentStep) von \(kSteps.count)")
-                    .font(DS.F.caption)
-                    .monospacedDigit()
-                    .foregroundColor(DS.C.text2)
-                Text(title)
-                    .font(DS.F.title)
-                    .foregroundColor(DS.C.text)
-                Text(subtitle)
-                    .font(DS.F.sub)
-                    .foregroundColor(DS.C.text2)
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Schritt \(currentStep) von \(kSteps.count)")
+                        .dsFont(.caption, monoDigits: true)
+                        .foregroundColor(DS.C.text2)
+                    Text(title)
+                        .dsFont(.title)
+                        .foregroundColor(DS.C.text)
+                    Text(subtitle)
+                        .dsFont(.sub)
+                        .foregroundColor(DS.C.text2)
+                }
+                Spacer()
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .dsFont(.icon(13, weight: .semibold))
+                        .foregroundColor(DS.C.text2)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(DS.C.sur2))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Einrichtung abbrechen")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 32)
@@ -355,18 +381,18 @@ private struct ContentPanel: View {
             // Footer
             Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
             HStack {
-                Button {
-                    onBack()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Zurück")
+                if currentStep > 1 {
+                    Button {
+                        onBack()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .dsFont(.icon(13, weight: .semibold))
+                            Text("Zurück")
+                        }
                     }
+                    .buttonStyle(DSSecondaryButton(height: 46, fullWidth: false))
                 }
-                .buttonStyle(DSSecondaryButton(height: 46, fullWidth: false))
-                .opacity(currentStep > 1 ? 1 : 0)
-                .disabled(currentStep <= 1)
 
                 Spacer()
 
@@ -376,12 +402,12 @@ private struct ContentPanel: View {
                             ProgressView().progressViewStyle(.circular).tint(.white)
                         } else if currentStep == kSteps.count {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .semibold))
+                                .dsFont(.raw(14, weight: .semibold))
                             Text("Kasse starten")
                         } else {
                             Text("Weiter")
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .semibold))
+                                .dsFont(.raw(13, weight: .semibold))
                         }
                     }
                 }
@@ -399,8 +425,8 @@ private struct ContentPanel: View {
     private var stepBody: some View {
         switch currentStep {
         case 1: Step1Body(email: $email, password: $password, showPW: $showPW)
-        case 2: Step2Body(businessName: $businessName, address: $address, taxNumber: $taxNumber, vatId: $vatId)
-        case 3: Step3Body(deviceName: $deviceName, location: $location)
+        case 2: Step2Body(businessName: $businessName, address: $address, taxNumber: $taxNumber)
+        case 3: Step3Body(deviceName: $deviceName)
         case 4: Step4Body(selectedPlan: $selectedPlan)
         case 5: Step5Body(checkedItems: $checkedItems)
         case 6: Step6Body(plan: selectedPlan)
@@ -432,7 +458,6 @@ private struct Step2Body: View {
     @Binding var businessName: String
     @Binding var address: String
     @Binding var taxNumber: String
-    @Binding var vatId: String
 
     var body: some View {
         VStack(spacing: 16) {
@@ -441,13 +466,9 @@ private struct Step2Body: View {
                    hint: "Vollständiger Firmenname wie im Handelsregister")
             OField(label: "Adresse", text: $address,
                    placeholder: "Straße, Hausnummer, PLZ, Stadt")
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                OField(label: "Steuernummer", text: $taxNumber,
-                       placeholder: "14/123/45678",
-                       hint: "Vom Finanzamt zugewiesen")
-                OField(label: "USt-IdNr. (optional)", text: $vatId,
-                       placeholder: "DE123456789")
-            }
+            OField(label: "Steuernummer oder USt-IdNr.", text: $taxNumber,
+                   placeholder: "14/123/45678",
+                   hint: "Vom Finanzamt zugewiesen — erscheint auf jedem Bon")
         }
     }
 }
@@ -456,48 +477,44 @@ private struct Step2Body: View {
 
 private struct Step3Body: View {
     @Binding var deviceName: String
-    @Binding var location: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                OField(label: "Gerätename", text: $deviceName,
-                       placeholder: "z.B. iPad Theke",
-                       hint: "Erscheint auf dem Bon (§ 6 KassenSichV)")
-                OField(label: "Standort", text: $location,
-                       placeholder: "z.B. Theke, Bar, Terrasse")
-            }
+            OField(label: "Gerätename", text: $deviceName,
+                   placeholder: "z.B. iPad Theke",
+                   hint: "Erscheint auf dem Bon (§ 6 KassenSichV)")
 
-            // TSE-Status (Phase 1: wird automatisch eingerichtet)
+            // TSE-Status — ehrlich: die Anbindung existiert noch nicht (Phase 2),
+            // hier wird kein Erfolg vorgetäuscht.
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(DS.C.successBg)
+                        .fill(DS.C.brassBg)
                         .frame(width: 40, height: 40)
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(DS.C.successText)
+                    Image(systemName: "clock")
+                        .dsFont(.icon(15, weight: .semibold))
+                        .foregroundColor(DS.C.brassText)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("TSE-Verbindung erfolgreich")
-                        .font(DS.F.subBold)
-                        .foregroundColor(DS.C.successText)
-                    Text("Fiskaly Cloud-TSE · BSI-zertifiziert · wird beim ersten Start aktiviert")
-                        .font(DS.F.caption)
-                        .foregroundColor(DS.C.successText.opacity(0.75))
+                    Text("TSE-Anbindung folgt vor dem Go-live")
+                        .dsFont(.subBold)
+                        .foregroundColor(DS.C.brassText)
+                    Text("Fiskaly Cloud-TSE · BSI-zertifiziert · wird vor dem Produktivbetrieb aktiviert")
+                        .dsFont(.caption)
+                        .foregroundColor(DS.C.brassText.opacity(0.85))
                 }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: DS.R.card).fill(DS.C.successBg.opacity(0.6)))
+            .background(RoundedRectangle(cornerRadius: DS.R.card).fill(DS.C.brassBg.opacity(0.6)))
 
             // ELSTER-Hinweis
             VStack(alignment: .leading, spacing: 4) {
                 Text("Wichtig: ELSTER-Meldung erforderlich")
-                    .font(DS.F.subBold)
+                    .dsFont(.subBold)
                     .foregroundColor(DS.C.brassText)
                 Text("Neue Kassensysteme müssen beim Finanzamt gemeldet werden. Das erledigst du in Schritt 5 der Checkliste.")
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.brassText)
             }
             .padding(16)
@@ -522,7 +539,7 @@ private struct Step4Body: View {
                 }
             }
             Text("14 Tage kostenlos testen — keine Kreditkarte nötig. Danach automatisch zum gewählten Plan.")
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
                 .multilineTextAlignment(.center)
                 .padding(.top, 16)
@@ -540,7 +557,7 @@ private struct PlanCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 if plan.isPopular {
                     Text("Empfohlen")
-                        .font(DS.F.captionBold)
+                        .dsFont(.captionBold)
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
@@ -551,16 +568,15 @@ private struct PlanCard: View {
                     Spacer().frame(height: 32)
                 }
                 Text(plan.displayName)
-                    .font(.system(size: 17, weight: .bold))
+                    .dsFont(.raw(17, weight: .bold))
                     .foregroundColor(selected ? DS.C.accT : DS.C.text)
                     .padding(.bottom, 4)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(plan.price)
-                        .font(DS.F.money(26, weight: .bold))
-                        .monospacedDigit()
+                        .dsFont(.money(26, weight: .bold))
                         .foregroundColor(selected ? DS.C.accT : DS.C.text)
                     Text("€/Monat")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
                 .padding(.bottom, 14)
@@ -568,10 +584,10 @@ private struct PlanCard: View {
                     ForEach(plan.features, id: \.self) { feat in
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .bold))
+                                .dsFont(.raw(11, weight: .bold))
                                 .foregroundColor(DS.C.accT)
                             Text(feat)
-                                .font(DS.F.sub)
+                                .dsFont(.sub)
                                 .foregroundColor(selected ? DS.C.text : DS.C.text2)
                         }
                     }
@@ -617,7 +633,7 @@ private struct Step5Body: View {
                                 .frame(width: 24, height: 24)
                             if done {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
+                                    .dsFont(.raw(11, weight: .bold))
                                     .foregroundColor(.white)
                             }
                         }
@@ -625,14 +641,14 @@ private struct Step5Body: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.title)
-                                .font(DS.F.bodyBold)
+                                .dsFont(.bodyBold)
                                 .foregroundColor(done ? DS.C.accT : DS.C.text)
                             Text(item.description)
-                                .font(DS.F.sub)
+                                .dsFont(.sub)
                                 .foregroundColor(DS.C.text2)
                                 .fixedSize(horizontal: false, vertical: true)
                             Text(item.badge)
-                                .font(DS.F.captionBold)
+                                .dsFont(.captionBold)
                                 .foregroundColor(item.required ? DS.C.brassText : DS.C.text2)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 3)
@@ -670,17 +686,17 @@ private struct Step6Body: View {
                     .fill(DS.C.successBg)
                     .frame(width: 80, height: 80)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 32, weight: .bold))
+                    .dsFont(.raw(32, weight: .bold))
                     .foregroundColor(DS.C.successText)
             }
 
             Text("Einrichtung abgeschlossen!")
-                .font(DS.F.title)
+                .dsFont(.title)
                 .foregroundColor(DS.C.text)
                 .multilineTextAlignment(.center)
 
             Text("Dein Kassensystem ist betriebsbereit. Öffne die erste Kassensitzung, lege deine Produkte an und starte mit der ersten Bestellung.")
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text2)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
@@ -705,11 +721,10 @@ private struct KPITile: View {
     var body: some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: 24, weight: .bold))
-                .monospacedDigit()
+                .dsFont(.raw(24, weight: .bold), monoDigits: true)
                 .foregroundColor(valueColor)
             Text(label)
-                .font(DS.F.caption)
+                .dsFont(.caption)
                 .foregroundColor(DS.C.text2)
         }
         .frame(maxWidth: .infinity)
@@ -721,41 +736,17 @@ private struct KPITile: View {
 
 // MARK: - Shared Field Components
 
+// Dünner Alias auf DSTextField (eine Feld-Quelle app-weit)
 private struct OField: View {
     let label: String
     @Binding var text: String
     var placeholder: String = ""
     var hint: String? = nil
     var keyboardType: UIKeyboardType = .default
-    @State private var isFocused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DSSectionLabel(text: label)
-            NoAssistantTextField(
-                placeholder:            placeholder,
-                text:                   $text,
-                keyboardType:           keyboardType,
-                uiFont:                 UIFont.systemFont(ofSize: 16),
-                uiTextColor:            UIColor(DS.C.text),
-                autocapitalizationType: .none,
-                autocorrectionType:     .no,
-                isFocused:              $isFocused
-            )
-            .padding(.horizontal, 14)
-            .frame(height: DS.S.inputHeight)
-            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
-            )
-            .animation(DS.M.fast, value: isFocused)
-            if let hint {
-                Text(hint)
-                    .font(DS.F.caption)
-                    .foregroundColor(DS.C.text2)
-            }
-        }
+        DSTextField(label: label, placeholder: placeholder, text: $text,
+                    keyboard: keyboardType, hint: hint)
     }
 }
 
@@ -763,45 +754,11 @@ private struct OSecureField: View {
     let label: String
     @Binding var text: String
     var hint: String? = nil
-    @Binding var showPassword: Bool
-    @State private var isFocused = false
+    @Binding var showPassword: Bool   // Alt-API — Reveal übernimmt DSTextField intern
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DSSectionLabel(text: label)
-            HStack(spacing: 8) {
-                NoAssistantTextField(
-                    placeholder:     "Mindestens 8 Zeichen",
-                    text:            $text,
-                    uiFont:          UIFont.systemFont(ofSize: 16),
-                    uiTextColor:     UIColor(DS.C.text),
-                    isSecure:        !showPassword,
-                    textContentType: .newPassword,
-                    isFocused:       $isFocused
-                )
-                Button { showPassword.toggle() } label: {
-                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .font(.system(size: 16))
-                        .foregroundColor(DS.C.text2)
-                        .frame(width: 40, height: 40)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: DS.S.inputHeight)
-            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
-            )
-            .animation(DS.M.fast, value: isFocused)
-            if let hint {
-                Text(hint)
-                    .font(DS.F.caption)
-                    .foregroundColor(DS.C.text2)
-            }
-        }
+        DSTextField(label: label, placeholder: "Mindestens 8 Zeichen", text: $text,
+                    isSecure: true, contentType: .newPassword, hint: hint)
     }
 }
 

@@ -52,7 +52,7 @@ struct EinstellungenView: View {
             VStack(spacing: 0) {
                 if !networkMonitor.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .dsBannerTransition()
                 }
                 ETopBar()
                 HStack(spacing: 0) {
@@ -73,7 +73,7 @@ private struct ETopBar: View {
     var body: some View {
         HStack {
             Text("Einstellungen")
-                .font(DS.F.heading)
+                .dsFont(.heading)
                 .foregroundColor(DS.C.text)
             Spacer()
         }
@@ -128,11 +128,11 @@ private struct ENavItem: View {
         Button(action: onTap) {
             HStack(spacing: 10) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 15, weight: isActive ? .semibold : .regular))
+                    .dsFont(.raw(15, weight: isActive ? .semibold : .regular))
                     .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
                     .frame(width: 22)
                 Text(tab.rawValue)
-                    .font(.system(size: 15, weight: isActive ? .semibold : .medium))
+                    .dsFont(.raw(15, weight: isActive ? .semibold : .medium))
                     .foregroundColor(isActive ? DS.C.accT : DS.C.text2)
                 Spacer()
             }
@@ -192,7 +192,7 @@ private struct EBetriebsdatenTab: View {
             VStack(alignment: .leading, spacing: 28) {
                 ESettingsSectionHeader(
                     title: "Betriebsdaten",
-                    sub:   "Pflichtfelder für den Bon — müssen mit Ihren steuerlichen Angaben übereinstimmen."
+                    sub:   "Pflichtfelder für den Bon — müssen mit deinen steuerlichen Angaben übereinstimmen."
                 )
                 ECard {
                     EInputRow(
@@ -232,7 +232,7 @@ private struct EBetriebsdatenTab: View {
                 ECard {
                     ERow("Bon per E-Mail versenden",
                          sub: "Kunde kann nach Zahlung eine Bon-PDF anfordern") {
-                        DSPill(label: "Phase 5", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
+                        DSPill(label: "Bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                 }
 
@@ -332,7 +332,7 @@ private struct EBenutzerTab: View {
                         Button { showAddSheet = true } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 13, weight: .bold))
+                                    .dsFont(.raw(13, weight: .bold))
                                 Text("Benutzer hinzufügen")
                             }
                         }
@@ -436,19 +436,19 @@ private struct EUserRow: View {
                 ZStack {
                     Circle().fill(roleBg).frame(width: 40, height: 40)
                     Text(String(user.name.prefix(1)).uppercased())
-                        .font(.system(size: 15, weight: .semibold))
+                        .dsFont(.raw(15, weight: .semibold))
                         .foregroundColor(roleColor)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(user.name)
-                            .font(.system(size: 16, weight: .semibold))
+                            .dsFont(.raw(16, weight: .semibold))
                             .foregroundColor(DS.C.text)
                         DSPill(label: user.role.displayName, fg: roleColor, bg: roleBg, showDot: false)
                         if isSelf {
                             Text("Ich")
-                                .font(DS.F.label)
+                                .dsFont(.label)
                                 .foregroundColor(DS.C.accT)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
@@ -456,7 +456,7 @@ private struct EUserRow: View {
                         }
                     }
                     Text("\(user.email) · PIN: ••••")
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                 }
 
@@ -500,7 +500,7 @@ private struct EGeraeteTab: View {
                 ECard {
                     ERow("Weitere Geräte verwalten",
                          sub: "Geräteregistrierung und TSE-Client-Verwaltung über das Admin-Panel") {
-                        DSPill(label: "Phase 5", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
+                        DSPill(label: "Bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                 }
             }
@@ -515,6 +515,14 @@ private struct EKassensystemTab: View {
     @AppStorage("setting_tische_verwenden")     private var tischeVerwenden    = true
     @AppStorage("setting_schicht_erinnerung")   private var schichtErinnerung  = true
     @AppStorage("setting_stornobegruendung")    private var stornoBegruendung  = true
+    @AppStorage(DSAppearance.storageKey)        private var appearanceRaw      = DSAppearance.system.rawValue
+
+    private var appearanceBinding: Binding<DSAppearance> {
+        Binding(
+            get: { DSAppearance(rawValue: appearanceRaw) ?? .system },
+            set: { appearanceRaw = $0.rawValue }
+        )
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -524,6 +532,15 @@ private struct EKassensystemTab: View {
                     sub:   "Betriebsverhalten und Pflicht-Einstellungen."
                 )
                 ECard {
+                    ERow("Darstellung",
+                         sub: "System folgt der iPad-Einstellung") {
+                        DSSegmentedControl(
+                            selection: appearanceBinding,
+                            options: DSAppearance.allCases.map { (value: $0, label: $0.label) }
+                        )
+                        .frame(width: 300)
+                    }
+                    Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Tische verwenden",
                          sub: "Deaktivieren für reinen Schnellkassenbetrieb (z. B. Späti)") {
                         Toggle("", isOn: $tischeVerwenden)
@@ -546,9 +563,9 @@ private struct EKassensystemTab: View {
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Mindest-App-Version",
-                         sub: "Ältere App-Versionen werden blockiert (426)") {
+                         sub: "Ältere App-Versionen können sich nicht mehr anmelden") {
                         Text("1.0.0")
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .dsFont(.mono(14, weight: .semibold))
                             .foregroundColor(DS.C.text)
                     }
                 }
@@ -569,35 +586,35 @@ private struct ETSETab: View {
                     sub:   "Technische Signatureinheit — gesetzlich vorgeschrieben (KassenSichV)."
                 )
                 ECard {
-                    ERow("TSS-Status", sub: "Fiskaly Cloud-TSE") {
-                        DSPill(label: "Phase 1 — ausstehend", fg: DS.C.brassText, bg: DS.C.brassBg)
+                    ERow("TSE-Status", sub: "Fiskaly Cloud-TSE") {
+                        DSPill(label: "Aktivierung ausstehend", fg: DS.C.brassText, bg: DS.C.brassBg)
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
-                    ERow("TSS-ID", sub: "Wird nach Fiskaly-Aktivierung vergeben") {
+                    ERow("TSE-Seriennummer", sub: "Wird bei der TSE-Aktivierung vergeben") {
                         Text("—")
-                            .font(DS.F.sub)
+                            .dsFont(.sub)
                             .foregroundColor(DS.C.text2)
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Offline-Betrieb",
                          sub: "Transaktionen werden lokal gespeichert und bei Reconnect signiert") {
-                        DSPill(label: "Phase 3", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
+                        DSPill(label: "Bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("ELSTER-Meldung",
                          sub: "Kasse beim Finanzamt melden (einmalig, nach Fiskaly-Aktivierung)") {
-                        DSPill(label: "Phase 2", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
+                        DSPill(label: "Bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                     }
                 }
 
                 // Info box
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 15))
+                        .dsFont(.raw(15))
                         .foregroundColor(DS.C.accT)
                         .padding(.top, 1)
-                    Text("TSE-Aktivierung erfolgt vor dem Go-Live. Phase 1 (Pilot-Betrieb) ist gesetzlich zulässig, muss aber vor dem regulären Betrieb umgestellt werden.")
-                        .font(DS.F.sub)
+                    Text("Die TSE-Aktivierung erfolgt vor dem Go-live. Der Pilot-Betrieb ohne TSE ist zulässig, muss aber vor dem regulären Betrieb umgestellt werden.")
+                        .dsFont(.sub)
                         .foregroundColor(DS.C.accT)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -669,7 +686,7 @@ private struct EAbonnementTab: View {
             VStack(alignment: .leading, spacing: 28) {
                 ESettingsSectionHeader(
                     title: "Abonnement",
-                    sub:   "Ihr aktueller Plan und Abrechnungsdetails."
+                    sub:   "Dein aktueller Plan und Abrechnungsdetails."
                 )
 
                 if isLoading {
@@ -680,24 +697,20 @@ private struct EAbonnementTab: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 10) {
                                 Text(planLabel)
-                                    .font(DS.F.heading)
+                                    .dsFont(.heading)
                                     .foregroundColor(DS.C.accT)
                                 DSPill(label: statusLabel, fg: statusColor, bg: statusBg)
                             }
                             if tenant?.subscriptionStatus == .trial {
                                 Text("14-Tage-Testphase läuft")
-                                    .font(DS.F.caption)
+                                    .dsFont(.caption)
                                     .foregroundColor(DS.C.accT.opacity(0.75))
                             }
                         }
                         Spacer()
                         if tenant?.plan == .starter || tenant?.subscriptionStatus == .trial {
-                            Button {
-                                // Stripe upgrade — Phase 3
-                            } label: {
-                                Text("Auf Pro upgraden")
-                            }
-                            .buttonStyle(DSPrimaryButton(height: 42, fullWidth: false))
+                            // Stripe-Upgrade kommt in Phase 3 — kein aktiv aussehender Button ohne Funktion
+                            DSPill(label: "Plan-Wechsel bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -708,27 +721,18 @@ private struct EAbonnementTab: View {
                     ECard {
                         ERow("Geräte", sub: "Starter: max. 1 Gerät") {
                             Text("1 / 1")
-                                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                .dsFont(.mono(14, weight: .semibold))
                                 .foregroundColor(DS.C.text)
                         }
                         Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                         ERow("Berichts-Zeitraum", sub: "Verfügbare Historien-Tiefe") {
                             Text(reportDays)
-                                .font(.system(size: 14, weight: .semibold))
+                                .dsFont(.raw(14, weight: .semibold))
                                 .foregroundColor(DS.C.text)
                         }
                         Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
-                        ERow("Stripe-Kundennummer", sub: "Für Rechnungen und Zahlungsmethoden") {
-                            Button {
-                                // Stripe portal — Phase 3
-                            } label: {
-                                Text("Stripe-Portal öffnen →")
-                                    .font(DS.F.subBold)
-                                    .foregroundColor(DS.C.accT)
-                                    .frame(minHeight: 44)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
+                        ERow("Rechnungen & Zahlungsmethoden", sub: "Verwaltung über das Abrechnungs-Portal") {
+                            DSPill(label: "Bald verfügbar", fg: DS.C.text2, bg: DS.C.sur2, showDot: false)
                         }
                     }
                 }
@@ -741,9 +745,10 @@ private struct EAbonnementTab: View {
                 ECard {
                     ERow("Abonnement kündigen",
                          sub: "Zugang endet zum Periodenende. Daten werden 10 Jahre aufbewahrt (GoBD).") {
-                        ESmallBtn(label: "Kündigen", danger: true) {
-                            // Cancel — Phase 3
-                        }
+                        // In-App-Kündigung kommt in Phase 3 — bis dahin der echte Weg:
+                        Text("Per E-Mail an support@cashbox.de")
+                            .dsFont(.subMed)
+                            .foregroundColor(DS.C.text2)
                     }
                 }
             }
@@ -768,39 +773,32 @@ private struct EDatenschutzTab: View {
             VStack(alignment: .leading, spacing: 28) {
                 ESettingsSectionHeader(
                     title: "Datenschutz & Rechtliches",
-                    sub:   "Ihre Pflichten als Kassenbetreiber und Datenschutzeinstellungen."
+                    sub:   "Deine Pflichten als Kassenbetreiber und Datenschutzeinstellungen."
                 )
                 ECard {
-                    ERow("AVV unterzeichnet",
-                         sub: "Auftragsverarbeitungsvertrag (DSGVO-Pflicht)") {
-                        HStack(spacing: 10) {
-                            Text("✓ Erstellt")
-                                .font(DS.F.subBold)
-                                .foregroundColor(DS.C.successText)
-                            ESmallBtn(label: "Herunterladen", danger: false) {}
-                        }
+                    // AVV/Verfahrensdoku existieren noch nicht — kein „✓ Erstellt" vortäuschen
+                    ERow("AVV unterzeichnen",
+                         sub: "Auftragsverarbeitungsvertrag (DSGVO-Pflicht) — vor dem Go-live") {
+                        DSPill(label: "In Vorbereitung", fg: DS.C.brassText, bg: DS.C.brassBg)
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Verfahrensdokumentation",
-                         sub: "Pflicht vor produktivem Einsatz (GoBD)") {
-                        HStack(spacing: 10) {
-                            Text("✓ Erstellt")
-                                .font(DS.F.subBold)
-                                .foregroundColor(DS.C.successText)
-                            ESmallBtn(label: "PDF herunterladen", danger: false) {}
-                        }
+                         sub: "Pflicht vor produktivem Einsatz (GoBD) — vor dem Go-live") {
+                        DSPill(label: "In Vorbereitung", fg: DS.C.brassText, bg: DS.C.brassBg)
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Datenspeicherung",
                          sub: "Hetzner Frankfurt · DSGVO-konform") {
                         Text("EU · DE")
-                            .font(DS.F.sub)
+                            .dsFont(.sub)
                             .foregroundColor(DS.C.text2)
                     }
                     Rectangle().fill(DS.C.brdAdaptive).frame(height: 1)
                     ERow("Daten exportieren",
                          sub: "ZIP-Export aller Betriebsdaten (30 Tage nach Kündigung)") {
-                        ESmallBtn(label: "Export anfordern", danger: false) {}
+                        Text("Per E-Mail an support@cashbox.de")
+                            .dsFont(.subMed)
+                            .foregroundColor(DS.C.text2)
                     }
                 }
             }
@@ -818,10 +816,10 @@ private struct ESettingsSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(DS.F.heading)
+                .dsFont(.heading)
                 .foregroundColor(DS.C.text)
             Text(sub)
-                .font(DS.F.sub)
+                .dsFont(.sub)
                 .foregroundColor(DS.C.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -857,11 +855,11 @@ private struct ERow<R: View>: View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.F.bodyMed)
+                    .dsFont(.bodyMed)
                     .foregroundColor(DS.C.text)
                 if let s = sub {
                     Text(s)
-                        .font(DS.F.caption)
+                        .dsFont(.caption)
                         .foregroundColor(DS.C.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -887,11 +885,11 @@ private struct EInputRow: View {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
-                        .font(DS.F.bodyMed)
+                        .dsFont(.bodyMed)
                         .foregroundColor(DS.C.text)
                     if let s = sub {
                         Text(s)
-                            .font(DS.F.caption)
+                            .dsFont(.caption)
                             .foregroundColor(DS.C.text2)
                     }
                 }
@@ -931,7 +929,7 @@ private struct ESmallBtn: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(DS.F.captionBold)
+                .dsFont(.captionBold)
                 .foregroundColor(danger ? DS.C.dangerText : DS.C.text)
                 .padding(.horizontal, 14)
                 .frame(height: 38)
@@ -961,81 +959,61 @@ private struct UserFormSheet: View {
     var isEdit:  Bool { user != nil }
     var canSave: Bool { !name.isEmpty && (isEdit || (!email.isEmpty && !password.isEmpty)) }
 
+    private var isDirty: Bool {
+        if isEdit { return name != (user?.name ?? "") || role != (user?.role ?? .staff) || !pin.isEmpty }
+        return !name.isEmpty || !email.isEmpty || !password.isEmpty || !pin.isEmpty
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(DS.C.text2.opacity(0.3))
-                    .frame(width: 36, height: 4)
-                Spacer()
-            }
-            .padding(.top, 12)
+        DSSheetScaffold(
+            title: isEdit ? "Mitarbeiter bearbeiten" : "Neuer Mitarbeiter",
+            subtitle: isEdit ? user?.name : "Mitarbeiter anlegen",
+            icon: isEdit ? "pencil" : "person.badge.plus",
+            isDirty: isDirty
+        ) {
+            VStack(alignment: .leading, spacing: 18) {
+                UFormField(label: "Name", placeholder: "Vollständiger Name", text: $name)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text(isEdit ? "Mitarbeiter bearbeiten" : "Neuer Mitarbeiter")
-                        .font(DS.F.title)
-                        .foregroundColor(DS.C.text)
-                        .padding(.top, 8)
-
-                    UFormField(label: "Name", placeholder: "Vollständiger Name", text: $name)
-
-                    if !isEdit {
-                        UFormField(label: "E-Mail", placeholder: "mitarbeiter@example.com", text: $email,
-                                   keyboardType: .emailAddress, autocapitalizationType: .none)
-                        UFormField(label: "Passwort", placeholder: "Mindestens 8 Zeichen", text: $password, isSecure: true)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        DSSectionLabel(text: "Rolle")
-                        HStack(spacing: 8) {
-                            ForEach([UserRole.staff, .manager, .owner], id: \.self) { r in
-                                Button {
-                                    withAnimation(DS.M.fast) { role = r }
-                                } label: {
-                                    Text(r.displayName)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(role == r ? .white : DS.C.text)
-                                        .padding(.horizontal, 16)
-                                        .frame(height: 44)
-                                        .background(RoundedRectangle(cornerRadius: DS.R.button).fill(role == r ? DS.C.acc : DS.C.sur2))
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    UFormField(label: "PIN (4 Stellen, optional)", placeholder: "1234", text: $pin,
-                               keyboardType: .numberPad, autocapitalizationType: .none)
-                        .keyboardType(.numberPad)
-
-                    HStack(spacing: 10) {
-                        Button("Abbrechen") { dismiss() }
-                            .buttonStyle(DSSecondaryButton())
-
-                        Button {
-                            onSave(name, email, password, role, pin.isEmpty ? nil : pin)
-                        } label: {
-                            Text("Speichern")
-                        }
-                        .buttonStyle(DSPrimaryButton())
-                        .disabled(!canSave)
-                    }
+                if !isEdit {
+                    UFormField(label: "E-Mail", placeholder: "mitarbeiter@example.com", text: $email,
+                               keyboardType: .emailAddress, autocapitalizationType: .none)
+                    UFormField(label: "Passwort", placeholder: "Mindestens 8 Zeichen", text: $password, isSecure: true)
                 }
-                .padding(DS.S.pagePad)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Rolle")
+                    DSSegmentedControl(selection: $role, options: [
+                        (value: UserRole.staff,   label: UserRole.staff.displayName),
+                        (value: UserRole.manager, label: UserRole.manager.displayName),
+                        (value: UserRole.owner,   label: UserRole.owner.displayName),
+                    ])
+                }
+
+                UFormField(label: "PIN (4 Stellen, optional)", placeholder: "1234", text: $pin,
+                           keyboardType: .numberPad, autocapitalizationType: .none)
+            }
+        } footer: {
+            HStack(spacing: 10) {
+                Button("Abbrechen") { dismiss() }
+                    .buttonStyle(DSSecondaryButton())
+
+                Button {
+                    onSave(name, email, password, role, pin.isEmpty ? nil : pin)
+                } label: {
+                    Text("Speichern")
+                }
+                .buttonStyle(DSPrimaryButton())
+                .disabled(!canSave)
             }
         }
-        .background(DS.C.sur)
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.hidden)
         .onAppear {
             if let u = user { name = u.name; role = u.role }
         }
     }
 }
 
+// Dünner Alias auf DSTextField (eine Feld-Quelle app-weit)
 private struct UFormField: View {
     let label:       String
     let placeholder: String
@@ -1043,30 +1021,11 @@ private struct UFormField: View {
     var isSecure:               Bool                          = false
     var keyboardType:           UIKeyboardType                = .default
     var autocapitalizationType: UITextAutocapitalizationType  = .words
-    @State private var isFocused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DSSectionLabel(text: label)
-            NoAssistantTextField(
-                placeholder:            placeholder,
-                text:                   $text,
-                keyboardType:           keyboardType,
-                uiFont:                 UIFont.systemFont(ofSize: 16),
-                uiTextColor:            UIColor(DS.C.text),
-                isSecure:               isSecure,
-                autocapitalizationType: autocapitalizationType,
-                isFocused:              $isFocused
-            )
-            .padding(.horizontal, 14)
-            .frame(height: DS.S.inputHeight)
-            .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(isFocused ? DS.C.acc : DS.C.brdAdaptive, lineWidth: isFocused ? 1.5 : 1)
-            )
-            .animation(DS.M.fast, value: isFocused)
-        }
+        DSTextField(label: label, placeholder: placeholder, text: $text,
+                    isSecure: isSecure, keyboard: keyboardType,
+                    capitalization: autocapitalizationType)
     }
 }
 
