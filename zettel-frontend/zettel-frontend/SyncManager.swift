@@ -10,6 +10,10 @@ import SwiftUI
 
 @MainActor
 class SyncManager: ObservableObject {
+    /// App-weite Instanz — OfflineBanner liest pendingCount direkt hierüber,
+    /// die App injiziert dieselbe Instanz als EnvironmentObject.
+    static let shared = SyncManager()
+
     /// Anzahl noch unsignierter Bons (für OfflineBanner / Einstellungen)
     @Published var pendingCount = 0
     @Published var isSyncing = false

@@ -8,6 +8,7 @@ struct ContentView: View {
     @EnvironmentObject var networkMonitor: NetworkMonitor
     @EnvironmentObject var syncManager: SyncManager
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(DSAppearance.storageKey) private var appearanceRaw = DSAppearance.system.rawValue
 
     var body: some View {
         Group {
@@ -17,6 +18,12 @@ struct ContentView: View {
                 LoginView()
             }
         }
+        // Dynamic Type bis AX1 — darüber kollabieren Tischgitter und Numpad.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        // Ein Tint app-weit: Links, Picker, System-Controls laufen in Ledger Green
+        .tint(DS.C.acc)
+        // Appearance: System ist Default, Override (Hell/Dunkel) app-weit an einer Stelle.
+        .preferredColorScheme((DSAppearance(rawValue: appearanceRaw) ?? .system).colorScheme)
         .animation(.easeInOut(duration: 0.3), value: authStore.isAuthenticated)
         .onReceive(NotificationCenter.default.publisher(for: .authSessionExpired)) { _ in
             Task { @MainActor in

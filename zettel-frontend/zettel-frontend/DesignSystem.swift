@@ -69,6 +69,8 @@ enum DS {
 
         // Brand-Panel (Login/Onboarding linke Spalte) — tiefes Nacht-Olive
         static let brandPanel = Color.adaptive(light: "1C2413", dark: "141A0D")
+        // Blatt-Akzent auf dem Brand-Panel (heller Ledger-Ton, auf dunklem Panel fix)
+        static let brandLeaf  = Color(hex: "AECB6E")
 
         // Sekundär — Brass (Zahlung angefordert, Hinweise, Trial)
         static let brass     = Color.adaptive(light: "9A6A0B", dark: "D9AC46")
@@ -100,55 +102,9 @@ enum DS {
         static let billText = brassText
     }
 
-    // MARK: Typographie — feste Skala, iPad auf Armlänge
-    // SF Pro (System). Geldbeträge über DS.F.money* (SF Rounded, Tabellenziffern).
-    enum F {
-        /// Sehr große Beträge: Tischkacheln, KPI-Kacheln
-        static func moneyDisplay(_ size: CGFloat = 40) -> Font {
-            .system(size: size, weight: .bold, design: .rounded)
-        }
-        /// Beträge in Zeilen, Footern, Buttons
-        static func money(_ size: CGFloat = 17, weight: Font.Weight = .semibold) -> Font {
-            .system(size: size, weight: weight, design: .rounded)
-        }
-
-        static let display  = Font.system(size: 40, weight: .bold)      // Screen-KPIs
-        static let title    = Font.system(size: 26, weight: .bold)      // Seitentitel
-        static let heading  = Font.system(size: 20, weight: .semibold)  // Kartentitel, Tischname
-        static let body     = Font.system(size: 17, weight: .regular)   // Standardtext
-        static let bodyMed  = Font.system(size: 17, weight: .medium)
-        static let bodyBold = Font.system(size: 17, weight: .semibold)
-        static let sub      = Font.system(size: 15, weight: .regular)   // Sekundärtext
-        static let subMed   = Font.system(size: 15, weight: .medium)
-        static let subBold  = Font.system(size: 15, weight: .semibold)
-        static let caption  = Font.system(size: 13, weight: .medium)    // Meta, Badges
-        static let captionBold = Font.system(size: 13, weight: .semibold)
-        static let label    = Font.system(size: 12, weight: .semibold)  // Abschnitts-Label (versal)
-    }
-
-    // MARK: Typo-Größen (Alt-API — Views nutzen zunehmend DS.F)
-    enum T {
-        static let topbarAppName: CGFloat  = 18
-        static let navItem: CGFloat        = 16
-        static let sectionHeader: CGFloat  = 12
-        static let sessionChip: CGFloat    = 14
-        static let quickLabel: CGFloat     = 17
-        static let quickSub: CGFloat       = 14
-        static let kpiValue: CGFloat       = 32
-        static let kpiLabel: CGFloat       = 12
-        static let tableName: CGFloat      = 20
-        static let tableAmount: CGFloat    = 40
-        static let tableMeta: CGFloat      = 14
-        static let badge: CGFloat          = 12
-        static let zonePill: CGFloat       = 14
-        static let loginHeadline: CGFloat  = 32
-        static let loginTitle: CGFloat     = 20
-        static let loginBody: CGFloat      = 15
-        static let loginButton: CGFloat    = 16
-        static let loginForgot: CGFloat    = 14
-        static let loginFooter: CGFloat    = 12
-        static let loginFeature: CGFloat   = 14
-    }
+    // MARK: Typographie
+    // Die Typo-Skala lebt als Dynamic-Type-fähige Tokens in DSComponents.swift:
+    // .dsFont(.body), .dsFont(.money(17)), … — hier gibt es keine Font-Statics mehr.
 
     // MARK: Border Radii — ruhig, nicht überrundet
     enum R {
@@ -214,10 +170,19 @@ struct MoneyText: View {
 
     var body: some View {
         Text(euroString(cents))
-            .font(DS.F.money(size, weight: weight))
-            .monospacedDigit()
+            .dsFont(.money(size, weight: weight))
             .foregroundColor(color)
+            .accessibilityLabel(euroAccessibilityLabel(cents))
     }
+}
+
+/// "23,50 €" → "23 Euro 50" — VoiceOver liest Beträge natürlich statt zeichenweise
+func euroAccessibilityLabel(_ cents: Int) -> String {
+    let sign  = cents < 0 ? "minus " : ""
+    let abs   = Swift.abs(cents)
+    let euros = abs / 100
+    let rest  = abs % 100
+    return rest == 0 ? "\(sign)\(euros) Euro" : "\(sign)\(euros) Euro \(rest)"
 }
 
 // MARK: - Button Styles
@@ -230,7 +195,7 @@ struct DSPrimaryButton: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 17, weight: .semibold))
+            .dsFont(.bodyBold)
             .foregroundColor(.white)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .frame(height: height)
@@ -253,7 +218,7 @@ struct DSSecondaryButton: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 17, weight: .semibold))
+            .dsFont(.bodyBold)
             .foregroundColor(DS.C.text)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .frame(height: height)
@@ -276,7 +241,7 @@ struct DSDestructiveButton: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 17, weight: .semibold))
+            .dsFont(.bodyBold)
             .foregroundColor(DS.C.dangerText)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .frame(height: height)
@@ -306,8 +271,8 @@ extension View {
             )
     }
 
-    /// Eingabefeld-Rahmen mit Fokus-Zustand
-    func dsInput(focused: Bool = false) -> some View {
+    /// Eingabefeld-Rahmen mit Fokus- und Fehlerzustand
+    func dsInput(focused: Bool = false, error: Bool = false) -> some View {
         self
             .padding(.horizontal, 14)
             .frame(height: DS.S.inputHeight)
@@ -315,8 +280,8 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: DS.R.input))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.R.input)
-                    .strokeBorder(focused ? DS.C.acc : DS.C.brdAdaptive,
-                                  lineWidth: focused ? 1.5 : 1)
+                    .strokeBorder(error ? DS.C.danger : (focused ? DS.C.acc : DS.C.brdAdaptive),
+                                  lineWidth: (focused || error) ? 1.5 : 1)
             )
             .animation(DS.M.fast, value: focused)
     }
@@ -336,7 +301,7 @@ struct DSPill: View {
                 Circle().fill(fg).frame(width: 7, height: 7)
             }
             Text(label)
-                .font(DS.F.captionBold)
+                .dsFont(.captionBold)
                 .foregroundColor(fg)
         }
         .padding(.horizontal, 11)
@@ -352,7 +317,7 @@ struct DSSectionLabel: View {
     let text: String
     var body: some View {
         Text(text.uppercased())
-            .font(DS.F.label)
+            .dsFont(.label)
             .foregroundColor(DS.C.text2)
             .tracking(0.7)
     }
@@ -374,15 +339,15 @@ struct DSEmptyState: View {
                     .fill(DS.C.sur2)
                     .frame(width: 64, height: 64)
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .medium))
+                    .dsFont(.icon(24))
                     .foregroundColor(DS.C.text2)
             }
             VStack(spacing: 4) {
                 Text(title)
-                    .font(DS.F.heading)
+                    .dsFont(.heading)
                     .foregroundColor(DS.C.text)
                 Text(message)
-                    .font(DS.F.sub)
+                    .dsFont(.sub)
                     .foregroundColor(DS.C.text2)
                     .multilineTextAlignment(.center)
             }
@@ -397,13 +362,3 @@ struct DSEmptyState: View {
     }
 }
 
-// MARK: - Font-Shim (Alt-API)
-// Plus Jakarta Sans wurde nie gebundelt — alle .jakarta()-Aufrufe fielen
-// still auf das System-Font zurück. Der Shim macht das explizit: SF Pro.
-// Neue/überarbeitete Views nutzen DS.F direkt.
-
-extension Font {
-    static func jakarta(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
-    }
-}

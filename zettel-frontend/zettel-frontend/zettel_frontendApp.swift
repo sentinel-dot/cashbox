@@ -24,8 +24,9 @@ struct zettel_frontendApp: App {
     @StateObject private var productStore   = ProductStore()
     @StateObject private var reportStore    = ReportStore()
     @StateObject private var usersStore     = UsersStore()
-    // Minimaler Offline-Queue-Trigger — Vollausbau (Retry-UI etc.) in Phase 3
-    @StateObject private var syncManager    = SyncManager()
+    // Minimaler Offline-Queue-Trigger — Vollausbau (Retry-UI etc.) in Phase 3.
+    // Shared-Instanz: OfflineBanner liest pendingCount direkt aus SyncManager.shared
+    @StateObject private var syncManager    = SyncManager.shared
 
     var body: some Scene {
         WindowGroup {

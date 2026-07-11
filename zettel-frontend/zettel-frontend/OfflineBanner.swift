@@ -20,21 +20,21 @@ private struct AppBanner: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .dsFont(.raw(14, weight: .semibold))
                 .foregroundColor(fg)
                 .frame(width: 18)
 
             Group {
                 Text(label).fontWeight(.semibold) + Text(" — ") + Text(message)
             }
-            .font(.system(size: 14))
+            .dsFont(.raw(14))
             .foregroundColor(fg)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let actionLabel, let onAction {
                 Button(action: onAction) {
                     Text(actionLabel)
-                        .font(.system(size: 14, weight: .semibold))
+                        .dsFont(.raw(14, weight: .semibold))
                         .foregroundColor(actionFg)
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
@@ -53,26 +53,31 @@ private struct AppBanner: View {
 // MARK: - Offline Banner
 
 /// Wird überall im App als `OfflineBanner()` verwendet.
-/// pendingCount > 0 zeigt die Anzahl ausstehender TSE-Signaturen.
+/// Die Anzahl ausstehender TSE-Signaturen kommt live aus SyncManager.shared;
+/// `pendingCount` ist nur ein Preview-Override.
 struct OfflineBanner: View {
-    var pendingCount: Int = 0
+    var pendingCount: Int? = nil
+    @ObservedObject private var syncManager = SyncManager.shared
+
+    private var count: Int { pendingCount ?? syncManager.pendingCount }
 
     // Bewusst modus-unabhängig dunkel: Offline ist ein Systemzustand,
     // der sich vom restlichen UI abheben soll.
     private let bg = Color(hex: "1A1F17")
     private let fg = Color(hex: "F1F3EC")
-    private let brassFg = Color(hex: "E2BE67")
 
     var body: some View {
         AppBanner(
             icon:        "wifi.slash",
             label:       "Kein Netz",
-            message:     "TSE-Signierung ausstehend. Bestellungen lokal gespeichert.",
+            message:     count > 0
+                ? "\(count) Bon\(count == 1 ? "" : "s") warten auf TSE-Signatur. Bestellungen lokal gespeichert."
+                : "TSE-Signierung ausstehend. Bestellungen lokal gespeichert.",
             bg:          bg,
             fg:          fg,
-            actionLabel: pendingCount > 0 ? "\(pendingCount) ausstehend →" : nil,
-            actionFg:    brassFg,
-            onAction:    pendingCount > 0 ? {} : nil
+            actionLabel: nil,
+            actionFg:    fg,
+            onAction:    nil
         )
     }
 }
