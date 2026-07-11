@@ -98,24 +98,22 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 ## 6. Arbeitspaket: Frontend-Exzellenz (impeccable)
 
-Screen-für-Screen-Pass mit `/impeccable` (audit.native + ios-Referenz + polish). Nicht „hübscher machen", sondern die Punkte, an denen POS-Apps im Alltag nerven:
+**Großer Pass erledigt (2026-07-11, Design v3.1):** Impeccable-Review (2× Design-Assessment + Native-Audit) + Umsetzung. Erledigt: Kiosk-Lock (iPad-only, Vollbild, Landscape — **kein iPhone/Split View mehr, bewusste Entscheidung**); Dynamic Type app-weit via `.dsFont(…)` (gedeckelt auf AX1); VoiceOver-Grundausstattung (MoneyText liest Beträge natürlich, Tischkacheln kombiniert, Icon-Buttons gelabelt); Karte-Zahlung ehrlich als 2-Schritt (kein „Warte auf Terminal"-Fake mehr); Kassenzählung befüllt Abschluss-Sheet vor; Onboarding mit Ausstieg + erzwungener Pflicht-Checkliste (vatId/Standort-Felder entfernt — Backend nahm sie nie an; USt-IdNr. pflegbar in Einstellungen → Betriebsdaten); durchgängig Du; Fake-Status/“Phase N“-Jargon/tote Stub-Buttons raus; DSTextField/DSSheetScaffold/DSSegmentedControl/DSSkeleton/Haptics als Shared-Komponenten; Skeletons an den 4 Kern-Ladezuständen; Erfolgs-Checkmark + Haptik bei Zahlung/„Kasse stimmt“; Bar-Zahlung mit „passend“-Prefill (0-Tap-Default); Appearance System/Hell/Dunkel (Default System); Reduce-Motion-Crossfades; Touch-Targets ≥44pt (Qty, Chips, Pills); Jakarta-TTFs + tote Font-APIs gelöscht.
 
-**Querschnitt (alle Screens):**
-- **Fehlerpfade zuerst:** Jeder Netzwerk-Call braucht die drei Zustände Loading (Skeleton statt Spinner wo möglich), Fehler (mit Retry-Button, nicht nur Alert), Leer (DSEmptyState mit Handlungsaufforderung). Aktuell primär Alert-basiert
+**Offen geblieben (nächster Pass):**
+- **Fehler mit Retry:** Alerts haben weiterhin nur „OK" — Retry-Button + `AppError.failureReason` als Sekundärzeile anzeigen
 - **A4 aus dem Audit:** 409/Timeout-Recovery beim Bezahlen (Status nachladen statt Sackgassen-Alert)
-- Offline-UX: OfflineBanner ist da — aber jede schreibende Aktion muss offline klar sagen was passiert (Queue vs. blockiert)
-- Haptik (`UIImpactFeedbackGenerator`) auf Bezahlen-Erfolg, Session-Schluss, Storno — Kassenkräfte schauen nicht auf den Screen
-- Dynamic Type bis XXL testen (Zahlen dürfen nie truncaten — Geldbetrag „1.234…" ist ein Bug), VoiceOver-Labels auf allen Geld-Werten
-- Landscape + Split View (iPad-Realität: nebenbei WhatsApp)
-- Touch-Targets ≥44pt nachmessen (v3 behauptet es — verifizieren), Tap-Feedback <100ms
-- Session-Ablauf (16h-Limit): forceLogout-Banner darf keinen Warenkorb verlieren — Zustand sichern
-
-**Pro Screen (Auszug der bekannten Schwächen):**
-- OrderView: Warenkorb-Performance bei 50+ Positionen (List statt VStack?), Produkt-Grid-Suche fehlt
-- PaymentView: Rückgeld groß und zuerst (das liest der Kellner), Gemischt-Eingabe mit Live-Validierung statt stummem Button-Disable
-- TableOverview: Pull-to-Refresh + Auto-Refresh-Intervall (Stale-Daten nach App-Wechsel)
-- ZBericht/Berichte: Zahlen-Alignment (monospacedDigit konsequent), Differenz-Farblogik (rot erst ab Schwelle, nicht bei ±1 Cent)
+- Offline-UX: jede schreibende Aktion muss offline klar sagen, was passiert (Queue vs. blockiert)
+- Haptik auf Storno fehlt noch (Zahlung/Session-Schluss/Numpad/Segmente haben sie)
+- Dynamic-Type-AX1-Screenshotmatrix aller Screens (Login hell/dunkel verifiziert; Rest manuell testen — kein Test-Target)
+- Session-Ablauf (16h-Limit): forceLogout darf keinen Warenkorb verlieren — Zustand sichern
+- OrderView: Warenkorb-Performance bei 50+ Positionen, Produkt-Grid-Suche fehlt
+- PaymentView: Rückgeld noch größer/zuerst (aktuell Zeile + Confirm-Label), Gemischt-Live-Validierung
+- TableOverview: Auto-Refresh-Intervall (Stale-Daten nach App-Wechsel; Pull-to-Refresh existiert)
+- ZBericht/Berichte: Differenz-Farblogik (rot erst ab Schwelle, nicht bei ±1 Cent)
 - Onboarding: Wiedereinstieg bei Abbruch auf Schritt 4 (State-Persistenz)
+- EInputRow (Einstellungen-Zeilenfeld) bewusst nicht auf DSTextField (anderes Layoutmuster) — bei Gelegenheit angleichen
+- **Betriebshinweis Kiosk:** `UIRequiresFullScreen` ist von Apple als „wird künftig ignoriert" markiert — echter Kiosk-Betrieb beim Piloten über Guided Access (Dreifachklick) bzw. später MDM Single App Mode
 
 ---
 

@@ -225,29 +225,32 @@ npm run test:coverage        # Coverage-Report
 
 ## Implementierungsstand SwiftUI Frontend
 
+**Design v3.1 (2026-07-11, Impeccable-Pass):** Kiosk-App — `TARGETED_DEVICE_FAMILY=2` (iPad-only), `UIRequiresFullScreen=YES`, nur Landscape. Dynamic Type app-weit über `.dsFont(…)` (Root-Deckel AX1 in ContentView), Appearance System/Hell/Dunkel (`DSAppearance`, Default System, app-weit in ContentView angewandt — **keine per-View `preferredColorScheme` mehr außer Previews**), app-weiter `.tint(DS.C.acc)`, Anrede durchgängig Du. Fonts: `.dsFont` ist die einzige Font-API (`DS.F`/`DS.T`/`.jakarta()` gelöscht, Jakarta-TTFs entfernt).
+
 ### Fertig implementiert ✅
 | Screen / File | Inhalt | Stand |
 |---------------|--------|-------|
-| `DesignSystem.swift` | Design v3 „Ledger Green": olivgetönte Neutrals, Ledger-Green-Primär + Brass-Sekundär, SF Pro (Geld: SF Rounded + `.monospacedDigit`), zentrale `euroString()`/`MoneyText`, Button-Styles (`DSPrimaryButton` etc.), `DSPill`, `DSEmptyState`, `DSSectionLabel`, `dsCard()`, Motion-Tokens. `.jakarta()`-Shim → SF Pro | ✅ |
+| `DesignSystem.swift` | Design v3.1 „Ledger Green": Farb-/Radius-/Spacing-/Motion-Tokens (`DS.C/R/S/M`), zentrale `euroString()`/`MoneyText` (inkl. VoiceOver-Betrags-Label), Button-Styles (`DSPrimaryButton` etc.), `DSPill`, `DSEmptyState`, `DSSectionLabel`, `dsCard()`/`dsInput()` — keine Font-Statics mehr | ✅ |
+| `DSComponents.swift` | v3.1-Komponenten: `.dsFont(_:)` (Dynamic-Type-Typo-Tokens via UIFontMetrics; `.money`-Tokens mit Tabellenziffern, `.mono` für Beleg-Ästhetik, `.icon`/`.raw` für Sondergrößen), `DSTextField` (das eine Eingabefeld: Label/Hint/Error/Secure-Reveal, NoAssistant-Engine), `DSSheetScaffold` (einheitliches Sheet-Chrome: Icon-Badge + xmark + Footer, `isDirty` → Dismiss-Guard), `DSSegmentedControl`, `DSSkeleton`, `DSSuccessCheckmark` (Reduce-Motion-safe), `Haptics`, `dsBannerTransition()`, `DSAppearance` | ✅ |
 | `AppError.swift` | App-weite Fehlertypen (LocalizedError, deutsche Meldungen) | ✅ |
 | `Models.swift` | User, AuthUser, Tenant, UserRole, SubscriptionPlan, SubscriptionStatus, AuthResponse | ✅ |
 | `AuthStore.swift` | ObservableObject: Login, Register, PIN-Login, Logout, User-Cache (UserDefaults), sendet deviceToken aus Keychain | ✅ |
 | `APIClient.swift` | async/await HTTP-Client: JWT im Keychain, Device-Token persistent, get/post/patch/delete, Refresh-Logic | ✅ |
 | `KeychainHelper.swift` | Sicherer Token-Speicher (save/load/delete, Service: com.cashbox.app) | ✅ |
 | `NetworkMonitor.swift` | NWPathMonitor Wrapper, isOnline @Published | ✅ |
-| `OfflineBanner.swift` | Offline-Hinweisband "TSE-Signatur ausstehend" | ✅ |
-| `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular, PIN-Liste, Dark-Mode-Toggle, PINEntrySheet | ✅ |
-| `OnboardingView.swift` | Registrierungs-/Onboarding-Flow (6 Schritte): Konto, Betriebsdaten, Gerät, Plan, Pflicht-Checkliste, Fertig → `authStore.register` (POST /onboarding/register). Einziger Registrierungsweg (RegisterView.swift gelöscht 2026-07-10, war toter Code) | ✅ |
-| `ContentView.swift` | Auth-Router: LoginView ↔ App | ✅ |
+| `OfflineBanner.swift` | Offline-Hinweisband; liest `pendingCount` live aus `SyncManager.shared` (zeigt „N Bons warten auf TSE-Signatur") | ✅ |
+| `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular (DSTextField), PIN-Liste, Darstellungs-Umschalter (System/Hell/Dunkel), PINEntrySheet | ✅ |
+| `OnboardingView.swift` | Registrierungs-Flow (6 Schritte) mit Abbrechen-X (+ Verwerfen-Rückfrage), erzwungener Pflicht-Checkliste (Schritt 5 gated `canContinue`), ehrlichem TSE-Pending-Status; Felder = exakt das Backend-Schema (vatId/Standort entfernt — registerSchema nimmt sie nicht an). Einziger Registrierungsweg (RegisterView.swift gelöscht 2026-07-10) | ✅ |
+| `ContentView.swift` | Auth-Router: LoginView ↔ App; app-weite Modifier: Dynamic-Type-Deckel (AX1), `preferredColorScheme` aus `DSAppearance`, `.tint(DS.C.acc)` | ✅ |
 | `zettel_frontendApp.swift` | Root mit @StateObject Stores + EnvironmentObject Injection | ✅ |
 | `SessionStore.swift` | ObservableObject: Session laden/öffnen/schließen, Movements, Preview-Factories | ✅ |
 | `OrderStore.swift` | ObservableObject: Orders laden, erstellen, Items add/remove, Storno, Preview-Factories | ✅ |
-| `KassensitzungView.swift` | Session öffnen (Eröffnungsbestand), aktive Session mit Stats + Movements, Schicht schließen + Z-Bericht-Sheet | ✅ |
+| `KassensitzungView.swift` | Session öffnen (Eröffnungsbestand), aktive Session mit Stats + Movements, Schicht schließen + Z-Bericht-Sheet. Live-Kassenzählung (KassenstandCard) befüllt das Abschluss-Sheet vor (State in Root); „Kasse stimmt"-Moment bei ±0 im Z-Sheet | ✅ |
 | `TableStore.swift` | ObservableObject: Tischliste + Zonen laden, occupiedCount, Preview-Factories | ✅ |
 | `TableOverviewView.swift` | Haupt-App-Shell: Topbar (Session-Chip, User), Sidebar (Nav + KPIs + Schnellkasse), Tischgitter 3-Spalten mit Zone-Filter-Pills, Kacheln mit Status-Badge + Streifen | ✅ |
 | `ProductStore.swift` | ObservableObject: GET /products laden (inkl. Modifier-Gruppen), Kategorien aus Produkten ableiten, filterProducts(for:), CRUD für Produkte + Kategorien inkl. GoBD-konformer Preisänderung, Preview-Factories | ✅ |
 | `OrderView.swift` | Produktkatalog (links: Kategorie-Pills, 3-Spalten-Grid) + Warenkorb-Panel (rechts: Items, Total, Bezahlen). ModifierSelectionSheet für Pflicht-Modifier integriert. Öffnet PaymentView nach "Bezahlen". | ✅ |
-| `PaymentView.swift` | Bar / Karte / Gemischt-Auswahl, MwSt-Aufschlüsselung (7% + 19%), Gemischt-Aufteilung mit Barbetrag-Eingabe, POST /orders/:id/pay, ReceiptSummarySheet nach Zahlung, Auto-Dismiss zu TableOverview. | ✅ |
+| `PaymentView.swift` | Bar / Karte / Gemischt, MwSt-Aufschlüsselung (7%/19%), POST /orders/:id/pay, ReceiptSummarySheet (Erfolgs-Checkmark + Haptik). Bar: Betrag mit „passend" vorbelegt (Prefill, erste Eingabe ersetzt). **Karte: ehrlicher 2-Schritt** — „Terminal hat die Zahlung genehmigt"-Bestätigung gated den Erfassen-Button (Phase 1 hat keine Terminal-Integration; kein Fake-„Warte auf Terminal") | ✅ |
 | `ReportStore.swift` | ObservableObject: Tagesbericht (GET /reports/daily), Zusammenfassung (GET /reports/summary), Preview-Factories | ✅ |
 | `UsersStore.swift` | ObservableObject: User laden/erstellen/bearbeiten/löschen (soft-delete), Preview-Factories | ✅ |
 | `ReceiptView.swift` | Compliance-Bon (KassenSichV + GoBD + §14 UStG): 2-Spalten (Bon-Details links, TSE + QR-Code rechts), Tenant-Snapshot, Positionen, MwSt, TSE-Pending-Hinweis | ✅ |
@@ -257,7 +260,7 @@ npm run test:coverage        # Coverage-Report
 | `KategorienView.swift` | Kategorienliste mit Farbchips, KategorieFormSheet (Name + Farb-Preset + HEX-Input + Sort-Order), Delete-Confirmation | ✅ |
 | `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Tischverwaltung (Tab "Tische"), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
 | `TischverwaltungView.swift` | Tische & Zonen verwalten: Liste, ZoneFormSheet, TischFormSheet (Zone-Picker), Deaktivieren-Confirm, CRUD via TableStore | ✅ |
-| `SyncManager.swift` | Minimaler Offline-Queue-Trigger: POST /sync/offline-queue bei Online-Wechsel/Foreground/Login (max. 3 Runden), pendingCount @Published. Vollausbau Phase 3 | ✅ |
+| `SyncManager.swift` | Minimaler Offline-Queue-Trigger: POST /sync/offline-queue bei Online-Wechsel/Foreground/Login (max. 3 Runden), pendingCount @Published. `SyncManager.shared` — dieselbe Instanz wird als EnvironmentObject injiziert und vom OfflineBanner direkt gelesen. Vollausbau Phase 3 | ✅ |
 
 ### Noch nicht implementiert ❌ (SwiftUI)
 | Screen | Abhängigkeiten | Phase |
