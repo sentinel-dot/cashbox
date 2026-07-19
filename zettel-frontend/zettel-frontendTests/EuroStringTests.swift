@@ -11,7 +11,7 @@ final class EuroStringTests: XCTestCase {
     }
 
     func testStandardBetrag() {
-        XCTAssertEqual(euroString(1250), "12,51 €")  // CI-NACHWEIS S02: absichtlich falsch
+        XCTAssertEqual(euroString(1250), "12,50 €")
     }
 
     func testTausenderpunkt() {

@@ -165,3 +165,18 @@ Grant-Host und Timezone-Tabellen in CI korrekt greifen.
 **2. Grüner Lauf** — Run `29702157037`, nach Rücknahme des Asserts: alle Schritte ✅,
 **76 Unit/Compliance (7 Dateien) + 301 Integration (22 Dateien)** — identisch zum lokalen Lauf.
 Laufzeit der Integrationstests in CI: ~39 s.
+
+## Nachweis iOS-Job (DoD S02)
+
+Durchgeführt am 2026-07-19 auf PR [#2](https://github.com/sentinel-dot/cashbox/pull/2):
+
+**Grüner Lauf** — Run `29702799713`: Simulator automatisch gewählt
+(`iPad Pro 13-inch (M5)`), `** TEST SUCCEEDED **`, 40 Testfälle.
+
+**Roter Lauf** — Run `29703020329`: `EuroStringTests.testStandardBetrag` erwartete absichtlich
+`"12,51 €"` → `Test case 'EuroStringTests.testStandardBetrag()' failed`, `** TEST FAILED **`,
+Check `iOS (xcodebuild test)` rot — **während der Backend-Job im selben Lauf grün blieb**. Damit ist
+belegt, dass die beiden Jobs unabhängig voneinander greifen.
+
+Nebenbefund dabei: Die Doku sprach von 41 XCTests, tatsächlich sind es **40** (8+5+12+7+8
+Testmethoden). In `CLAUDE.md`, `OFFEN.md` und `ROADMAP.md` korrigiert.
