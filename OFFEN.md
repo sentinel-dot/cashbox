@@ -1,6 +1,6 @@
 # OFFEN — Was noch zu tun ist
 
-**Einzige Quelle für alles Offene.** Stand: 2026-07-10 (nach Finanz-Integritäts-Audit).
+**Einzige Quelle für alles Offene.** Stand: 2026-07-19 (nach Test-Offensive: A4/A8 gefixt, T1–T4 komplett — Backend 76 Unit/Compliance + 301 Integration, iOS 41 XCTests. Testkonzept: `docs/testkonzept.md`).
 Erledigtes fliegt raus (Git-History behält es), Neues kommt priorisiert hier rein.
 Spezifikation (DB-Schema, TSE-Flow, Bon-Pflichtfelder): `implementierungsplan.md` §1–15.
 
@@ -27,11 +27,9 @@ Neue Tests: UNIQUE-Backstop (Race-Simulation via Direkt-INSERT), Folgetag-Storno
 | A1 | **TSE läuft vor der DB-TX** (payOrder/splitBill/cancelReceipt): verliert die Zahlung danach das 409-Race, existiert ab Phase 2 eine signierte TSE-Transaktion ohne Bon | Vor Phase-2-Go-live: Fiskaly-TX bei Abbruch canceln, oder TSE nach dem Lock (Lock-Dauer abwägen) | Phase 2 |
 | A2 | **Fiskaly-4xx blockiert die Zahlung komplett** (kein Offline-Fallback bei Validierungsfehler): ein Schema-Bug nach Fiskaly-API-Änderung würde den ganzen Betrieb lahmlegen, obwohl KassenSichV dokumentierten Offline-Betrieb erlaubt | Design-Entscheidung: 4xx ebenfalls → tse_pending + LAUTER Alert (E-Mail), statt Verkauf zu blockieren | Phase 2 |
 | A3 | **addItem: Modifier-INSERTs laufen nach dem Commit** (auditDb, separater Pool): schlägt das fehl → 500, Item ist aber schon drin → Client-Retry erzeugt Duplikat; dem Original fehlen die Modifier-Zeilen (Bon-Nachvollziehbarkeit) | Kompensation: bei Modifier-INSERT-Fehler `order_item_removals`-Eintrag schreiben, dann 500 | Vor Go-live |
-| A4 | **iOS: 409 nach Zahlungs-Timeout-Retry** — wenn der erste Request serverseitig durchkam, sieht der Kellner nur „Bestellung ist nicht mehr offen" und keinen Bon. Geld ist sicher (Statusmaschine), UX nicht | PaymentView: bei 409 Order-Status nachladen; wenn `paid` → Bon anzeigen statt Fehler | Vor Pilot-Ende |
 | A5 | **Reports: `DATE(CONVERT_TZ(created_at))` in WHERE** ist nicht index-fähig (Full Scan pro Tenant) | Datumsgrenzen in UTC vorberechnen und `created_at BETWEEN ? AND ?` filtern | Nach Pilot |
 | A6 | **`audit_insert_user` hat INSERT auf alle Tabellen** statt nur die 5 Audit-Tabellen | Prod: tabellen-scoped Grants (Kommentar in setup-db.ts listet sie) | Vor Go-live |
 | A7 | **`changePrice` ohne Lock/TX**: parallele Preisänderungen können Historie-Reihenfolge ≠ finalem Preis erzeugen | Produkt-Zeile FOR UPDATE + Historie und UPDATE seriell | Nach Pilot |
-| A8 | **`parseCents` doppelt implementiert** (KassensitzungView, ProdukteView — einmal `Int?`, einmal `Int`) | Eine zentrale Funktion in DesignSystem.swift | Gelegenheit |
 | A9 | **closeSession: z_reports-INSERT nach Commit** (anderer DB-User, keine gemeinsame TX möglich) — schlägt er fehl, ist die Session zu ohne Z-Bericht (wird jetzt laut geloggt, Daten rekonstruierbar) | Cron/Monitoring: geschlossene Sessions ohne z_reports-Zeile finden + nachtragen | Vor Go-live |
 | A10 | **Bewusster Trade-off, dokumentieren nicht fixen:** Refresh-Tokens sind stateless — Logout ist rein clientseitig, Session-Kill nur via Geräte-Revoke; 16h-Limit begrenzt den Schaden | — | — |
 
@@ -39,7 +37,7 @@ Neue Tests: UNIQUE-Backstop (Race-Simulation via Direkt-INSERT), Folgetag-Storno
 
 ## 2. Blocker vor Pilot
 
-Keine. Alle kritischen Audit-Funde sind gefixt, Suites grün. Pilot (Shishabar) kann mit Phase-1-Konfiguration (ohne TSE) testen. A4 (Zahlungs-Retry-UX) sollte während des Piloten kommen — genau dieser Fall (WLAN-Aussetzer beim Bezahlen) passiert in einer Shishabar ständig.
+Keine. Alle kritischen Audit-Funde sind gefixt, Suites grün. Pilot (Shishabar) kann mit Phase-1-Konfiguration (ohne TSE) testen. A4 (Zahlungs-Retry-UX) ist erledigt (2026-07-19): 409/Timeout beim Bezahlen lädt den Order-Status nach und zeigt den Bon statt einer Sackgasse.
 
 ---
 
@@ -102,7 +100,6 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 **Offen geblieben (nächster Pass):**
 - **Fehler mit Retry:** Alerts haben weiterhin nur „OK" — Retry-Button + `AppError.failureReason` als Sekundärzeile anzeigen
-- **A4 aus dem Audit:** 409/Timeout-Recovery beim Bezahlen (Status nachladen statt Sackgassen-Alert)
 - Offline-UX: jede schreibende Aktion muss offline klar sagen, was passiert (Queue vs. blockiert)
 - Haptik auf Storno fehlt noch (Zahlung/Session-Schluss/Numpad/Segmente haben sie)
 - Dynamic-Type-AX1-Screenshotmatrix aller Screens (Login hell/dunkel verifiziert; Rest manuell testen — kein Test-Target)
@@ -119,12 +116,11 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 ## 7. Tests & Qualität
 
+Testkonzept (REQ → UC → TC, Traceability): **`docs/testkonzept.md`** — neue Anforderungen dort als REQ eintragen, jedem REQ ≥ 1 TC zuordnen.
+Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, zReportAggregation, sequences, fiskalyPayload), T2 (XCTest-Target `zettel-frontendTests`, 41 Tests: ParseCents, EuroString, PaymentLogic, VatBreakdown-Formelparität, ModelDecoding — der Roundtrip-Test fand direkt einen Tausenderpunkt-Bug in parseCents), T3 (`integration/e2e-tagesablauf.test.ts`), T4 (`integration/concurrency.test.ts` — echte Promise.all-Races gegen pay/cancel/close/open).
+
 | # | Lücke | Inhalt | Prio |
 |---|---|---|---|
-| T1 | **Backend-Unit-Tests: nur 1 Datei** (vatCalculation) | Unit-Tests für: Split-Partition-Validierung, Storno-Negations-Invariante (SUM==0), Z-Bericht-Aggregation (Fixture-basiert), sequences (Mock-Conn), Fiskaly-Payload-Bau (amounts_per_vat_rate-Format, centsToFiskaly) | Vor Go-live |
-| T2 | **iOS: null Tests** | XCTest-Target: parseCents/euroString (Rundung, Locale), buildPayments (Gemischt-Kanten: bar==total, bar>total), VatBreakdown-Berechnung vs. Backend-Formel, Store-Decoding gegen Response-Fixtures | Vor Go-live |
-| T3 | **E2E-Durchstich** | Ein Integrationstest über den ganzen Tag: Session auf → 3 Orders (bar/karte/gemischt/split) → Storno → Movements → Session zu → Z-Bericht-Invarianten (expected_cash, Summen netten, Bon-Nummern lückenlos) | Vor Go-live |
-| T4 | **Nebenläufigkeits-Tests** | `Promise.all`-Doppel-Requests gegen pay/cancel/close — jetzt wo die Locks da sind, absichern dass sie bleiben | Nach Pilot |
 | T5 | **CI** | GitHub Actions: tsc + unit + integration (MariaDB-Service-Container) als PR-Gate; iOS-Build via xcodebuild | Mit N5 |
 | T6 | **Backend: `any` eliminieren (237 Stellen, davon 160 `db.execute<any[]>`)** | Request-Seite ist via Zod schon typisiert (`z.infer`), die DB-Seite nicht. Plan: (1) Row-Interfaces pro Tabelle in `src/db/types.ts` (`OrderRow`, `ReceiptRow`, …) und `db.execute<OrderRow[]>` — Achtung: mysql2-Generics sind reine Casts, keine Runtime-Prüfung, daher Spalten-Drift weiter durch Integrationstests absichern; (2) `ResultSetHeader` statt `<any>` für INSERT/UPDATE-Ergebnisse; (3) `catch (err: unknown)` + Narrowing statt `err: any`; (4) ESLint `@typescript-eslint/no-explicit-any: error` als Ratchet, Geld-Pfade zuerst (payments, splitBill, cancellations, sessions). iOS ist sauber (nur KeychainHelper nutzt `[String: Any]` — Security-C-API, unvermeidbar) | Vor Go-live, schrittweise |
 
@@ -158,10 +154,10 @@ Nikos Insider-Blick (Deutsche Post ITS, POS-Testing) gezielt nutzen — die Punk
 
 ## 10. Priorisierte Reihenfolge
 
-1. **Jetzt (Pilot läuft an):** A4 (Zahlungs-Retry-UX) → T2-Grundstock (Geld-Funktionen) → Pilot-Feedback-Schleife
-2. **Vor Go-live (Reihenfolge):** B1 E-Mail → B2 Cron → B3 Passwort-Reset → B6/B7 Prozess-Härtung → B4/B5 → A3/A6/A9 → T1/T3 → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
+1. **Jetzt (Pilot läuft an):** Pilot-Feedback-Schleife (A4 + T1–T4 sind erledigt, 2026-07-19)
+2. **Vor Go-live (Reihenfolge):** B1 E-Mail → B2 Cron → B3 Passwort-Reset → B6/B7 Prozess-Härtung → B4/B5 → A3/A6/A9 → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
 3. **Phase 2 (TSE scharf):** A1 + A2 lösen → Fiskaly-Sandbox-E2E → N2/N3
-4. **Nach Pilot:** §6 impeccable-Pass komplett, T4/T5, S2–S4
+4. **Nach Pilot:** §6 impeccable-Pass komplett, T5, S2–S4
 5. **Phase 3+:** Trinkgeld (nach Steuerberater), SyncManager-Vollausbau, Phase-5-Features
 
 ---

@@ -208,7 +208,7 @@ npm run test:coverage        # Coverage-Report
 | Modifier Groups | CRUD /modifier-groups + /options | ✅ |
 | Tische/Zonen | CRUD /tables + /zones | ✅ |
 | Kassensitzungen | open, close (+ Z-Bericht), current, /:id, /:id/z-report, movements | ✅ |
-| Bestellungen | GET+POST /orders, GET /:id, items (add/remove), cancel, pay, pay/split | ✅ |
+| Bestellungen | GET+POST /orders, GET /:id (liefert bei `paid` einen `receipt`-Block im PaymentResult-Shape — A4-Recovery), items (add/remove), cancel, pay, pay/split | ✅ |
 | Bons | GET /receipts (Liste), GET /receipts/:id, POST /:id/cancel | ✅ |
 | Offline-Sync | GET+POST /sync/offline-queue | ✅ |
 | Onboarding | POST /onboarding/register, POST /onboarding/create-checkout-session | ✅ |
@@ -230,7 +230,7 @@ npm run test:coverage        # Coverage-Report
 ### Fertig implementiert ✅
 | Screen / File | Inhalt | Stand |
 |---------------|--------|-------|
-| `DesignSystem.swift` | Design v3.1 „Ledger Green": Farb-/Radius-/Spacing-/Motion-Tokens (`DS.C/R/S/M`), zentrale `euroString()`/`MoneyText` (inkl. VoiceOver-Betrags-Label), Button-Styles (`DSPrimaryButton` etc.), `DSPill`, `DSEmptyState`, `DSSectionLabel`, `dsCard()`/`dsInput()` — keine Font-Statics mehr | ✅ |
+| `DesignSystem.swift` | Design v3.1 „Ledger Green": Farb-/Radius-/Spacing-/Motion-Tokens (`DS.C/R/S/M`), zentrale `euroString()`/`parseCents()` (A8: eine Implementierung, `Int?` — nil disabled Save-Buttons)/`MoneyText` (inkl. VoiceOver-Betrags-Label), Button-Styles (`DSPrimaryButton` etc.), `DSPill`, `DSEmptyState`, `DSSectionLabel`, `dsCard()`/`dsInput()` — keine Font-Statics mehr | ✅ |
 | `DSComponents.swift` | v3.1-Komponenten: `.dsFont(_:)` (Dynamic-Type-Typo-Tokens via UIFontMetrics; `.money`-Tokens mit Tabellenziffern, `.mono` für Beleg-Ästhetik, `.icon`/`.raw` für Sondergrößen), `DSTextField` (das eine Eingabefeld: Label/Hint/Error/Secure-Reveal, NoAssistant-Engine), `DSSheetScaffold` (einheitliches Sheet-Chrome: Icon-Badge + xmark + Footer, `isDirty` → Dismiss-Guard), `DSSegmentedControl`, `DSSkeleton`, `DSSuccessCheckmark` (Reduce-Motion-safe), `Haptics`, `dsBannerTransition()`, `DSAppearance` | ✅ |
 | `AppError.swift` | App-weite Fehlertypen (LocalizedError, deutsche Meldungen) | ✅ |
 | `Models.swift` | User, AuthUser, Tenant, UserRole, SubscriptionPlan, SubscriptionStatus, AuthResponse | ✅ |
@@ -250,7 +250,8 @@ npm run test:coverage        # Coverage-Report
 | `TableOverviewView.swift` | Haupt-App-Shell: Topbar (Session-Chip, User), Sidebar (Nav + KPIs + Schnellkasse), Tischgitter 3-Spalten mit Zone-Filter-Pills, Kacheln mit Status-Badge + Streifen | ✅ |
 | `ProductStore.swift` | ObservableObject: GET /products laden (inkl. Modifier-Gruppen), Kategorien aus Produkten ableiten, filterProducts(for:), CRUD für Produkte + Kategorien inkl. GoBD-konformer Preisänderung, Preview-Factories | ✅ |
 | `OrderView.swift` | Produktkatalog (links: Kategorie-Pills, 3-Spalten-Grid) + Warenkorb-Panel (rechts: Items, Total, Bezahlen). ModifierSelectionSheet für Pflicht-Modifier integriert. Öffnet PaymentView nach "Bezahlen". | ✅ |
-| `PaymentView.swift` | Bar / Karte / Gemischt, MwSt-Aufschlüsselung (7%/19%), POST /orders/:id/pay, ReceiptSummarySheet (Erfolgs-Checkmark + Haptik). Bar: Betrag mit „passend" vorbelegt (Prefill, erste Eingabe ersetzt). **Karte: ehrlicher 2-Schritt** — „Terminal hat die Zahlung genehmigt"-Bestätigung gated den Erfassen-Button (Phase 1 hat keine Terminal-Integration; kein Fake-„Warte auf Terminal") | ✅ |
+| `PaymentView.swift` | Bar / Karte / Gemischt, MwSt-Aufschlüsselung (7%/19%), POST /orders/:id/pay, ReceiptSummarySheet (Erfolgs-Checkmark + Haptik). Bar: Betrag mit „passend" vorbelegt (Prefill, erste Eingabe ersetzt). **Karte: ehrlicher 2-Schritt** — „Terminal hat die Zahlung genehmigt"-Bestätigung gated den Erfassen-Button (Phase 1 hat keine Terminal-Integration; kein Fake-„Warte auf Terminal"). **A4-Recovery:** 409/Timeout → `OrderStore.recoverPayment` lädt den Order-Status nach; `paid` → Bon-Sheet statt Sackgassen-Alert | ✅ |
+| `PaymentLogic.swift` | Pure Zahlungs-/MwSt-Logik, aus PaymentView extrahiert für Testbarkeit: `computeVat` (Formelparität mit Backend-calcVat), `buildPayments(mode:barRaw:totalCents:)` (Summen-Invariante == total; Gemischt bar>total wird geklemmt) | ✅ |
 | `ReportStore.swift` | ObservableObject: Tagesbericht (GET /reports/daily), Zusammenfassung (GET /reports/summary), Preview-Factories | ✅ |
 | `UsersStore.swift` | ObservableObject: User laden/erstellen/bearbeiten/löschen (soft-delete), Preview-Factories | ✅ |
 | `ReceiptView.swift` | Compliance-Bon (KassenSichV + GoBD + §14 UStG): 2-Spalten (Bon-Details links, TSE + QR-Code rechts), Tenant-Snapshot, Positionen, MwSt, TSE-Pending-Hinweis | ✅ |
@@ -260,6 +261,7 @@ npm run test:coverage        # Coverage-Report
 | `KategorienView.swift` | Kategorienliste mit Farbchips, KategorieFormSheet (Name + Farb-Preset + HEX-Input + Sort-Order), Delete-Confirmation | ✅ |
 | `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Tischverwaltung (Tab "Tische"), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
 | `TischverwaltungView.swift` | Tische & Zonen verwalten: Liste, ZoneFormSheet, TischFormSheet (Zone-Picker), Deaktivieren-Confirm, CRUD via TableStore | ✅ |
+| `zettel-frontendTests/` (XCTest-Target) | 41 Tests: ParseCents (Locale/Rundung/Tausenderpunkt), EuroString (inkl. Roundtrip), PaymentLogic (buildPayments-Summeninvariante, Gemischt-Kanten), VatBreakdown (Formelparität mit Backend-vatCalculation.test.ts), ModelDecoding (wörtliche snake_case-Fixtures via `JSONDecoder.cashbox`, inkl. A4-receipt-Block). Lauf: `xcodebuild test -project zettel-frontend.xcodeproj -scheme zettel-frontend -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)'` | ✅ |
 | `SyncManager.swift` | Minimaler Offline-Queue-Trigger: POST /sync/offline-queue bei Online-Wechsel/Foreground/Login (max. 3 Runden), pendingCount @Published. `SyncManager.shared` — dieselbe Instanz wird als EnvironmentObject injiziert und vom OfflineBanner direkt gelesen. Vollausbau Phase 3 | ✅ |
 
 ### Noch nicht implementiert ❌ (SwiftUI)
@@ -340,15 +342,25 @@ src/
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/
-    ├── unit/
-    │   └── vatCalculation.test.ts   -- MwSt-Berechnung + buildVatBreakdown
-    ├── integration/    -- auth, cancellations, devices, export, mixed-payments,
-    │                      modifierGroups, offline-queue, onboarding, orders,
-    │                      payments, products, receipts, receipts-list, reports,
-    │                      sessions, split-bill, stripe-webhooks, tables,
-    │                      tenants, users
+    ├── unit/           -- vatCalculation, splitPartition (validateSplitPartition),
+    │                      cancellationNegation (buildCancellationValues),
+    │                      zReportAggregation (buildZReportData, Mock-Executor),
+    │                      sequences (Mock-Conn), fiskalyPayload (centsToFiskaly,
+    │                      buildAmountsPerVatRate, aggregatePaymentTypes)
+    ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
+    │                      devices, e2e-tagesablauf (kompletter Kassentag),
+    │                      export, mixed-payments, modifierGroups, offline-queue,
+    │                      onboarding, orders, payments, products, receipts,
+    │                      receipts-list, reports, sessions, split-bill,
+    │                      stripe-webhooks, tables, tenants, users
     │                   -- Tenant-Isolation-Tests sind in jeder dieser Dateien
     │                      als eigene it()-Blöcke enthalten
     ├── compliance/     -- receipt-fields (KassenSichV + GoBD Pflichtfelder)
     └── external/       -- fiskaly (Sandbox, nightly)
 ```
+
+**Testkonzept (REQ → UC → TC, Traceability-Matrix): `docs/testkonzept.md`** — neue
+Anforderungen/Regeln dort als REQ eintragen, jeder REQ braucht ≥ 1 TC.
+Für Unit-Tests sind die betroffenen Geld-Funktionen als pure Funktionen exportiert
+(validateSplitPartition, buildCancellationValues, buildZReportData, buildAmountsPerVatRate) —
+neue Geld-Logik demselben Muster folgen lassen: pure Funktion + Unit-Test, Handler ruft auf.
