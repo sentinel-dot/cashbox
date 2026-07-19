@@ -37,10 +37,11 @@ Drei Punkte dazu:
 - **Keine feste Destination.** Die Simulator-Ausstattung unterscheidet sich je Runner-Image, deshalb
   wird sie zur Laufzeit per `simctl … --json` + `jq` ermittelt. Ein fest verdrahtetes
   `name=iPad Pro 11-inch (M5)` würde beim nächsten Image-Update brechen.
-- **`macos-26`, nicht `macos-latest`.** Das Test-Target hat `IPHONEOS_DEPLOYMENT_TARGET = 26.2` und
-  braucht damit Xcode 26 + iOS-26.2-Runtime; `macos-latest` zeigt derzeit auf macOS 15 mit Xcode 16
-  und würde scheitern. Das Image ist bei GitHub noch **Preview** — bewusst akzeptiert. Die saubere
-  Alternative (Test-Target auf 18.2 senken, App-Mindestversion) hängt an `OFFEN.md` T7.
+- **`macos-26`, nicht `macos-latest`.** App **und** Test-Target haben seit T7 (2026-07-20)
+  einheitlich `IPHONEOS_DEPLOYMENT_TARGET = 26.2` — die App ist bewusst iPadOS-26-only. Das braucht
+  Xcode 26 + eine iOS-26-Runtime; `macos-latest` zeigt derzeit auf macOS 15 mit Xcode 16 und würde
+  scheitern. Dass das Image bei GitHub noch **Preview** ist, ist damit kein offener Punkt mehr,
+  sondern Konsequenz der Mindestversion.
 - **Kein Signing.** `CODE_SIGNING_ALLOWED=NO` — Simulator-Tests brauchen keine Zertifikate, damit
   auch keine Apple-Secrets in CI. Erst der TestFlight-Build (S04) braucht das.
 
