@@ -140,6 +140,9 @@ Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, z
 | S4 | **A5: Report-Queries nicht index-fähig** | s. Audit | Nach Pilot |
 | S5 | **Docker Compose** | Onboarding zweiter Entwickler / neues Gerät | Gelegenheit |
 | S6 | **DB-Pool-Sizing + Timeouts prüfen** | Session-Locks serialisieren Zahlungen pro Gerät — bei Multi-Tenant-Last Pool-Größe & `innodb_lock_wait_timeout` bewusst setzen | Vor Go-live |
+| S7 | **Server überlebt `EADDRINUSE` stillschweigend** | `src/index.ts:78` behandelt kein `error`-Event auf `server.listen()`. Beobachtet 2026-07-20: Port war belegt, Prozess lief 2,5 min weiter **ohne auf irgendeinem Port zu lauschen** und ohne sichtbaren Fehler. In Prod heißt das: Deploy meldet „läuft", Kasse ist tot. → `server.on('error')` mit Fatal-Log + Exit 1 | Vor Go-live |
+| S8 | **`/health` sagt nicht, wessen Server antwortet** | Antwort ist generisch (`{status, timestamp}`). Bei belegtem Port antwortet ein fremder Dienst mit 200 und die Diagnose läuft in die Irre (real passiert 2026-07-20). → Feld `service: "cashbox"` + Version in die Antwort | Gelegenheit |
+| S9 | **422-`details` sind englische Zod-Rohtexte** | `validationMiddleware` reicht `result.error.flatten().fieldErrors` durch („Invalid input: expected string…"). iOS zeigt deshalb nur die Feldnamen als Diagnose, nicht *was* falsch ist. → deutsche Messages in den Zod-Schemas (`.min(8, 'Passwort braucht mindestens 8 Zeichen')`) | Nach Pilot |
 
 ---
 
