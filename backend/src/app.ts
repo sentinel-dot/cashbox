@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import pinoHttp from 'pino-http';
 import { apiRateLimit } from './middleware/rateLimitMiddleware.js';
 import { logger } from './logger.js';
+import { captureException } from './sentry.js';
 
 dotenv.config();
 
@@ -90,6 +91,9 @@ app.use((err: any, req: any, res: any, _next: any) => {
   const status = err.status ?? err.statusCode ?? 500;
   if (status >= 500) {
     logger.error({ err, url: req.url, method: req.method, tenant: req.auth?.tenantId }, 'Unhandled error');
+    // Nur 5xx an Sentry — 4xx sind Client-Fehler (falscher PIN, 409 Session zu),
+    // die würden das Monitoring zurauschen. tenant kommt aus dem JWT, nie aus Body/Params.
+    captureException(err, { url: req.url, method: req.method, tenant: req.auth?.tenantId });
   }
   // Kein Stack Trace in Produktion
   res.status(status).json({

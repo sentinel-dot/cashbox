@@ -1,6 +1,32 @@
 import { db } from '../db/index.js';
 
 /**
+ * Aktuelles Datum (YYYY-MM-DD) in der Zeitzone, in der die Berichte bucketen
+ * (`REPORT_TZ` in reportsController: Europe/Berlin).
+ *
+ * NICHT durch `new Date().toISOString().slice(0, 10)` ersetzen: das liefert das
+ * UTC-Datum. Zwischen 00:00 und 02:00 Berliner Zeit (22:00–24:00 UTC) liegt das
+ * Berliner Datum einen Tag vor dem UTC-Datum — ein Test, der Bons „jetzt" anlegt
+ * und dann den UTC-Tag abfragt, bekommt dann korrekterweise 0 zurück und wird rot,
+ * obwohl die Berichtslogik stimmt. Für eine Bar, die über Mitternacht offen hat,
+ * ist die Berliner Bucketierung genau das gewünschte Verhalten.
+ */
+export function berlinDate(d: Date = new Date()): string {
+  // en-CA formatiert als YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
+
+/** Berliner Datum vor `n` Tagen (YYYY-MM-DD). */
+export function berlinDateDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return berlinDate(d);
+}
+
+/**
  * Löscht alle Test-Daten in FK-sicherer Reihenfolge (Kinder vor Eltern).
  * Kein SET foreign_key_checks — damit werden keine Pool-Connections kontaminiert.
  */
