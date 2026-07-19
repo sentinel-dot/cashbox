@@ -85,7 +85,14 @@ gh api -X PUT repos/sentinel-dot/cashbox/branches/main/protection \
 JSON
 ```
 
-Folge: **Direkt-Pushes auf `main` sind blockiert**, Änderungen laufen über PRs.
+Aktiv seit 2026-07-19. Folge: **Änderungen an `main` laufen über PRs**, Force-Pushes und Löschen
+des Branches sind gesperrt, und ein PR ist erst mergebar, wenn der Check grün **und** der Branch
+aktuell ist (`strict: true`).
+
+`enforce_admins` steht bewusst auf `false`: als Repo-Admin kommst du im Notfall (kaputter Runner,
+GitHub-Ausfall) noch an `main` — die Regel ist ein Gate, kein Selbstfesseln. Wer sie nutzt, sollte
+das im Commit begründen.
+
 Bei S02 muss der iOS-Check hier in `contexts` ergänzt werden.
 
 ## Lokal reproduzieren
@@ -108,4 +115,23 @@ mariadb-tzinfo-to-sql /usr/share/zoneinfo | mariadb -u root mysql
 
 ## Nachweis „roter Test → roter PR" (DoD S01)
 
-<!-- S01-NACHWEIS -->
+Durchgeführt am 2026-07-19 auf PR [#1](https://github.com/sentinel-dot/cashbox/pull/1)
+(Branch `ci/s01-github-actions`):
+
+**1. Roter Lauf** — Run `29702114397`. Ein Assert in `unit/vatCalculation.test.ts` wurde absichtlich
+auf `expect(netCents).toBe(999)` gesetzt (korrekt sind 1000 bei `calcVat(1190, '19')`).
+
+| Schritt | Ergebnis |
+|---|---|
+| tzinfo laden + verifizieren | ✅ |
+| Typecheck | ✅ |
+| Test-DB aufsetzen (`db:setup:test` mit `DB_USER_HOST=%`) | ✅ |
+| Unit- + Compliance-Tests | ❌ `AssertionError: expected 1000 to be 999` |
+| Integrationstests | übersprungen |
+
+Check-Status `failure` → PR nicht mergebar. Die Schritte davor bestätigen zugleich, dass
+Grant-Host und Timezone-Tabellen in CI korrekt greifen.
+
+**2. Grüner Lauf** — Run `29702157037`, nach Rücknahme des Asserts: alle Schritte ✅,
+**76 Unit/Compliance (7 Dateien) + 301 Integration (22 Dateien)** — identisch zum lokalen Lauf.
+Laufzeit der Integrationstests in CI: ~39 s.

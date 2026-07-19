@@ -6,6 +6,7 @@ kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
 **Stand:** 2026-07-19 · Suiten: Backend 76 Unit/Compliance + 301 Integration, iOS 41 XCTests — alle grün.
+Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
 
@@ -54,7 +55,7 @@ daraus abgeleiteten Regressionstests — kein Audit ohne Test-Niederschlag.
 
 **Gate M0:** CI blockt rote PRs nachweislich · Sentry empfängt Test-Event · App via TestFlight auf dem Pilot-iPad.
 
-## [ ] S01 — CI Backend (GitHub Actions) — ~0,5–1 d
+## [x] S01 — CI Backend (GitHub Actions) — erledigt 2026-07-19
 **Prompt:**
 > Setze Paket S01 aus ROADMAP.md um: GitHub-Actions-Workflow als PR-Gate für main.
 > Job 1: backend/ — Node LTS, `npx tsc --noEmit`, `npm test`, `npm run test:integration` mit
@@ -64,6 +65,13 @@ daraus abgeleiteten Regressionstests — kein Audit ohne Test-Niederschlag.
 > einen absichtlich kaputten Test in einem Branch pushst und zeigst, dass der PR rot wird.
 
 **DoD:** Workflow läuft auf Push/PR; roter Test → roter PR (nachgewiesen); README-Badge optional.
+
+**Erledigt 2026-07-19:** `.github/workflows/ci.yml` (Job `backend`, MariaDB-11.4-Service-Container,
+tzinfo laden + Guard, `tsc --noEmit` → `db:setup:test` → `npm test` → `test:integration`).
+`setup-db.ts` nimmt jetzt `DB_USER_HOST` (Default `localhost`, CI `%`) — sonst greifen die Grants im
+Service-Container nicht. Nachweis auf PR #1: Run `29702114397` rot (absichtlicher Assert-Fehler,
+Check `failure`), Run `29702157037` grün (76 + 301 Tests). Branch Protection auf `main` aktiv
+(Required Check + kein Force-Push). Doku: `docs/ci.md`. Kein Badge (kein README im Repo).
 
 ## [ ] S02 — CI iOS — ~0,5 d
 **Prompt:**
