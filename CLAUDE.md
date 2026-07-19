@@ -14,6 +14,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
+**Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
 **Bekannte offene Sicherheitslücken:** keine ✅ (Audit #1 + Finanz-Integritäts-Audit #2, beide 2026-07-10: alle kritischen Findings behoben — u.a. Doppel-Storno-Race, Session-Close-Race, cancelOrder-Guard, app_user-DELETE-Grant. Details + verbleibende mittlere Punkte: `OFFEN.md` §1)
 

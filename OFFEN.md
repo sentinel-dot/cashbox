@@ -3,6 +3,7 @@
 **Einzige Quelle für alles Offene.** Stand: 2026-07-19 (nach Test-Offensive: A4/A8 gefixt, T1–T4 komplett — Backend 76 Unit/Compliance + 301 Integration, iOS 41 XCTests. Testkonzept: `docs/testkonzept.md`).
 Erledigtes fliegt raus (Git-History behält es), Neues kommt priorisiert hier rein.
 Spezifikation (DB-Schema, TSE-Flow, Bon-Pflichtfelder): `implementierungsplan.md` §1–15.
+**Abarbeitungsreihenfolge (Session-Pakete S01–S21 + Gates): `ROADMAP.md`** — dort abhaken, hier streichen.
 
 ---
 
