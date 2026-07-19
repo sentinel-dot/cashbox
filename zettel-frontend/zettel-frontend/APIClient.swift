@@ -150,7 +150,8 @@ class APIClient {
 
     private func mapStatusCode(_ code: Int, data: Data) throws {
         guard code >= 400 else { return }
-        let serverMsg = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?.error ?? ""
+        let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
+        let serverMsg = body?.error ?? ""
         switch code {
         case 401:
             // Wenn ein Token vorhanden war → Session abgelaufen → App-weite Abmeldung auslösen
@@ -167,9 +168,16 @@ class APIClient {
         case 409:
             throw AppError.conflict(serverMsg.isEmpty ? "Aktion nicht möglich." : serverMsg)
         case 422:
-            throw AppError.serverError(422, serverMsg.isEmpty ? "Ungültige Eingabe." : serverMsg)
+            // details enthält die Zod-Meldungen (englisch, technisch) — die betroffenen
+            // Feldnamen reichen als Diagnose in failureReason, der Haupttext bleibt deutsch.
+            let fields = (body?.details?.keys).map { Array($0).sorted().joined(separator: ", ") } ?? ""
+            throw AppError.validationFailed(fields)
         case 426:
             throw AppError.serverError(426, "App-Version veraltet — bitte Update installieren.")
+        case 429:
+            throw AppError.rateLimited(serverMsg.isEmpty
+                ? "Zu viele Versuche. Bitte kurz warten."
+                : serverMsg)
         default:
             let fallback = "Unerwarteter Fehler (\(code))."
             throw AppError.serverError(code, serverMsg.isEmpty ? fallback : serverMsg)
@@ -190,6 +198,8 @@ struct EmptyResponse: Decodable {}
 
 private struct APIErrorBody: Decodable {
     let error: String
+    /// Nur bei 422 gesetzt (validationMiddleware): Feldname → Zod-Meldungen.
+    let details: [String: [String]]?
 }
 
 // MARK: - JSON Konfiguration (snake_case ↔ camelCase)

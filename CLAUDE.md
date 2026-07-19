@@ -234,7 +234,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 
 ## Implementierungsstand SwiftUI Frontend
 
-**Design v3.1 (2026-07-11, Impeccable-Pass):** Kiosk-App — `TARGETED_DEVICE_FAMILY=2` (iPad-only), `UIRequiresFullScreen=YES`, nur Landscape. Dynamic Type app-weit über `.dsFont(…)` (Root-Deckel AX1 in ContentView), Appearance System/Hell/Dunkel (`DSAppearance`, Default System, app-weit in ContentView angewandt — **keine per-View `preferredColorScheme` mehr außer Previews**), app-weiter `.tint(DS.C.acc)`, Anrede durchgängig Du. Fonts: `.dsFont` ist die einzige Font-API (`DS.F`/`DS.T`/`.jakarta()` gelöscht, Jakarta-TTFs entfernt).
+**Design v3.1 (2026-07-11, Impeccable-Pass):** Kiosk-App — `TARGETED_DEVICE_FAMILY=2` (iPad-only, App **und** Test-Target), `IPHONEOS_DEPLOYMENT_TARGET=26.2` in allen vier Build-Configs (T7-Entscheidung 2026-07-20: nur aktuelles iPadOS ab 26 — deshalb braucht CI `macos-26`), `UIRequiresFullScreen=YES`, nur Landscape. Dynamic Type app-weit über `.dsFont(…)` (Root-Deckel AX1 in ContentView), Appearance System/Hell/Dunkel (`DSAppearance`, Default System, app-weit in ContentView angewandt — **keine per-View `preferredColorScheme` mehr außer Previews**), app-weiter `.tint(DS.C.acc)`, Anrede durchgängig Du. Fonts: `.dsFont` ist die einzige Font-API (`DS.F`/`DS.T`/`.jakarta()` gelöscht, Jakarta-TTFs entfernt).
 
 ### Fertig implementiert ✅
 | Screen / File | Inhalt | Stand |

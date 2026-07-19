@@ -92,12 +92,11 @@ jobs:
 
   ios:
     name: iOS (xcodebuild test)
-    # macos-26 ist nötig, nicht Geschmackssache: das Test-Target hat
-    # IPHONEOS_DEPLOYMENT_TARGET = 26.2, das braucht Xcode 26 + eine
-    # iOS-26.2-Simulator-Runtime. macos-latest zeigt derzeit auf macOS 15
-    # (Xcode 16) und würde scheitern. Das Image ist bei GitHub noch als
-    # Preview markiert — bewusst akzeptiert (S02), Alternative wäre, das
-    # Test-Target auf 18.2 zu senken (OFFEN.md T7).
+    # macos-26 ist nötig, nicht Geschmackssache: App- und Test-Target haben
+    # IPHONEOS_DEPLOYMENT_TARGET = 26.2 (T7-Entscheidung 2026-07-20: die App
+    # ist iPadOS-26-only), das braucht Xcode 26 + eine iOS-26-Simulator-
+    # Runtime. macos-latest zeigt derzeit auf macOS 15 (Xcode 16) und würde
+    # scheitern. Preview-Status des Images ist damit bewusst in Kauf genommen.
     runs-on: macos-26
 
     defaults:

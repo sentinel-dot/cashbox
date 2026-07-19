@@ -88,6 +88,8 @@ committet (Voraussetzung — `xcuserdata/` ist gitignored). Nachweis auf PR #2: 
 grün (40 Tests), Run `29703020329` rot bei absichtlich kaputtem XCTest, Backend-Job im selben Lauf
 grün. Beide Checks in der Branch Protection. **Neuer Befund → `OFFEN.md` T7:** Test-Target verlangt
 iOS 26.2, App nur 18.2 — bindet CI ans Preview-Image `macos-26`, vor S04 zu klären.
+**T7 erledigt 2026-07-20:** App-Mindestversion auf iOS 26.2 angehoben (statt Test-Target zu senken),
+Test-Target zusätzlich auf `TARGETED_DEVICE_FAMILY = 2`; 40 XCTests grün auf iOS 26.3.
 
 ## [x] S03 — Sentry + Prozess-Härtung (S1 + B6 + B7) — erledigt 2026-07-19
 **Prompt:**
@@ -120,6 +122,7 @@ den Wert von S01 untergräbt. Berichtslogik war korrekt, nur die Tests lagen fal
 
 ## [ ] S04 — Pilot-Start (User-Aktionen, ohne Claude-Session)
 - [x] N7: Apple Developer Account — vorhanden (2026-07-19 bestätigt)
+- [ ] **Vorab:** Pilot-iPad auf iPadOS 26 prüfen/aktualisieren — die App verlangt seit T7 mindestens 26.2
 - [ ] TestFlight-Build hochladen, Shishabar-iPad einladen
 - [ ] Guided Access auf dem Pilot-iPad einrichten (Kiosk, siehe OFFEN.md §6 Betriebshinweis)
 - [ ] Schriftliche Pilot-Vereinbarung (Vorlage: N8) unterschreiben lassen

@@ -10,6 +10,8 @@ enum AppError: LocalizedError {
     case noActiveSession
     case wrongPin
     case conflict(String)
+    case validationFailed(String)   // 422 — String = betroffene Felder (Diagnose)
+    case rateLimited(String)        // 429 mit Server-Nachricht (bereits nutzerfertig, deutsch)
     case networkError(String)
     case serverError(Int, String)
     case fiskalyError(String)
@@ -31,6 +33,13 @@ enum AppError: LocalizedError {
             return "Falsche PIN. Bitte versuch es noch einmal."
         case .conflict(let msg):
             return msg
+        case .validationFailed:
+            return "Bitte prüfe deine Eingaben."
+        case .rateLimited(let msg):
+            // Backend liefert bereits einen fertigen deutschen Satz inkl. Wartezeit —
+            // durchreichen statt durch "versuch es noch einmal" ersetzen: erneutes
+            // Drücken verlängert das Rate-Limit-Fenster nur.
+            return msg
         case .networkError:
             return "Keine Verbindung zum Server. Prüfe dein WLAN und versuch es noch einmal."
         case .serverError:
@@ -45,6 +54,7 @@ enum AppError: LocalizedError {
     /// Technisches Detail für Support/Diagnose (sekundär anzeigen, nie als Haupttext)
     var failureReason: String? {
         switch self {
+        case .validationFailed(let fields):   return fields.isEmpty ? nil : "Betroffen: \(fields)"
         case .networkError(let msg):          return msg
         case .serverError(let code, let msg): return "Serverfehler \(code): \(msg)"
         case .fiskalyError(let msg):          return msg
