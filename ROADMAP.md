@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-19 · Suiten: Backend 76 Unit/Compliance + 301 Integration, iOS 40 XCTests — alle grün.
+**Stand:** 2026-07-19 · Suiten: Backend 84 Unit/Compliance + 304 Integration, iOS 40 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -89,7 +89,7 @@ grün (40 Tests), Run `29703020329` rot bei absichtlich kaputtem XCTest, Backend
 grün. Beide Checks in der Branch Protection. **Neuer Befund → `OFFEN.md` T7:** Test-Target verlangt
 iOS 26.2, App nur 18.2 — bindet CI ans Preview-Image `macos-26`, vor S04 zu klären.
 
-## [ ] S03 — Sentry + Prozess-Härtung (S1 + B6 + B7) — ~0,5 d
+## [x] S03 — Sentry + Prozess-Härtung (S1 + B6 + B7) — erledigt 2026-07-19
 **Prompt:**
 > Setze Paket S03 aus ROADMAP.md um (OFFEN.md S1, B6, B7): (1) `@sentry/node` einbauen,
 > captureException im globalen Error-Handler in `backend/src/app.ts`, Tenant aus JWT als Tag,
@@ -100,8 +100,21 @@ iOS 26.2, App nur 18.2 — bindet CI ans Preview-Image `macos-26`, vor S04 zu kl
 
 **DoD:** Test-Event in Sentry sichtbar; `kill -TERM` beendet sauber (Log zeigt Drain); Suiten grün.
 
+**Erledigt 2026-07-19:** `src/sentry.ts` (`@sentry/node` v10 — nur 5xx, Tags tenant/method/source,
+keine PII; ohne `SENTRY_DSN` komplett aus), `src/shutdown.ts` (`createShutdown` mit DI: Drain →
+Flush → Pools, idempotent, 10-s-Notbremse), `index.ts` auf Pino + SIGTERM/SIGINT/
+unhandledRejection/uncaughtException, `.env.example` um ALLOWED_ORIGIN/LOG_LEVEL/SENTRY_DSN
+ergänzt. Auch der fire-and-forget `console.error` im Stripe-Webhook geht jetzt an Log + Sentry
+(fehlgeschlagener audit_log-INSERT ist GoBD-relevant). Tests: **+8 Unit** (`unit/shutdown`),
+**+3 Integration** (`integration/errorHandler`) → 84 + 304 grün. REQ-OPS-001…004 im Testkonzept.
+Nachweise in `docs/betrieb.md`: SIGTERM-Log mit Drain (Exit 0) und Keep-Alive-Fall (42 ms statt
+10-s-Notbremse — belegt `closeIdleConnections()`); Sentry-Envelope gegen lokalen Ingest verifiziert.
+**Neuer Befund → `OFFEN.md` T8:** `npm run dev` (ts-node/CJS) startet nicht — Bestandsproblem.
+**DoD-Rest beim User:** Sentry-Projekt anlegen, echten DSN eintragen, Test-Event im Dashboard
+sichten, Alert-Regel setzen.
+
 ## [ ] S04 — Pilot-Start (User-Aktionen, ohne Claude-Session)
-- [ ] N7: Apple Developer Account (99 €/Jahr — **Vorlauf, sofort beantragen**)
+- [x] N7: Apple Developer Account — vorhanden (2026-07-19 bestätigt)
 - [ ] TestFlight-Build hochladen, Shishabar-iPad einladen
 - [ ] Guided Access auf dem Pilot-iPad einrichten (Kiosk, siehe OFFEN.md §6 Betriebshinweis)
 - [ ] Schriftliche Pilot-Vereinbarung (Vorlage: N8) unterschreiben lassen

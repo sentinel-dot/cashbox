@@ -291,6 +291,20 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 - 4xx → `warn`, 5xx → `error`, 2xx → `info` — `/health` wird nicht geloggt
 - Globaler Error Handler nutzt `logger.error` statt `console.error`
 
+### Backend — Monitoring & Shutdown (implementiert ✅, Details `docs/betrieb.md`)
+- **Sentry** (`src/sentry.ts`, `@sentry/node` v10) — `captureException` im globalen Error-Handler.
+  **Nur 5xx** wird gemeldet (4xx = Normalbetrieb: falscher PIN, 409, 422), Kontext ist
+  `tenant` (aus JWT), `method`, `url`. **Keine PII**: keine Bodies, Header, IPs, Namen oder
+  Beträge (`sendDefaultPii: false`, kein Tracing) — AVV-relevant, beim Erweitern prüfen.
+  Ohne `SENTRY_DSN` ist Sentry komplett aus und alle Aufrufe sind No-Ops.
+  `src/sentry.ts` **muss der erste Import in `index.ts` bleiben** (lädt eigene .env).
+- **Shutdown** (`src/shutdown.ts`) — Reihenfolge **Server drainen → Sentry flushen →
+  DB-Pools schließen → exit**, idempotent gegen ein zweites Signal, 10-s-Notbremse bei
+  hängendem Drain. Ausgelöst von SIGTERM/SIGINT sowie `unhandledRejection`/
+  `uncaughtException` (Exit 1). `closeIdleConnections()` ist Pflicht — iPads halten
+  Keep-Alive-Sockets offen, sonst läuft jeder Deploy in die Notbremse.
+  Prozess-Manager braucht ≥ 15 s Kulanz (PM2 `kill_timeout`, systemd `TimeoutStopSec`).
+
 ### Auth — kritische Backend-Details
 - **Token-Modell:** Access-JWT 15 min (`JWT_EXPIRY`), Refresh-Token 7 d rotierend (`JWT_REFRESH_EXPIRY`), **absolutes Session-Limit 16 h** (`SESSION_MAX_HOURS`, Schicht-Modell: 1× Login pro Tag). `session_start`-Claim im Refresh-Token wird bei Rotation unverändert weitergereicht; `/auth/refresh` gibt 401 wenn Limit überschritten oder Claim fehlt, Token-`exp` ist zusätzlich auf `session_start + Limit` gedeckelt. iOS zeigt danach automatisch das „Sitzung abgelaufen"-Banner (forceLogout)
 - `POST /auth/login` erwartet **auch `device_token`** — Gerät muss registriert sein (via `/onboarding/register` oder `/devices/register`)
@@ -307,7 +321,9 @@ scripts/
 └── setup-db.ts         -- DB + User + Grants + Migrations (dev/test)
 src/
 ├── app.ts
-├── index.ts
+├── index.ts           -- Start, Signal-Handler, Prozess-Ende (sentry.js zuerst importieren!)
+├── sentry.ts          -- Error-Monitoring (No-Op ohne SENTRY_DSN)
+├── shutdown.ts        -- createShutdown(): Drain → Flush → Pools (pure, DI-testbar)
 ├── routes/             -- auth, devices, export, modifierGroups, onboarding, orders,
 │                          products, receipts, reports, sessions, sync, tables,
 │                          tenants, users, webhooks
@@ -351,13 +367,15 @@ src/
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/
-    ├── unit/           -- vatCalculation, splitPartition (validateSplitPartition),
+    ├── unit/           -- shutdown (createShutdown: Reihenfolge/Idempotenz/Notbremse),
+    │                      vatCalculation, splitPartition (validateSplitPartition),
     │                      cancellationNegation (buildCancellationValues),
     │                      zReportAggregation (buildZReportData, Mock-Executor),
     │                      sequences (Mock-Conn), fiskalyPayload (centsToFiskaly,
     │                      buildAmountsPerVatRate, aggregatePaymentTypes)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
     │                      devices, e2e-tagesablauf (kompletter Kassentag),
+    │                      errorHandler (5xx→Sentry, 4xx nicht, kein Leak in Prod),
     │                      export, mixed-payments, modifierGroups, offline-queue,
     │                      onboarding, orders, payments, products, receipts,
     │                      receipts-list, reports, sessions, split-bill,

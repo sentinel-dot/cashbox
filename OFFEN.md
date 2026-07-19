@@ -53,8 +53,8 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 | B3 | **Passwort-Reset** | `POST /auth/forgot-password` + `/reset-password`: Token (einmalig, 1h, gehasht in DB) per Mail, Rate-Limit, kein User-Enumeration-Leak (immer 200) | 1 d |
 | B4 | **`versionMiddleware`** | `X-App-Version`-Header, semver-Vergleich gegen `devices.min_app_version` → 426; iOS zeigt Update-Hinweis | 0,5 d |
 | B5 | **`GET /tenants/me` Subscription-Details** | `trial_expires_at`, `subscription_current_period_end` in Response; iOS EinstellungenView zeigt Trial-Restzeit + Banner ab Tag 10 | 0,5 d |
-| B6 | **Prozess-Härtung** | SIGTERM-Handler (Server drainen, DB-Pools schließen), `unhandledRejection`/`uncaughtException`-Handler (loggen + kontrolliert beenden — Node crasht sonst hart), `index.ts` auf Pino statt console | 0,5 d |
-| B7 | **`.env.example` vervollständigen** | `ALLOWED_ORIGIN` (CORS Prod), `LOG_LEVEL` — Code liest beide, Example kennt sie nicht | 10 min |
+| B6 | ~~**Prozess-Härtung**~~ | Erledigt 2026-07-19 (S03): `src/shutdown.ts` (Drain → Sentry-Flush → Pools, idempotent, 10-s-Notbremse), SIGTERM/SIGINT + `unhandledRejection`/`uncaughtException` in `index.ts`, Pino statt console. Nachweis-Protokolle in `docs/betrieb.md` §2. **Achtung bei S20:** PM2 `kill_timeout: 15000` / systemd `TimeoutStopSec=15`, sonst wirkungslos | ✅ |
+| B7 | ~~**`.env.example` vervollständigen**~~ | Erledigt 2026-07-19 (S03): `ALLOWED_ORIGIN`, `LOG_LEVEL`, `SENTRY_DSN` ergänzt | ✅ |
 | B8 | **A3 + A6 + A9** aus dem Audit | s.o. | 1 d |
 
 ---
@@ -69,7 +69,7 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 | N4 | **Stripe Live** | Live-Keys, Webhook-Endpoint im Dashboard, Preis-IDs für 3 Pläne |
 | N5 | **Hosting** | Hetzner, Nginx + SSL, PM2 (Cluster erst nach Rate-Limit-Store-Fix §7), GitHub Actions CI/CD (Suites + tsc als Gate) |
 | N6 | **MariaDB Prod-Setup** | Timezone-Tabellen laden (`mariadb-tzinfo-to-sql`, sonst liefern alle Berichte 0!), DB-User nach setup-db.ts-Vorbild inkl. **kein DELETE für app_user** |
-| N7 | **Apple Developer Account** | 99 €/Jahr, TestFlight für Pilot |
+| N7 | ~~**Apple Developer Account**~~ | ✅ vorhanden (2026-07-19). Nächster Schritt: TestFlight-Build — vorher T7 klären (Test-Target iOS 26.2 vs. App 18.2 vs. iPadOS auf dem Pilot-iPad) |
 | N8 | **Rechtliches** | AGB + Haftung (Anwalt), AVV-Vorlage, **Verfahrensdokumentation** (GoBD-Pflicht vor Go-live), schriftliche Pilot-Vereinbarung, Datenhaltung nach Kündigung |
 | N9 | **Steuerberater** | receipt_sequences-Konzept absegnen, Offline-TSE-Handling absegnen; Trinkgeld (vor Phase 3), Außer-Haus-MwSt (vor Phase 4) |
 
@@ -124,6 +124,7 @@ Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, z
 |---|---|---|---|
 | T5 | ~~**CI**~~ | Erledigt 2026-07-19: Backend-Job (S01) + iOS-Job (S02) in `.github/workflows/ci.yml`, beide Required Status Checks auf `main`. Doku `docs/ci.md` | ✅ |
 | T7 | **Test-Target verlangt iOS 26.2, App nur 18.2** | `zettel-frontend.xcodeproj`: `IPHONEOS_DEPLOYMENT_TARGET` ist projektweit 18.2, im Target `zettel-frontendTests` aber 26.2 (vermutlich Artefakt der Target-Erstellung unter Xcode 26). Folge: (1) die 40 XCTests laufen nie auf der Mindestversion, die die App selbst unterstützt — ein iOS-18-Regression würde nicht auffallen; (2) CI ist dadurch an das `macos-26`-Image gebunden, das GitHub noch als **Preview** führt (S02 akzeptiert das bewusst). Entscheidung: entweder Test-Target auf 18.2 senken (dann läuft CI auf dem GA-Image `macos-15`, muss aber gegen das ältere SDK durchbauen) oder App-Mindestversion bewusst anheben. Vor dem TestFlight-Build klären — hängt davon ab, welches iPadOS auf dem Pilot-iPad läuft | Vor S04 (TestFlight) |
+| T8 | **`npm run dev` startet nicht** | `ts-node src/index.ts` scheitert im CommonJS-Modus an den `.js`-Endungen der relativen Imports (`Cannot find module './sentry.js'`) — betrifft jeden Import in `index.ts`, nicht nur den neuen. Bestandsproblem, bei S03 aufgefallen, weil dort erstmals lokal gestartet wurde. Tests laufen über vitest (löst korrekt auf), Produktion über `npm run build` + `npm start` — deshalb bisher unbemerkt. Fix: `tsx` statt `ts-node` als dev-Runner (löst `.js`→`.ts` auf), oder ts-node ESM-Loader. Nicht dringend, aber jeder neue Entwickler stolpert sofort darüber (vgl. S5 Docker Compose) | Gelegenheit / vor S5 |
 | T6 | **Backend: `any` eliminieren (237 Stellen, davon 160 `db.execute<any[]>`)** | Request-Seite ist via Zod schon typisiert (`z.infer`), die DB-Seite nicht. Plan: (1) Row-Interfaces pro Tabelle in `src/db/types.ts` (`OrderRow`, `ReceiptRow`, …) und `db.execute<OrderRow[]>` — Achtung: mysql2-Generics sind reine Casts, keine Runtime-Prüfung, daher Spalten-Drift weiter durch Integrationstests absichern; (2) `ResultSetHeader` statt `<any>` für INSERT/UPDATE-Ergebnisse; (3) `catch (err: unknown)` + Narrowing statt `err: any`; (4) ESLint `@typescript-eslint/no-explicit-any: error` als Ratchet, Geld-Pfade zuerst (payments, splitBill, cancellations, sessions). iOS ist sauber (nur KeychainHelper nutzt `[String: Any]` — Security-C-API, unvermeidbar) | Vor Go-live, schrittweise |
 
 ---
@@ -132,7 +133,7 @@ Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, z
 
 | # | Punkt | Warum | Prio |
 |---|---|---|---|
-| S1 | **Error-Monitoring (Sentry)** | Bugs blockieren direkt Einnahmen des Kunden; stdout-Logs liest niemand. `@sentry/node` + captureException im Error-Handler, ~20 min | Vor Go-live |
+| S1 | ~~**Error-Monitoring (Sentry)**~~ | Erledigt 2026-07-19 (S03): `src/sentry.ts` (`@sentry/node` v10), captureException im globalen Error-Handler — nur 5xx, Kontext tenant/url/method, keine PII. Ohne `SENTRY_DSN` komplett aus. Doku `docs/betrieb.md` §1. **Rest-Aufgabe User:** Sentry-Projekt anlegen, DSN in Prod-`.env`, Alert-Regel setzen | ✅ |
 | S2 | **Rate-Limit: in-memory Store** | Reset bei Restart, nicht Cluster-fähig (PM2), per-IP statt per-Tenant (NAT-Problem) → Redis-Store + keyGenerator nach tenantMiddleware | Vor Multi-Instanz |
 | S3 | **subscriptionMiddleware: DB-Query pro Request** | Status in JWT-Claim, DB nur bei `trial` | Nach Pilot |
 | S4 | **A5: Report-Queries nicht index-fähig** | s. Audit | Nach Pilot |

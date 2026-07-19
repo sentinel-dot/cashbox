@@ -72,6 +72,15 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-CI-002 | CI läuft gegen eine echte MariaDB mit geladenen Timezone-Tabellen; fehlen sie, bricht der Lauf ab statt Berichte still mit 0 zu testen | CLAUDE.md Betriebshinweis |
 | REQ-CI-003 | Die iOS-XCTest-Suite ist Teil desselben Gates; das Scheme ist geteilt und die Simulator-Destination wird zur Laufzeit ermittelt (Runner-Images variieren) | ROADMAP S02 |
 
+### Betrieb / Monitoring (REQ-OPS)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-OPS-001 | Der Prozess fährt auf SIGTERM/SIGINT kontrolliert herunter: laufende Requests zu Ende (Drain), dann Monitoring flushen, dann DB-Pools schließen. Ein Deploy darf keine angefangene Bon-Transaktion abreißen. Hängt der Drain, greift eine Notbremse statt eines späteren SIGKILL | ROADMAP S03 / OFFEN.md B6 |
+| REQ-OPS-002 | 5xx werden ans Error-Monitoring gemeldet (Sentry), 4xx nicht; Kontext ist tenant_id (aus JWT), URL und Methode — keine Bodies, Header oder Beträge (DSGVO/AVV) | ROADMAP S03 / OFFEN.md S1 |
+| REQ-OPS-003 | `unhandledRejection`/`uncaughtException` beenden den Prozess kontrolliert statt Node hart crashen zu lassen — vorher loggen und an Sentry melden | ROADMAP S03 / OFFEN.md B6 |
+| REQ-OPS-004 | In Production erreicht kein Stack Trace / keine interne Fehlermeldung den Client | app.ts |
+
 ---
 
 ## 2. Use Cases (Kassenalltag)
@@ -93,6 +102,8 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-13 | Betriebsprüfung: DSFinV-K-Export | GOBD-001…011 |
 | UC-14 | Preis ändern (GoBD-Historie) | GOBD-008 |
 | UC-15 | Offline-Betrieb / TSE-Nachsignierung | TSE-001/005 |
+| UC-OPS-01 | Deploy/Neustart während des Betriebs (SIGTERM, laufende Zahlung) | OPS-001/003 |
+| UC-OPS-02 | Serverfehler beim Kunden — wird sichtbar, ohne dass jemand Logs liest | OPS-002/004 |
 
 ---
 
@@ -130,6 +141,10 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | CI-001 | alle | **TC-CI-001**: PR mit absichtlich rotem Unit-Test → Check `backend` rot, PR nicht mergebar (Nachweis-Protokoll in `docs/ci.md`) |
 | CI-002 | UC-09/13 | **TC-CI-002**: Guard-Step „Timezone-Tabellen verifizieren" in `.github/workflows/ci.yml` — `CONVERT_TZ` NULL ⇒ Job-Abbruch |
 | CI-003 | alle iOS-UCs | **TC-CI-003**: PR mit absichtlich rotem XCTest → Check `iOS (xcodebuild test)` rot (Nachweis-Protokoll in `docs/ci.md`) |
+| OPS-001 | UC-OPS-01 | **TC-U unit/shutdown.test.ts** (Reihenfolge Drain→Flush→Pools, Idempotenz bei zweitem Signal, Exit-Code bei Pool-Fehler, Notbremse bei hängendem Drain); **TC-M Manuell**: `kill -TERM` gegen laufenden Server, Log zeigt Drain (Protokoll in `docs/betrieb.md`) |
+| OPS-002 | UC-OPS-02 | **TC-I integration/errorHandler.test.ts** (5xx → captureException mit tenant/url/method; 4xx → nicht gemeldet); **TC-M Manuell**: Envelope-Nachweis gegen lokalen Ingest (`docs/betrieb.md`) |
+| OPS-003 | UC-OPS-01 | abgedeckt über OPS-001 (derselbe Shutdown-Pfad, Exit-Code 1); Verdrahtung der Handler: `src/index.ts` |
+| OPS-004 | UC-OPS-02 | **TC-I integration/errorHandler.test.ts** (Production: `error` == „Interner Serverfehler.", kein Leak) |
 
 ---
 
