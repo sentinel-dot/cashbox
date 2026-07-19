@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { db } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
+import { logger } from '../logger.js';
+import { captureException } from '../sentry.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -275,7 +277,14 @@ export async function stripeWebhook(req: Request, res: Response): Promise<void> 
       entityType: 'tenant',
       entityId:   pendingAudit.tenantId,
       diff:       pendingAudit.diff,
-    }).catch(console.error); // fire-and-forget: Audit darf Webhook-Response nicht blockieren
+    }).catch((err: unknown) => {
+      // fire-and-forget: Audit darf die Webhook-Response nicht blockieren (Stripe
+      // retried sonst). Ein fehlgeschlagener audit_log-INSERT ist aber GoBD-relevant
+      // und darf nicht still nach stdout verschwinden → Log + Sentry.
+      logger.error({ err, tenant: pendingAudit.tenantId, action: pendingAudit.action },
+        'audit_log-INSERT nach Stripe-Webhook fehlgeschlagen');
+      captureException(err, { tenant: pendingAudit.tenantId, source: 'stripe-webhook-audit' });
+    });
   }
 
   res.json({ received: true });
