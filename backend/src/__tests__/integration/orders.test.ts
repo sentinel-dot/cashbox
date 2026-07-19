@@ -168,6 +168,78 @@ describe('GET /orders/:id', () => {
     expect(res.body.total_cents).toBe(3000); // 1500 × 2
   });
 
+  it('receipt ist null solange Order offen', async () => {
+    const orderId = await createOrderHelper(token);
+    await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 1 });
+
+    const res = await request(app).get(`/orders/${orderId}`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.receipt).toBeNull();
+  });
+
+  it('liefert receipt-Block nach Bezahlung (A4-Recovery)', async () => {
+    const orderId = await createOrderHelper(token);
+    await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 2 });
+
+    const payRes = await request(app)
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ method: 'cash', amount_cents: 3000 });
+    expect(payRes.status).toBe(201);
+
+    const res = await request(app).get(`/orders/${orderId}`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('paid');
+    // Shape == payOrder-Response, damit iOS direkt PaymentResult decodiert
+    expect(res.body.receipt).toMatchObject({
+      receipt_id:        payRes.body.receipt_id,
+      receipt_number:    payRes.body.receipt_number,
+      total_gross_cents: 3000,
+      vat_7_net_cents:   0,
+      vat_7_tax_cents:   0,
+      vat_19_net_cents:  payRes.body.vat_19_net_cents,
+      vat_19_tax_cents:  payRes.body.vat_19_tax_cents,
+      payments:          [{ method: 'cash', amount_cents: 3000 }],
+    });
+    expect(typeof res.body.receipt.tse_pending).toBe('boolean');
+    // Netto + Steuer == Brutto (Cent-genau)
+    expect(res.body.receipt.vat_19_net_cents + res.body.receipt.vat_19_tax_cents).toBe(3000);
+  });
+
+  it('receipt ist null nach Split-Zahlung (kein Einzel-Bon zuordenbar)', async () => {
+    const orderId = await createOrderHelper(token);
+    const item1 = await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 1 });
+    const item2 = await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 1 });
+
+    const splitRes = await request(app)
+      .post(`/orders/${orderId}/pay/split`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        splits: [
+          { order_item_ids: [item1.body.id], payments: [{ method: 'cash', amount_cents: 1500 }] },
+          { order_item_ids: [item2.body.id], payments: [{ method: 'card', amount_cents: 1500 }] },
+        ],
+      });
+    expect(splitRes.status).toBe(201);
+
+    const res = await request(app).get(`/orders/${orderId}`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('paid');
+    expect(res.body.receipt).toBeNull();
+  });
+
   it('Tenant-Isolation: kann Order anderer Tenants nicht lesen', async () => {
     const [t2] = await db.execute(`INSERT INTO tenants (name, address, plan, subscription_status) VALUES ('B','X','starter','active')`) as any;
     await db.execute(`INSERT INTO receipt_sequences (tenant_id, last_number) VALUES (?,0)`, [t2.insertId]);

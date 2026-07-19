@@ -152,6 +152,47 @@ export async function getOrder(req: Request, res: Response): Promise<void> {
   const total_cents = items.reduce((s: number, i: any) => s + i.subtotal_cents, 0);
 
   const o = rows[0];
+
+  // Bezahlt? → Bon mitliefern (A4: Client kann nach 409/Timeout-Retry den Bon anzeigen).
+  // Feldnamen identisch zur payOrder-Response, damit iOS direkt PaymentResult decodiert.
+  // ORDER BY id ASC: bei stornierter Order ist der Original-Bon die erste active-Zeile.
+  let receipt: Record<string, unknown> | null = null;
+  if (o.status === 'paid') {
+    const [receiptRows] = await db.execute<any[]>(
+      `SELECT id, receipt_number, total_gross_cents,
+              vat_7_net_cents, vat_7_tax_cents, vat_19_net_cents, vat_19_tax_cents,
+              tse_pending
+       FROM receipts
+       WHERE order_id = ? AND tenant_id = ? AND status = 'active' AND is_split_receipt = FALSE
+       ORDER BY id ASC
+       LIMIT 1`,
+      [orderId, tenantId]
+    );
+    if (receiptRows.length > 0) {
+      const r = receiptRows[0];
+      // payments hat keine tenant_id-Spalte → Tenant-Isolation über JOIN receipts
+      const [paymentRows] = await db.execute<any[]>(
+        `SELECT p.method, p.amount_cents
+         FROM payments p
+         JOIN receipts rc ON rc.id = p.receipt_id
+         WHERE p.receipt_id = ? AND rc.tenant_id = ?
+         ORDER BY p.id ASC`,
+        [r.id, tenantId]
+      );
+      receipt = {
+        receipt_id:        r.id,
+        receipt_number:    r.receipt_number,
+        total_gross_cents: r.total_gross_cents,
+        vat_7_net_cents:   r.vat_7_net_cents,
+        vat_7_tax_cents:   r.vat_7_tax_cents,
+        vat_19_net_cents:  r.vat_19_net_cents,
+        vat_19_tax_cents:  r.vat_19_tax_cents,
+        payments:          paymentRows.map((p: any) => ({ method: p.method, amount_cents: p.amount_cents })),
+        tse_pending:       Boolean(r.tse_pending),
+      };
+    }
+  }
+
   res.json({
     id:             o.id,
     status:         o.status,
@@ -163,6 +204,7 @@ export async function getOrder(req: Request, res: Response): Promise<void> {
     table: o.table_id ? { id: o.table_id, name: o.table_name } : null,
     items,
     total_cents,
+    receipt,
   });
 }
 
