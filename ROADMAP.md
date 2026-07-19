@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-19 · Suiten: Backend 76 Unit/Compliance + 301 Integration, iOS 41 XCTests — alle grün.
+**Stand:** 2026-07-19 · Suiten: Backend 76 Unit/Compliance + 301 Integration, iOS 40 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
