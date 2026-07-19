@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import app from '../../app.js';
 import { db } from '../../db/index.js';
+import { berlinDate } from '../testHelpers.js';
 import type { AuthPayload } from '../../middleware/authMiddleware.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -117,7 +118,7 @@ describe('POST /receipts/:id/cancel', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ reason: 'Reklamation' });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = berlinDate();
     const res = await request(app)
       .get(`/reports/daily?date=${today}`)
       .set('Authorization', `Bearer ${token}`);

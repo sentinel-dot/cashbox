@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import app from '../../app.js';
 import { db } from '../../db/index.js';
+import { berlinDate, berlinDateDaysAgo } from '../testHelpers.js';
 import type { AuthPayload } from '../../middleware/authMiddleware.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -99,7 +100,8 @@ async function insertPaidReceipt(
   return { receiptId, orderId, receiptNumber };
 }
 
-const TODAY = new Date().toISOString().slice(0, 10);
+// Berliner Datum — die Berichte bucketen via CONVERT_TZ nach Europe/Berlin (s. berlinDate)
+const TODAY = berlinDate();
 
 // ─── GET /reports/daily ───────────────────────────────────────────────────────
 
@@ -162,10 +164,8 @@ describe('GET /reports/daily', () => {
 
   it('403 wenn Starter-Plan zu weit zurückschaut', async () => {
     const { token: starterToken } = await setup('starter');
-    const old = new Date();
-    old.setDate(old.getDate() - 60);
     const res = await request(app)
-      .get(`/reports/daily?date=${old.toISOString().slice(0, 10)}`)
+      .get(`/reports/daily?date=${berlinDateDaysAgo(60)}`)
       .set('Authorization', `Bearer ${starterToken}`);
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/Plan-Limit/);
@@ -211,9 +211,7 @@ describe('GET /reports/summary', () => {
   });
 
   it('aggregiert korrekt über mehrere Tage', async () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const YESTERDAY = yesterday.toISOString().slice(0, 10);
+    const YESTERDAY = berlinDateDaysAgo(1);
 
     await insertPaidReceipt(tenantId, sessionId, deviceId, userId, { vat19GrossCents: 2500, dateOverride: YESTERDAY });
     await insertPaidReceipt(tenantId, sessionId, deviceId, userId, { vat19GrossCents: 1190, dateOverride: TODAY });
@@ -240,10 +238,8 @@ describe('GET /reports/summary', () => {
   });
 
   it('422 wenn from nach to liegt', async () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
     const res = await request(app)
-      .get(`/reports/summary?from=${TODAY}&to=${yesterday.toISOString().slice(0, 10)}`)
+      .get(`/reports/summary?from=${TODAY}&to=${berlinDateDaysAgo(1)}`)
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(422);
     expect(res.body.error).toMatch(/from/);
@@ -251,10 +247,8 @@ describe('GET /reports/summary', () => {
 
   it('403 wenn Starter-Plan zu weit zurückschaut', async () => {
     const { token: starterToken } = await setup('starter');
-    const old = new Date();
-    old.setDate(old.getDate() - 60);
     const res = await request(app)
-      .get(`/reports/summary?from=${old.toISOString().slice(0, 10)}&to=${TODAY}`)
+      .get(`/reports/summary?from=${berlinDateDaysAgo(60)}&to=${TODAY}`)
       .set('Authorization', `Bearer ${starterToken}`);
     expect(res.status).toBe(403);
   });
