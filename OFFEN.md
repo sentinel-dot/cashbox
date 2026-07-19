@@ -122,7 +122,7 @@ Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, z
 
 | # | Lücke | Inhalt | Prio |
 |---|---|---|---|
-| T5 | **CI** | GitHub Actions: tsc + unit + integration (MariaDB-Service-Container) als PR-Gate; iOS-Build via xcodebuild | Mit N5 |
+| T5 | **CI — iOS-Job fehlt noch** | Backend erledigt 2026-07-19 (S01): `.github/workflows/ci.yml`, tsc + unit + integration gegen MariaDB-Service-Container, Required Status Check auf `main`, Doku `docs/ci.md`. Offen: iOS-Build/Tests via `xcodebuild` als zweiter Job im selben Gate (Paket S02) | S02 |
 | T6 | **Backend: `any` eliminieren (237 Stellen, davon 160 `db.execute<any[]>`)** | Request-Seite ist via Zod schon typisiert (`z.infer`), die DB-Seite nicht. Plan: (1) Row-Interfaces pro Tabelle in `src/db/types.ts` (`OrderRow`, `ReceiptRow`, …) und `db.execute<OrderRow[]>` — Achtung: mysql2-Generics sind reine Casts, keine Runtime-Prüfung, daher Spalten-Drift weiter durch Integrationstests absichern; (2) `ResultSetHeader` statt `<any>` für INSERT/UPDATE-Ergebnisse; (3) `catch (err: unknown)` + Narrowing statt `err: any`; (4) ESLint `@typescript-eslint/no-explicit-any: error` als Ratchet, Geld-Pfade zuerst (payments, splitBill, cancellations, sessions). iOS ist sauber (nur KeychainHelper nutzt `[String: Any]` — Security-C-API, unvermeidbar) | Vor Go-live, schrittweise |
 
 ---

@@ -4,7 +4,7 @@ Stand: 2026-07-19. Methodik: Anforderungen (REQ) → Use Cases (UC) → Testfäl
 Pflege: Neue Anforderungen/Regeln aus CLAUDE.md hier als REQ eintragen, jedem REQ mindestens einen TC zuordnen.
 Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan.md`, GoBD / KassenSichV / § 14 UStG.
 
-**TC-Namensschema:** `TC-U-*` Unit (DB-frei, `npm test`) · `TC-I-*` Integration (Test-DB, `npm run test:integration`) · `TC-E2E-*` Durchstich · `TC-C-*` Nebenläufigkeit · `TC-IOS-*` XCTest.
+**TC-Namensschema:** `TC-U-*` Unit (DB-frei, `npm test`) · `TC-I-*` Integration (Test-DB, `npm run test:integration`) · `TC-E2E-*` Durchstich · `TC-C-*` Nebenläufigkeit · `TC-IOS-*` XCTest · `TC-CI-*` Pipeline-Nachweis (GitHub Actions).
 
 ---
 
@@ -64,6 +64,13 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-UX-003 | Gemischt-Zahlung: bar==total → nur cash; bar<total → Rest als card, Summe == total; bar>total wird nicht abgeschickt | PaymentView |
 | REQ-UX-004 | iOS decodiert alle Backend-Responses mit der Produktions-Decoder-Konfiguration (snake_case) verlustfrei | APIClient |
 
+### Prozess / CI (REQ-CI)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-CI-001 | Keine Änderung erreicht `main`, ohne dass Typecheck + Unit/Compliance + Integrationstests grün durchlaufen — erzwungen als Required Status Check, nicht als Konvention | ROADMAP S01 |
+| REQ-CI-002 | CI läuft gegen eine echte MariaDB mit geladenen Timezone-Tabellen; fehlen sie, bricht der Lauf ab statt Berichte still mit 0 zu testen | CLAUDE.md Betriebshinweis |
+
 ---
 
 ## 2. Use Cases (Kassenalltag)
@@ -119,6 +126,8 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | UX-002 | UC-03 | **TC-IOS ParseCentsTests, EuroStringTests** |
 | UX-003 | UC-05 | **TC-IOS PaymentLogicTests** |
 | UX-004 | alle | **TC-IOS ModelDecodingTests** (Fixtures je Response-Typ) |
+| CI-001 | alle | **TC-CI-001**: PR mit absichtlich rotem Unit-Test → Check `backend` rot, PR nicht mergebar (Nachweis-Protokoll in `docs/ci.md`) |
+| CI-002 | UC-09/13 | **TC-CI-002**: Guard-Step „Timezone-Tabellen verifizieren" in `.github/workflows/ci.yml` — `CONVERT_TZ` NULL ⇒ Job-Abbruch |
 
 ---
 

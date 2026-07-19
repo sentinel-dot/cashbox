@@ -1,0 +1,111 @@
+# CI — GitHub Actions als PR-Gate
+
+Stand: 2026-07-19 (Paket S01 aus `ROADMAP.md`)
+
+Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+
+## Was läuft
+
+Job **`backend`** auf `ubuntu-latest`, bei jedem Push auf `main` und jedem PR gegen `main`:
+
+| Schritt | Kommando | Warum |
+|---|---|---|
+| Timezone-Tabellen | `mariadb-tzinfo-to-sql` im Service-Container | Berichte nutzen `CONVERT_TZ` (s.u.) |
+| Guard | `SELECT CONVERT_TZ(NOW(), '+00:00', 'Europe/Berlin')` | Bricht ab, wenn der vorige Schritt still gescheitert ist |
+| Install | `npm ci` | Lockfile-treu |
+| Typecheck | `npx tsc --noEmit` | |
+| Test-DB | `npm run db:setup:test` | Legt DB + 3 User + Grants an, fährt Migrations hoch |
+| Unit + Compliance | `npm test` | |
+| Integration | `npm run test:integration` | Gegen echte MariaDB |
+
+**Nicht** im Gate: `npm run test:external` (Fiskaly-Sandbox + Stripe) — braucht echte Credentials und
+läuft nightly bzw. manuell. `npm run test:coverage` ebenfalls nicht (kein Erkenntnisgewinn pro PR).
+
+Der iOS-Job (`xcodebuild test` auf macOS-Runner) ist **Paket S02** und noch nicht Teil des Workflows.
+
+## Keine Repo-Secrets nötig
+
+`backend/.env.test` ist bewusst committet und enthält ausschließlich Wegwerf-Credentials
+(`test_password`, ein fixes Test-JWT-Secret). Es gibt darin nichts, was in Produktion gilt.
+Der Backend-Job kommt deshalb ohne GitHub-Secrets aus.
+
+⚠️ Wenn dort je ein echtes Secret landen soll: **nicht** in `.env.test` — dann Repo-Secret anlegen
+und im Workflow via `env:` durchreichen.
+
+## Drei Stolpersteine, die im Workflow gelöst sind
+
+### 1. Grant-Host (`DB_USER_HOST`)
+
+`backend/scripts/setup-db.ts` legte die DB-User früher fest als `'app_user_test'@'localhost'` an.
+In CI läuft MariaDB als Service-Container; Verbindungen kommen über die Docker-Bridge an, MariaDB
+sieht also die Gateway-IP statt `localhost` → Grants greifen nicht, alles scheitert mit
+*Access denied*.
+
+Das Script liest jetzt `DB_USER_HOST` (Default `localhost`, lokal also unverändert). Der Workflow
+setzt `DB_USER_HOST: '%'`. Bewusst so gelöst, statt die Grant-Logik in der CI zu duplizieren —
+sonst driften CI-Rechte und `npm run db:setup` auseinander, und genau diese Grants sind der
+GoBD-Schutz gegen DELETE auf Finanztabellen (siehe CLAUDE.md).
+
+### 2. Timezone-Tabellen
+
+`reportsController.ts` und `receiptsController.ts` ordnen Geschäftstage per
+`CONVERT_TZ(…, '+00:00', 'Europe/Berlin')` zu. Ohne geladene Timezone-Tabellen liefert MariaDB
+`NULL` — die Tests würden dann nicht krachen, sondern still 0 Umsatz messen. Deshalb lädt der
+Workflow die Tabellen und **verifiziert** danach mit einem eigenen Schritt, dass `CONVERT_TZ`
+nicht `NULL` liefert.
+
+Dieselbe Voraussetzung gilt in Produktion (CLAUDE.md → Betriebshinweis).
+
+### 3. Port-Mapping statt Container-Job
+
+`backend/src/__tests__/setup.ts` lädt `.env.test` mit `override: true` — im Testlauf gelten also
+zwingend `DB_HOST=localhost` und `DB_PORT=3306` aus der Datei, exportierte Env-Variablen verlieren.
+Der Service-Container muss deshalb `3306:3306` auf den Runner mappen; ein Container-Job, der die DB
+unter dem Service-Hostname `mariadb` erreicht, würde nicht funktionieren.
+
+`setup-db.ts`, `migrate.ts` und `db/index.ts` laden dotenv **ohne** `override` — dort gewinnen die
+Workflow-Variablen (`DB_ADMIN_PASSWORD`, `DB_USER_HOST`) wie erwartet.
+
+## Branch Protection
+
+Der Workflow allein blockt nichts — scharf wird das Gate durch die Branch-Protection-Regel auf `main`:
+
+```bash
+gh api -X PUT repos/sentinel-dot/cashbox/branches/main/protection \
+  --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["Backend (tsc + unit + integration)"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+JSON
+```
+
+Folge: **Direkt-Pushes auf `main` sind blockiert**, Änderungen laufen über PRs.
+Bei S02 muss der iOS-Check hier in `contexts` ergänzt werden.
+
+## Lokal reproduzieren
+
+Der CI-Lauf ist identisch zu:
+
+```bash
+cd backend
+npx tsc --noEmit
+npm run db:setup:test
+npm test
+npm run test:integration
+```
+
+Wenn Report-Tests lokal 0 liefern, fehlen die Timezone-Tabellen auch lokal:
+
+```bash
+mariadb-tzinfo-to-sql /usr/share/zoneinfo | mariadb -u root mysql
+```
+
+## Nachweis „roter Test → roter PR" (DoD S01)
+
+<!-- S01-NACHWEIS -->

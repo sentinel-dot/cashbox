@@ -8,6 +8,11 @@
  *   DB_ADMIN_USER=root  (oder ein MariaDB-Admin-User)
  *   DB_ADMIN_PASSWORD=...
  *
+ * Optional:
+ *   DB_USER_HOST=%      Host-Teil der angelegten User/Grants (Default: localhost).
+ *                       In CI nötig: dort läuft MariaDB als Service-Container, die
+ *                       Verbindung kommt aus dem Docker-Netz an — nicht von localhost.
+ *
  * Usage:
  *   npm run db:setup           # development (.env)
  *   npm run db:setup:test      # test (.env.test)
@@ -74,6 +79,11 @@ const DB_ADMIN_USER     = process.env['DB_ADMIN_USER']     ?? 'root';
 const DB_ADMIN_PASSWORD = process.env['DB_ADMIN_PASSWORD'] ?? '';
 const DB_ADMIN_SOCKET   = process.env['DB_ADMIN_SOCKET']   ?? '/var/run/mysqld/mysqld.sock';
 
+// Host-Teil der angelegten User und ihrer Grants. Lokal 'localhost'; in CI '%',
+// weil Verbindungen dort aus dem Docker-Netz des MariaDB-Service-Containers
+// kommen und ein 'localhost'-Grant nicht greifen würde.
+const DB_USER_HOST = process.env['DB_USER_HOST'] ?? 'localhost';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function run(conn: mysql.Connection, sql: string, label?: string): Promise<void> {
@@ -126,15 +136,15 @@ async function main(): Promise<void> {
 
     // 2. User anlegen (idempotent via IF NOT EXISTS)
     await run(conn,
-      `CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}'`,
+      `CREATE USER IF NOT EXISTS '${DB_USER}'@'${DB_USER_HOST}' IDENTIFIED BY '${DB_PASSWORD}'`,
       `User '${DB_USER}'`
     );
     await run(conn,
-      `CREATE USER IF NOT EXISTS '${DB_AUDIT_USER}'@'localhost' IDENTIFIED BY '${DB_AUDIT_PASSWORD}'`,
+      `CREATE USER IF NOT EXISTS '${DB_AUDIT_USER}'@'${DB_USER_HOST}' IDENTIFIED BY '${DB_AUDIT_PASSWORD}'`,
       `User '${DB_AUDIT_USER}'`
     );
     await run(conn,
-      `CREATE USER IF NOT EXISTS '${DB_READONLY_USER}'@'localhost' IDENTIFIED BY '${DB_READONLY_PASSWORD}'`,
+      `CREATE USER IF NOT EXISTS '${DB_READONLY_USER}'@'${DB_USER_HOST}' IDENTIFIED BY '${DB_READONLY_PASSWORD}'`,
       `User '${DB_READONLY_USER}'`
     );
 
@@ -149,19 +159,19 @@ async function main(): Promise<void> {
     // (Seed-Rollback V005) — bzw. in der Test-DB pauschal (testHelpers wischen
     // zwischen Testläufen alle Tabellen).
     await run(conn,
-      `GRANT SELECT, INSERT, UPDATE, CREATE, ALTER, INDEX ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
+      `GRANT SELECT, INSERT, UPDATE, CREATE, ALTER, INDEX ON \`${DB_NAME}\`.* TO '${DB_USER}'@'${DB_USER_HOST}'`,
       `Grants für '${DB_USER}'`
     );
     if (NODE_ENV === 'test') {
       await run(conn,
-        `GRANT DELETE ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'`,
+        `GRANT DELETE ON \`${DB_NAME}\`.* TO '${DB_USER}'@'${DB_USER_HOST}'`,
         `Grants für '${DB_USER}' (DELETE — nur Test-DB)`
       );
     } else {
       // Früher vergebenes pauschales DELETE entziehen (Grants sind additiv —
       // ohne REVOKE bliebe es auf bestehenden Dev-DBs bestehen)
       try {
-        await conn.execute(`REVOKE DELETE ON \`${DB_NAME}\`.* FROM '${DB_USER}'@'localhost'`);
+        await conn.execute(`REVOKE DELETE ON \`${DB_NAME}\`.* FROM '${DB_USER}'@'${DB_USER_HOST}'`);
         console.log(`  ✓ Pauschales DELETE für '${DB_USER}' entzogen`);
       } catch {
         // kein bestehender DELETE-Grant — nichts zu entziehen
@@ -175,7 +185,7 @@ async function main(): Promise<void> {
       ];
       for (const table of DELETABLE_TABLES) {
         await run(conn,
-          `GRANT DELETE ON \`${DB_NAME}\`.\`${table}\` TO '${DB_USER}'@'localhost'`,
+          `GRANT DELETE ON \`${DB_NAME}\`.\`${table}\` TO '${DB_USER}'@'${DB_USER_HOST}'`,
         );
       }
       console.log(`  ✓ Grants für '${DB_USER}' (DELETE nur auf ${DELETABLE_TABLES.length} Nicht-Finanztabellen)`);
@@ -189,13 +199,13 @@ async function main(): Promise<void> {
     //   GRANT INSERT ON cashbox.order_item_modifiers TO ...
     //   GRANT INSERT ON cashbox.order_item_removals TO ...
     await run(conn,
-      `GRANT INSERT ON \`${DB_NAME}\`.* TO '${DB_AUDIT_USER}'@'localhost'`,
+      `GRANT INSERT ON \`${DB_NAME}\`.* TO '${DB_AUDIT_USER}'@'${DB_USER_HOST}'`,
       `Grants für '${DB_AUDIT_USER}' (INSERT only)`
     );
 
     // app_readonly: nur SELECT
     await run(conn,
-      `GRANT SELECT ON \`${DB_NAME}\`.* TO '${DB_READONLY_USER}'@'localhost'`,
+      `GRANT SELECT ON \`${DB_NAME}\`.* TO '${DB_READONLY_USER}'@'${DB_USER_HOST}'`,
       `Grants für '${DB_READONLY_USER}' (SELECT only)`
     );
 
