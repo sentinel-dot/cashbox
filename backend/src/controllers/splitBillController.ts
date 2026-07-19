@@ -22,6 +22,66 @@ export const splitBillSchema = z.object({
   splits: z.array(splitSchema).min(1),
 });
 
+// ─── Partitions-Validierung (pure, unit-getestet) ─────────────────────────────
+// Invariante (REQ-GELD-004): jedes Item in genau einem Split, je Split
+// Zahlungssumme == Item-Summe. Liefert den ersten Verstoß als 422-Body.
+
+export type SplitInput = {
+  order_item_ids: number[];
+  payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+};
+
+export type SplitValidationResult =
+  | { ok: true }
+  | { ok: false; error: string; expected_cents?: number; received_cents?: number };
+
+export function validateSplitPartition(
+  allItems: Array<{ id: number; subtotal_cents: number }>,
+  splits: SplitInput[]
+): SplitValidationResult {
+  const allItemIds = new Set(allItems.map(i => i.id));
+  const itemById   = new Map(allItems.map(i => [i.id, i]));
+
+  // 1. Keine unbekannten Item-IDs
+  const requestedIds = splits.flatMap(s => s.order_item_ids);
+  const unknownIds = requestedIds.filter(id => !allItemIds.has(id));
+  if (unknownIds.length > 0) {
+    return { ok: false, error: `Unbekannte order_item_ids: ${unknownIds.join(', ')}.` };
+  }
+
+  // 2. Keine Überschneidungen (jedes Item max. einmal)
+  const seen = new Set<number>();
+  for (const id of requestedIds) {
+    if (seen.has(id)) {
+      return { ok: false, error: `order_item_id ${id} kommt in mehreren Splits vor.` };
+    }
+    seen.add(id);
+  }
+
+  // 3. Alle Items abgedeckt
+  if (seen.size !== allItemIds.size) {
+    const missing = [...allItemIds].filter(id => !seen.has(id));
+    return { ok: false, error: `Folgende Items fehlen in den Splits: ${missing.join(', ')}.` };
+  }
+
+  // 4. Zahlungssumme je Split muss Item-Summe ergeben
+  for (let i = 0; i < splits.length; i++) {
+    const split     = splits[i];
+    const itemTotal = split.order_item_ids.reduce((s, id) => s + (itemById.get(id)?.subtotal_cents ?? 0), 0);
+    const payTotal  = split.payments.reduce((s, p) => s + p.amount_cents, 0);
+    if (payTotal !== itemTotal) {
+      return {
+        ok:             false,
+        error:          `Split ${i + 1}: Betrag stimmt nicht.`,
+        expected_cents: itemTotal,
+        received_cents: payTotal,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
 // ─── POST /orders/:id/pay/split ───────────────────────────────────────────────
 
 export async function splitBill(req: Request, res: Response): Promise<void> {
@@ -64,49 +124,14 @@ export async function splitBill(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const allItemIds = new Set(allItems.map((i: any) => i.id as number));
-  const itemById   = new Map(allItems.map((i: any) => [i.id as number, i]));
+  const itemById = new Map(allItems.map((i: any) => [i.id as number, i]));
 
-  // ─── Splits validieren ────────────────────────────────────────────────────
-
-  // 1. Keine unbekannten Item-IDs
-  const requestedIds: number[] = splits.flatMap(s => s.order_item_ids);
-  const unknownIds = requestedIds.filter(id => !allItemIds.has(id));
-  if (unknownIds.length > 0) {
-    res.status(422).json({ error: `Unbekannte order_item_ids: ${unknownIds.join(', ')}.` });
+  // ─── Splits validieren (pure Funktion, unit-getestet) ─────────────────────
+  const validation = validateSplitPartition(allItems as Array<{ id: number; subtotal_cents: number }>, splits);
+  if (!validation.ok) {
+    const { ok: _ok, ...body } = validation;
+    res.status(422).json(body);
     return;
-  }
-
-  // 2. Keine Überschneidungen (jedes Item max. einmal)
-  const seen = new Set<number>();
-  for (const id of requestedIds) {
-    if (seen.has(id)) {
-      res.status(422).json({ error: `order_item_id ${id} kommt in mehreren Splits vor.` });
-      return;
-    }
-    seen.add(id);
-  }
-
-  // 3. Alle Items abgedeckt
-  if (seen.size !== allItemIds.size) {
-    const missing = [...allItemIds].filter(id => !seen.has(id));
-    res.status(422).json({ error: `Folgende Items fehlen in den Splits: ${missing.join(', ')}.` });
-    return;
-  }
-
-  // 4. Zahlungssumme je Split muss Item-Summe ergeben
-  for (let i = 0; i < splits.length; i++) {
-    const split       = splits[i];
-    const itemTotal   = split.order_item_ids.reduce((s, id) => s + (itemById.get(id)?.subtotal_cents ?? 0), 0);
-    const payTotal    = split.payments.reduce((s, p) => s + p.amount_cents, 0);
-    if (payTotal !== itemTotal) {
-      res.status(422).json({
-        error:          `Split ${i + 1}: Betrag stimmt nicht.`,
-        expected_cents: itemTotal,
-        received_cents: payTotal,
-      });
-      return;
-    }
   }
 
   // ─── Tenant + Device-Snapshots ────────────────────────────────────────────

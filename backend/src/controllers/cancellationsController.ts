@@ -11,6 +11,47 @@ export const cancelReceiptSchema = z.object({
   reason: z.string().min(1).max(500),
 });
 
+// ─── Gegenbuchungs-Werte (pure, unit-getestet) ───────────────────────────────
+// REQ-GOBD-004: Storno-Bon trägt negierte Beträge + negative payments je
+// Original-Zahlungsmittel — eine Quelle für JSON-Snapshot UND INSERT-Parameter,
+// damit beide nicht auseinanderdriften können.
+
+export type CancellationAmounts = {
+  vat_7_net_cents: number;
+  vat_7_tax_cents: number;
+  vat_19_net_cents: number;
+  vat_19_tax_cents: number;
+  total_gross_cents: number;
+};
+
+export type PaymentLine = { method: 'cash' | 'card'; amount_cents: number };
+
+export function buildCancellationValues(
+  original: CancellationAmounts,
+  originalPayments: PaymentLine[]
+): {
+  negatedAmounts: CancellationAmounts;
+  tsePayments: PaymentLine[];       // positiv — für TSE-CANCELLATION-Transaktion
+  negatedPayments: PaymentLine[];   // negativ — für payments-INSERTs
+} {
+  // Fallback: Alt-Bons ohne payments-Zeilen → eine cash-Zeile über den Gesamtbetrag
+  const tsePayments = originalPayments.length > 0
+    ? originalPayments.map(p => ({ method: p.method, amount_cents: p.amount_cents }))
+    : [{ method: 'cash' as const, amount_cents: original.total_gross_cents }];
+
+  return {
+    negatedAmounts: {
+      vat_7_net_cents:   -original.vat_7_net_cents,
+      vat_7_tax_cents:   -original.vat_7_tax_cents,
+      vat_19_net_cents:  -original.vat_19_net_cents,
+      vat_19_tax_cents:  -original.vat_19_tax_cents,
+      total_gross_cents: -original.total_gross_cents,
+    },
+    tsePayments,
+    negatedPayments: tsePayments.map(p => ({ method: p.method, amount_cents: -p.amount_cents })),
+  };
+}
+
 // ─── POST /receipts/:id/cancel ────────────────────────────────────────────────
 
 export async function cancelReceipt(req: Request, res: Response): Promise<void> {
@@ -109,9 +150,10 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
      WHERE p.receipt_id = ? AND r.tenant_id = ?`,
     [receiptId, tenantId]
   );
-  const tsePayments = originalPayments.length > 0
-    ? originalPayments.map((p: any) => ({ method: p.method as 'cash' | 'card', amount_cents: p.amount_cents }))
-    : [{ method: 'cash' as const, amount_cents: original.total_gross_cents }];
+  const { negatedAmounts, tsePayments, negatedPayments } = buildCancellationValues(
+    original,
+    originalPayments.map((p: any) => ({ method: p.method as 'cash' | 'card', amount_cents: p.amount_cents }))
+  );
 
   // ─── Fiskaly TSE-Storno-Transaktion (vor DB-TX) ───────────────────────────
   const tseResult = await processTseTransaction({
@@ -192,11 +234,7 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
       // Gegenbuchung: Beträge negiert — SUM()-Aggregationen (Berichte, Z-Bericht,
       // Kassenbestand) netten Original + Storno automatisch auf 0.
       // Items bleiben der positive Original-Snapshot (Dokumentation was storniert wurde).
-      vat_7_net_cents:   -original.vat_7_net_cents,
-      vat_7_tax_cents:   -original.vat_7_tax_cents,
-      vat_19_net_cents:  -original.vat_19_net_cents,
-      vat_19_tax_cents:  -original.vat_19_tax_cents,
-      total_gross_cents: -original.total_gross_cents,
+      ...negatedAmounts,
       tse_pending:       tseResult.pending,
       tse_transaction_id: tseResult.tseTransactionId ?? null,
     };
@@ -215,9 +253,9 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
       [
         tenantId, original.order_id, sessionId, cancellationReceiptNumber,
         device.id, device.name,
-        -original.vat_7_net_cents,  -original.vat_7_tax_cents,
-        -original.vat_19_net_cents, -original.vat_19_tax_cents,
-        -original.total_gross_cents, original.is_takeaway,
+        negatedAmounts.vat_7_net_cents,  negatedAmounts.vat_7_tax_cents,
+        negatedAmounts.vat_19_net_cents, negatedAmounts.vat_19_tax_cents,
+        negatedAmounts.total_gross_cents, original.is_takeaway,
         tseResult.pending ? 1 : 0,
         tseResult.tseTransactionId    ?? null,
         tseResult.tseSerialNumber     ?? null,
@@ -240,11 +278,11 @@ export async function cancelReceipt(req: Request, res: Response): Promise<void> 
 
     // Negative payments-Zeilen (Rückerstattung je Original-Zahlungsmittel) —
     // damit netten Kassenbestand (cash) und Zahlungsart-Summen automatisch aus.
-    for (const p of tsePayments) {
+    for (const p of negatedPayments) {
       await conn.execute(
         `INSERT INTO payments (order_id, receipt_id, method, amount_cents, tip_cents, paid_by_user_id)
          VALUES (?, ?, ?, ?, 0, ?)`,
-        [original.order_id, cancellationReceiptId, p.method, -p.amount_cents, userId]
+        [original.order_id, cancellationReceiptId, p.method, p.amount_cents, userId]
       );
     }
 

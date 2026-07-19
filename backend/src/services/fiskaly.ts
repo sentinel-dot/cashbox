@@ -74,8 +74,42 @@ async function fiskalyFetch(method: string, path: string, body?: unknown): Promi
 
 // ─── Hilfsfunktion: Cent → Fiskaly-String ("30.50") ─────────────────────────
 
-function centsToFiskaly(cents: number): string {
+export function centsToFiskaly(cents: number): string {
   return (cents / 100).toFixed(2);
+}
+
+// ─── Hilfsfunktion: amounts_per_vat_rate bauen ───────────────────────────────
+// Fiskaly-Regeln (REQ-TSE-003): Singular-Feldname, amount (Brutto) required,
+// excl_vat_amounts (Netto + MwSt) dazu, 0-Sätze weggelassen.
+
+export function buildAmountsPerVatRate(
+  vat7GrossCents: number,
+  vat19GrossCents: number
+): Array<{ vat_rate: string; amount: string; excl_vat_amounts: { amount: string; vat_amount: string } }> {
+  const amountsPerVatRates = [];
+  if (vat19GrossCents > 0) {
+    const netCents = Math.round((vat19GrossCents * 100) / 119);
+    amountsPerVatRates.push({
+      vat_rate: 'NORMAL',
+      amount:   centsToFiskaly(vat19GrossCents),
+      excl_vat_amounts: {
+        amount:     centsToFiskaly(netCents),
+        vat_amount: centsToFiskaly(vat19GrossCents - netCents),
+      },
+    });
+  }
+  if (vat7GrossCents > 0) {
+    const netCents = Math.round((vat7GrossCents * 100) / 107);
+    amountsPerVatRates.push({
+      vat_rate: 'REDUCED_1',
+      amount:   centsToFiskaly(vat7GrossCents),
+      excl_vat_amounts: {
+        amount:     centsToFiskaly(netCents),
+        vat_amount: centsToFiskaly(vat7GrossCents - netCents),
+      },
+    });
+  }
+  return amountsPerVatRates;
 }
 
 // ─── TSE-TX Step 1: starten ───────────────────────────────────────────────────
@@ -93,7 +127,7 @@ async function startTx(tssId: string, txId: string, clientId: string): Promise<v
 
 // ─── Hilfsfunktion: payments aggregieren → Fiskaly amounts_per_payment_types ─
 
-function aggregatePaymentTypes(
+export function aggregatePaymentTypes(
   payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>
 ): Array<{ payment_type: string; amount: string }> {
   const totals: Record<string, number> = {};
@@ -120,30 +154,7 @@ async function updateTx(
     ? current.latest_revision + 1
     : 2;
 
-  // Fiskaly: amounts_per_vat_rate — amount (Brutto, required) + excl_vat_amounts (Netto + MwSt, optional aber empfohlen)
-  const amountsPerVatRates = [];
-  if (params.vat19GrossCents > 0) {
-    const netCents = Math.round((params.vat19GrossCents * 100) / 119);
-    amountsPerVatRates.push({
-      vat_rate: 'NORMAL',
-      amount:   centsToFiskaly(params.vat19GrossCents),
-      excl_vat_amounts: {
-        amount:     centsToFiskaly(netCents),
-        vat_amount: centsToFiskaly(params.vat19GrossCents - netCents),
-      },
-    });
-  }
-  if (params.vat7GrossCents > 0) {
-    const netCents = Math.round((params.vat7GrossCents * 100) / 107);
-    amountsPerVatRates.push({
-      vat_rate: 'REDUCED_1',
-      amount:   centsToFiskaly(params.vat7GrossCents),
-      excl_vat_amounts: {
-        amount:     centsToFiskaly(netCents),
-        vat_amount: centsToFiskaly(params.vat7GrossCents - netCents),
-      },
-    });
-  }
+  const amountsPerVatRates = buildAmountsPerVatRate(params.vat7GrossCents, params.vat19GrossCents);
 
   const reqBody = {
     state:     'ACTIVE',
@@ -194,29 +205,7 @@ async function finishTx(
     : revision;
 
   // Fiskaly erfordert vollständiges Schema auch beim FINISHED-Request
-  const amountsPerVatRates = [];
-  if (params.vat19GrossCents > 0) {
-    const netCents = Math.round((params.vat19GrossCents * 100) / 119);
-    amountsPerVatRates.push({
-      vat_rate: 'NORMAL',
-      amount:   centsToFiskaly(params.vat19GrossCents),
-      excl_vat_amounts: {
-        amount:     centsToFiskaly(netCents),
-        vat_amount: centsToFiskaly(params.vat19GrossCents - netCents),
-      },
-    });
-  }
-  if (params.vat7GrossCents > 0) {
-    const netCents = Math.round((params.vat7GrossCents * 100) / 107);
-    amountsPerVatRates.push({
-      vat_rate: 'REDUCED_1',
-      amount:   centsToFiskaly(params.vat7GrossCents),
-      excl_vat_amounts: {
-        amount:     centsToFiskaly(netCents),
-        vat_amount: centsToFiskaly(params.vat7GrossCents - netCents),
-      },
-    });
-  }
+  const amountsPerVatRates = buildAmountsPerVatRate(params.vat7GrossCents, params.vat19GrossCents);
 
   const { status, data } = await fiskalyFetch('PUT', `/tss/${tssId}/tx/${txId}?tx_revision=${currentRevision}`, {
     state:     'FINISHED',

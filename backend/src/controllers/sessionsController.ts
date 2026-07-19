@@ -32,7 +32,7 @@ export const movementSchema = z.object({
  * Berechnet den Z-Bericht-Snapshot für eine Session.
  * Wird bei session.close() generiert und unveränderlich in z_reports gespeichert.
  */
-async function buildZReportData(sessionId: number, tenantId: number, exec: SqlExecutor = db) {
+export async function buildZReportData(sessionId: number, tenantId: number, exec: SqlExecutor = db) {
   // Zahlungen der Session aggregiert nach Methode.
   // Join über receipts.session_id (nicht orders.session_id): ein Storno am Folgetag
   // gehört in die Kassenlade der Session, in der er durchgeführt wurde.
