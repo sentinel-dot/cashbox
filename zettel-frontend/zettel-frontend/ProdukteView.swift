@@ -542,13 +542,12 @@ fileprivate struct ProduktFormSheet: View {
 
     var isEdit: Bool { product != nil }
 
-    var prodPriceCents: Int {
-        parseCents(newProdPriceText)
-    }
-    var changePriceCents: Int { parseCents(newPriceText) }
+    // nil bei unlesbarer Eingabe → Save-Buttons bleiben aus (kein stilles 0-€-Produkt)
+    var prodPriceCents:   Int? { parseCents(newProdPriceText) }
+    var changePriceCents: Int? { parseCents(newPriceText) }
 
-    var canSaveMain:  Bool { !name.isEmpty && (!isEdit ? prodPriceCents > 0 : true) }
-    var canSavePrice: Bool { changePriceCents > 0 && !priceReason.isEmpty }
+    var canSaveMain:  Bool { !name.isEmpty && (!isEdit ? (prodPriceCents ?? 0) > 0 : true) }
+    var canSavePrice: Bool { (changePriceCents ?? 0) > 0 && !priceReason.isEmpty }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -746,7 +745,7 @@ fileprivate struct ProduktFormSheet: View {
             PFField(label: "Grund der Preisänderung (GoBD-Pflicht)", placeholder: "z.B. Lieferantenpreiserhöhung", text: $priceReason)
 
             Button {
-                onChangePrice?(changePriceCents, priceReason)
+                if let cents = changePriceCents { onChangePrice?(cents, priceReason) }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "lock.doc").dsFont(.raw(14))
@@ -860,7 +859,9 @@ fileprivate struct ProduktFormSheet: View {
                 Button {
                     onSave(ProduktFormData(
                         name:            name,
-                        priceCents:      prodPriceCents,
+                        // Edit ändert den Preis nie hier (GoBD: eigener Preis-Tab);
+                        // Create ist via canSaveMain auf > 0 gegated
+                        priceCents:      prodPriceCents ?? 0,
                         vatRateInhouse:  vatRateInhouse,
                         vatRateTakeaway: vatRateTakeaway,
                         categoryId:      selectedCat,

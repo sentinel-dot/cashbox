@@ -94,6 +94,23 @@ final class OrderStore: ObservableObject {
         return result
     }
 
+    /// Ergebnis der A4-Recovery nach 409/Timeout beim Bezahlen.
+    enum PaymentRecovery {
+        case paid(PaymentResult)   // Zahlung war durch, Bon gefunden → Erfolgspfad
+        case paidWithoutReceipt    // bezahlt, aber kein Einzel-Bon (Split-Randfall)
+        case notRecovered          // weiterhin offen oder Prüfung selbst gescheitert
+    }
+
+    /// A4-Recovery: Prüft nach 409/Timeout, ob die Zahlung serverseitig durchkam.
+    func recoverPayment(orderId: Int) async -> PaymentRecovery {
+        guard let detail: OrderDetail = try? await api.get("/orders/\(orderId)"),
+              detail.status == .paid else { return .notRecovered }
+        orders.removeAll { $0.id == orderId }
+        if selectedOrder?.id == orderId { selectedOrder = nil }
+        if let receipt = detail.receipt { return .paid(receipt) }
+        return .paidWithoutReceipt
+    }
+
     func clearError() { error = nil }
     func clearSelection() { selectedOrder = nil }
 

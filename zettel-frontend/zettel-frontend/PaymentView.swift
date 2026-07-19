@@ -25,6 +25,7 @@ struct PaymentView: View {
     @State private var showError     = false
     @State private var paymentResult: PaymentResult?
     @State private var showReceipt   = false
+    @State private var showAlreadyPaid = false   // A4: bezahlt, aber kein Einzel-Bon (Split-Randfall)
 
     private var total:        Int              { order.totalCents }
     private var vatBreakdown: VatBreakdownLocal { computeVat(order.items) }
@@ -70,6 +71,11 @@ struct PaymentView: View {
         } message: {
             Text(error?.localizedDescription ?? "Unbekannter Fehler")
         }
+        .alert("Bereits bezahlt", isPresented: $showAlreadyPaid) {
+            Button("OK") { dismiss() }
+        } message: {
+            Text("Diese Bestellung wurde bereits bezahlt. Der Bon ist unter Bons abrufbar.")
+        }
         .sheet(isPresented: $showReceipt) {
             if let result = paymentResult {
                 ReceiptSummarySheet(
@@ -101,31 +107,42 @@ struct PaymentView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let result = try await orderStore.pay(orderId: order.id, payments: buildPayments())
+            let result = try await orderStore.pay(
+                orderId:  order.id,
+                payments: buildPayments(mode: payMode, barRaw: barRaw, totalCents: total)
+            )
             paymentResult = result
             showReceipt   = true
         } catch let e as AppError {
-            error = e; showError = true
+            await handlePaymentError(e)
         } catch {
             self.error = .unknown(error.localizedDescription); showError = true
         }
     }
 
-    private func buildPayments() -> [PaymentItem] {
-        switch payMode {
-        case .bar:
-            return [PaymentItem(method: .cash, amountCents: total)]
-        case .karte:
-            return [PaymentItem(method: .card, amountCents: total)]
-        case .gemischt:
-            let barC  = Int(barRaw) ?? 0
-            let cardC = total - barC
-            var out: [PaymentItem] = []
-            if barC  > 0 { out.append(PaymentItem(method: .cash, amountCents: barC)) }
-            if cardC > 0 { out.append(PaymentItem(method: .card, amountCents: cardC)) }
-            return out
+    /// A4: 409/Timeout kann bedeuten, dass der erste Request serverseitig durchkam
+    /// (WLAN-Aussetzer beim Bezahlen). Vor dem Fehler-Alert den Order-Status prüfen —
+    /// wenn bezahlt, den Bon zeigen statt den Kellner in die Sackgasse zu schicken.
+    private func handlePaymentError(_ e: AppError) async {
+        switch e {
+        case .conflict, .networkError:
+            switch await orderStore.recoverPayment(orderId: order.id) {
+            case .paid(let result):
+                paymentResult = result
+                showReceipt   = true
+                return
+            case .paidWithoutReceipt:
+                showAlreadyPaid = true
+                return
+            case .notRecovered:
+                break   // Order weiterhin offen → regulärer Fehler, erneut zahlen möglich
+            }
+        default:
+            break
         }
+        error = e; showError = true
     }
+
 }
 
 // MARK: - Top Bar
@@ -174,29 +191,7 @@ private struct PTopBar: View {
 
 // MARK: - Order Summary (links)
 
-private struct VatBreakdownLocal {
-    let vat7NetCents:  Int
-    let vat7TaxCents:  Int
-    let vat19NetCents: Int
-    let vat19TaxCents: Int
-    var has7:  Bool { vat7NetCents  + vat7TaxCents  > 0 }
-    var has19: Bool { vat19NetCents + vat19TaxCents > 0 }
-}
-
-private func computeVat(_ items: [OrderItem]) -> VatBreakdownLocal {
-    var v7n = 0, v7t = 0, v19n = 0, v19t = 0
-    for item in items {
-        let gross = item.subtotalCents
-        let is7   = item.vatRate == "7"
-        let net   = Int((Double(gross * 100) / Double(is7 ? 107 : 119)).rounded())
-        let tax   = gross - net
-        if is7 { v7n += net; v7t += tax } else { v19n += net; v19t += tax }
-    }
-    return VatBreakdownLocal(
-        vat7NetCents: v7n, vat7TaxCents: v7t,
-        vat19NetCents: v19n, vat19TaxCents: v19t
-    )
-}
+// VatBreakdownLocal + computeVat: zentral in PaymentLogic.swift (testbar ohne UI)
 
 private struct POrderSummary: View {
     let order: OrderDetail
@@ -1030,7 +1025,8 @@ private extension OrderDetail {
                     createdAt: "", modifiers: []
                 ),
             ],
-            totalCents: 5000
+            totalCents: 5000,
+            receipt: nil
         )
     }
 }

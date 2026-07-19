@@ -138,6 +138,8 @@ struct OrderDetail: Identifiable, Codable {
     let table: OrderTable?
     let items: [OrderItem]
     let totalCents: Int
+    /// Bon der bezahlten Order (A4-Recovery nach 409/Timeout) — nil solange offen oder Split-bezahlt
+    let receipt: PaymentResult?
 }
 
 struct OrderItem: Identifiable, Codable {

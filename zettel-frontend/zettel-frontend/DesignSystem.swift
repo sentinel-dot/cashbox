@@ -161,6 +161,23 @@ func euroString(_ cents: Int) -> String {
     return (_euroFormatter.string(from: val) ?? "0,00") + " €"
 }
 
+/// Betragseingabe → Cent: akzeptiert "12,50", "12.50", "1.234,56" und " 19,99 € ".
+/// nil bei leerer/unlesbarer/negativer Eingabe — Aufrufer disablen dann den Save-Button
+/// statt still 0 € zu buchen. (.rounded() ist Pflicht: 19.99 × 100 = 1998.99… →
+/// Int() würde 1998 abschneiden.)
+func parseCents(_ text: String) -> Int? {
+    var n = text
+        .replacingOccurrences(of: "€", with: "")
+        .trimmingCharacters(in: .whitespaces)
+    if n.contains(",") {
+        // deutsches Format: Punkte sind Tausendertrenner ("1.234,56"), Komma ist Dezimaltrenner
+        n = n.replacingOccurrences(of: ".", with: "")
+             .replacingOccurrences(of: ",", with: ".")
+    }
+    guard !n.isEmpty, let v = Double(n), v >= 0 else { return nil }
+    return Int((v * 100).rounded())
+}
+
 /// Geldbetrag mit Tabellenziffern — fluchtet in Listen, zittert nicht in Timern
 struct MoneyText: View {
     let cents: Int

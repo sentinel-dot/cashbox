@@ -1061,11 +1061,7 @@ private struct ZReportRow: View {
 
 // MARK: - Helpers
 
-private func parseCents(_ text: String) -> Int? {
-    let n = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-    guard !n.isEmpty, let v = Double(n), v >= 0 else { return nil }
-    return Int((v * 100).rounded())
-}
+// parseCents: zentral in DesignSystem.swift
 
 private func formatTimeOnly(_ iso: String) -> String {
     guard iso.count >= 16 else { return iso }

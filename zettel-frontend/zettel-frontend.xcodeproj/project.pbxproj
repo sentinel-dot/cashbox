@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		1710420E300D417400DB3732 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 17068C8B2F6761C100FFDB4F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 17068C922F6761C100FFDB4F;
+			remoteInfo = "zettel-frontend";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		17068C932F6761C100FFDB4F /* zettel-frontend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "zettel-frontend.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1710420A300D417400DB3732 /* zettel-frontendTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "zettel-frontendTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = "zettel-frontend";
 			sourceTree = "<group>";
 		};
+		1710420B300D417400DB3732 /* zettel-frontendTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "zettel-frontendTests";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		17068C902F6761C100FFDB4F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		17104207300D417400DB3732 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				17068C952F6761C100FFDB4F /* zettel-frontend */,
+				1710420B300D417400DB3732 /* zettel-frontendTests */,
 				17068C942F6761C100FFDB4F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				17068C932F6761C100FFDB4F /* zettel-frontend.app */,
+				1710420A300D417400DB3732 /* zettel-frontendTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = 17068C932F6761C100FFDB4F /* zettel-frontend.app */;
 			productType = "com.apple.product-type.application";
 		};
+		17104209300D417400DB3732 /* zettel-frontendTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 17104212300D417400DB3732 /* Build configuration list for PBXNativeTarget "zettel-frontendTests" */;
+			buildPhases = (
+				17104206300D417400DB3732 /* Sources */,
+				17104207300D417400DB3732 /* Frameworks */,
+				17104208300D417400DB3732 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1710420F300D417400DB3732 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				1710420B300D417400DB3732 /* zettel-frontendTests */,
+			);
+			name = "zettel-frontendTests";
+			packageProductDependencies = (
+			);
+			productName = "zettel-frontendTests";
+			productReference = 1710420A300D417400DB3732 /* zettel-frontendTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -77,11 +125,15 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1620;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
 					17068C922F6761C100FFDB4F = {
 						CreatedOnToolsVersion = 16.2;
+					};
+					17104209300D417400DB3732 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 17068C922F6761C100FFDB4F;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				17068C922F6761C100FFDB4F /* zettel-frontend */,
+				17104209300D417400DB3732 /* zettel-frontendTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		17068C912F6761C100FFDB4F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		17104208300D417400DB3732 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		17104206300D417400DB3732 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1710420F300D417400DB3732 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 17068C922F6761C100FFDB4F /* zettel-frontend */;
+			targetProxy = 1710420E300D417400DB3732 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		17068C9F2F6761C200FFDB4F /* Debug */ = {
@@ -302,6 +377,50 @@
 			};
 			name = Release;
 		};
+		17104210300D417400DB3732 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RNK5A8AP8B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.milinkovic.zettel-frontendTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/zettel-frontend.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/zettel-frontend";
+			};
+			name = Debug;
+		};
+		17104211300D417400DB3732 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RNK5A8AP8B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.milinkovic.zettel-frontendTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/zettel-frontend.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/zettel-frontend";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -319,6 +438,15 @@
 			buildConfigurations = (
 				17068CA22F6761C200FFDB4F /* Debug */,
 				17068CA32F6761C200FFDB4F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		17104212300D417400DB3732 /* Build configuration list for PBXNativeTarget "zettel-frontendTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				17104210300D417400DB3732 /* Debug */,
+				17104211300D417400DB3732 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
