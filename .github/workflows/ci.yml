@@ -89,3 +89,65 @@ jobs:
 
       - name: Integrationstests
         run: npm run test:integration
+
+  ios:
+    name: iOS (xcodebuild test)
+    # macos-26 ist nötig, nicht Geschmackssache: das Test-Target hat
+    # IPHONEOS_DEPLOYMENT_TARGET = 26.2, das braucht Xcode 26 + eine
+    # iOS-26.2-Simulator-Runtime. macos-latest zeigt derzeit auf macOS 15
+    # (Xcode 16) und würde scheitern. Das Image ist bei GitHub noch als
+    # Preview markiert — bewusst akzeptiert (S02), Alternative wäre, das
+    # Test-Target auf 18.2 zu senken (OFFEN.md T7).
+    runs-on: macos-26
+
+    defaults:
+      run:
+        working-directory: zettel-frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Die verfügbaren Simulatoren unterscheiden sich je Runner-Image, deshalb
+      # keine feste Destination: neuestes iOS-Runtime nehmen, darin das erste
+      # iPad (die App ist iPad-only, TARGETED_DEVICE_FAMILY=2).
+      - name: iPad-Simulator wählen
+        id: sim
+        run: |
+          SELECT='.devices
+            | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS-")))
+            | map({
+                ver: (.key | capture("iOS-(?<a>[0-9]+)-(?<b>[0-9]+)")
+                            | (.a | tonumber) * 1000 + (.b | tonumber)),
+                devs: .value
+              })
+            | sort_by(.ver) | reverse
+            | map(.devs | map(select(.name | test("iPad"))))
+            | flatten | .[0]'
+          JSON=$(xcrun simctl list devices available --json)
+          UDID=$(echo "$JSON" | jq -r "$SELECT | .udid // empty")
+          NAME=$(echo "$JSON" | jq -r "$SELECT | .name // empty")
+          if [ -z "$UDID" ]; then
+            echo "::error::Kein iPad-Simulator auf dem Runner gefunden."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Gewählt: $NAME ($UDID)"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: XCTest-Suite
+        run: |
+          xcodebuild test \
+            -project zettel-frontend.xcodeproj \
+            -scheme zettel-frontend \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Result-Bundle sichern (nur bei Fehlschlag)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult
+          path: zettel-frontend/TestResults.xcresult
+          retention-days: 7
