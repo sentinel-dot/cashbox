@@ -109,9 +109,14 @@ ergänzt. Auch der fire-and-forget `console.error` im Stripe-Webhook geht jetzt 
 **+3 Integration** (`integration/errorHandler`) → 84 + 304 grün. REQ-OPS-001…004 im Testkonzept.
 Nachweise in `docs/betrieb.md`: SIGTERM-Log mit Drain (Exit 0) und Keep-Alive-Fall (42 ms statt
 10-s-Notbremse — belegt `closeIdleConnections()`); Sentry-Envelope gegen lokalen Ingest verifiziert.
-**Neuer Befund → `OFFEN.md` T8:** `npm run dev` (ts-node/CJS) startet nicht — Bestandsproblem.
-**DoD-Rest beim User:** Sentry-Projekt anlegen, echten DSN eintragen, Test-Event im Dashboard
-sichten, Alert-Regel setzen.
+**DoD vollständig:** Sentry-Projekt in der **EU-Region** (ingest.de.sentry.io) angelegt, DSN
+eingetragen, Test-Event am 2026-07-20 im Dashboard sichtbar. Dafür `npm run sentry:test`
+(`src/scripts/sentry-test.ts`) — wird bei S20 für Prod wiederverwendet.
+**Neue Befunde:** `OFFEN.md` **T8** — `npm run dev` (ts-node/CJS) startet nicht (Bestandsproblem,
+nicht angefasst). `OFFEN.md` **T9** — Report-Tests waren nachts 2 h flaky (UTC- statt
+Berlin-Datum); im selben Fenster gefunden und behoben, weil ein nachts grundlos rotes PR-Gate
+den Wert von S01 untergräbt. Berichtslogik war korrekt, nur die Tests lagen falsch.
+**Offen beim User:** Alert-Regel in Sentry setzen; DPA/AVV unter Settings → Legal akzeptieren (N8).
 
 ## [ ] S04 — Pilot-Start (User-Aktionen, ohne Claude-Session)
 - [x] N7: Apple Developer Account — vorhanden (2026-07-19 bestätigt)
