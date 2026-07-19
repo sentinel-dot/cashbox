@@ -1,6 +1,6 @@
 # OFFEN — Was noch zu tun ist
 
-**Einzige Quelle für alles Offene.** Stand: 2026-07-19 (nach Test-Offensive: A4/A8 gefixt, T1–T4 komplett — Backend 76 Unit/Compliance + 301 Integration, iOS 41 XCTests. Testkonzept: `docs/testkonzept.md`).
+**Einzige Quelle für alles Offene.** Stand: 2026-07-19 (nach Test-Offensive: A4/A8 gefixt, T1–T4 komplett — Backend 76 Unit/Compliance + 301 Integration, iOS 40 XCTests. Testkonzept: `docs/testkonzept.md`).
 Erledigtes fliegt raus (Git-History behält es), Neues kommt priorisiert hier rein.
 Spezifikation (DB-Schema, TSE-Flow, Bon-Pflichtfelder): `implementierungsplan.md` §1–15.
 **Abarbeitungsreihenfolge (Session-Pakete S01–S21 + Gates): `ROADMAP.md`** — dort abhaken, hier streichen.
@@ -118,11 +118,12 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 ## 7. Tests & Qualität
 
 Testkonzept (REQ → UC → TC, Traceability): **`docs/testkonzept.md`** — neue Anforderungen dort als REQ eintragen, jedem REQ ≥ 1 TC zuordnen.
-Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, zReportAggregation, sequences, fiskalyPayload), T2 (XCTest-Target `zettel-frontendTests`, 41 Tests: ParseCents, EuroString, PaymentLogic, VatBreakdown-Formelparität, ModelDecoding — der Roundtrip-Test fand direkt einen Tausenderpunkt-Bug in parseCents), T3 (`integration/e2e-tagesablauf.test.ts`), T4 (`integration/concurrency.test.ts` — echte Promise.all-Races gegen pay/cancel/close/open).
+Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, zReportAggregation, sequences, fiskalyPayload), T2 (XCTest-Target `zettel-frontendTests`, 40 Tests: ParseCents, EuroString, PaymentLogic, VatBreakdown-Formelparität, ModelDecoding — der Roundtrip-Test fand direkt einen Tausenderpunkt-Bug in parseCents), T3 (`integration/e2e-tagesablauf.test.ts`), T4 (`integration/concurrency.test.ts` — echte Promise.all-Races gegen pay/cancel/close/open).
 
 | # | Lücke | Inhalt | Prio |
 |---|---|---|---|
-| T5 | **CI — iOS-Job fehlt noch** | Backend erledigt 2026-07-19 (S01): `.github/workflows/ci.yml`, tsc + unit + integration gegen MariaDB-Service-Container, Required Status Check auf `main`, Doku `docs/ci.md`. Offen: iOS-Build/Tests via `xcodebuild` als zweiter Job im selben Gate (Paket S02) | S02 |
+| T5 | ~~**CI**~~ | Erledigt 2026-07-19: Backend-Job (S01) + iOS-Job (S02) in `.github/workflows/ci.yml`, beide Required Status Checks auf `main`. Doku `docs/ci.md` | ✅ |
+| T7 | **Test-Target verlangt iOS 26.2, App nur 18.2** | `zettel-frontend.xcodeproj`: `IPHONEOS_DEPLOYMENT_TARGET` ist projektweit 18.2, im Target `zettel-frontendTests` aber 26.2 (vermutlich Artefakt der Target-Erstellung unter Xcode 26). Folge: (1) die 40 XCTests laufen nie auf der Mindestversion, die die App selbst unterstützt — ein iOS-18-Regression würde nicht auffallen; (2) CI ist dadurch an das `macos-26`-Image gebunden, das GitHub noch als **Preview** führt (S02 akzeptiert das bewusst). Entscheidung: entweder Test-Target auf 18.2 senken (dann läuft CI auf dem GA-Image `macos-15`, muss aber gegen das ältere SDK durchbauen) oder App-Mindestversion bewusst anheben. Vor dem TestFlight-Build klären — hängt davon ab, welches iPadOS auf dem Pilot-iPad läuft | Vor S04 (TestFlight) |
 | T6 | **Backend: `any` eliminieren (237 Stellen, davon 160 `db.execute<any[]>`)** | Request-Seite ist via Zod schon typisiert (`z.infer`), die DB-Seite nicht. Plan: (1) Row-Interfaces pro Tabelle in `src/db/types.ts` (`OrderRow`, `ReceiptRow`, …) und `db.execute<OrderRow[]>` — Achtung: mysql2-Generics sind reine Casts, keine Runtime-Prüfung, daher Spalten-Drift weiter durch Integrationstests absichern; (2) `ResultSetHeader` statt `<any>` für INSERT/UPDATE-Ergebnisse; (3) `catch (err: unknown)` + Narrowing statt `err: any`; (4) ESLint `@typescript-eslint/no-explicit-any: error` als Ratchet, Geld-Pfade zuerst (payments, splitBill, cancellations, sessions). iOS ist sauber (nur KeychainHelper nutzt `[String: Any]` — Security-C-API, unvermeidbar) | Vor Go-live, schrittweise |
 
 ---

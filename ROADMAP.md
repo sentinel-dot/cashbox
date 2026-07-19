@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-19 · Suiten: Backend 76 Unit/Compliance + 301 Integration, iOS 41 XCTests — alle grün.
+**Stand:** 2026-07-19 · Suiten: Backend 76 Unit/Compliance + 301 Integration, iOS 40 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -73,7 +73,7 @@ Service-Container nicht. Nachweis auf PR #1: Run `29702114397` rot (absichtliche
 Check `failure`), Run `29702157037` grün (76 + 301 Tests). Branch Protection auf `main` aktiv
 (Required Check + kein Force-Push). Doku: `docs/ci.md`. Kein Badge (kein README im Repo).
 
-## [ ] S02 — CI iOS — ~0,5 d
+## [x] S02 — CI iOS — erledigt 2026-07-19
 **Prompt:**
 > Setze Paket S02 aus ROADMAP.md um: zweiter GitHub-Actions-Job auf macos-Runner:
 > `xcodebuild test -project zettel-frontend/zettel-frontend.xcodeproj -scheme zettel-frontend`
@@ -81,6 +81,13 @@ Check `failure`), Run `29702157037` grün (76 + 301 Tests). Branch Protection au
 > Der Job ist Teil desselben PR-Gates.
 
 **DoD:** iOS-Tests laufen in CI; kaputter Swift-Test → roter PR.
+
+**Erledigt 2026-07-19:** Job `ios` in `.github/workflows/ci.yml` auf `macos-26`, Destination zur
+Laufzeit per `simctl --json` + `jq` (neueste iOS-Runtime → erstes iPad). Geteiltes Xcode-Scheme
+committet (Voraussetzung — `xcuserdata/` ist gitignored). Nachweis auf PR #2: Run `29702799713`
+grün (40 Tests), Run `29703020329` rot bei absichtlich kaputtem XCTest, Backend-Job im selben Lauf
+grün. Beide Checks in der Branch Protection. **Neuer Befund → `OFFEN.md` T7:** Test-Target verlangt
+iOS 26.2, App nur 18.2 — bindet CI ans Preview-Image `macos-26`, vor S04 zu klären.
 
 ## [ ] S03 — Sentry + Prozess-Härtung (S1 + B6 + B7) — ~0,5 d
 **Prompt:**

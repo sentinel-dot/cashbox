@@ -193,11 +193,13 @@ npm run test:external        # Fiskaly Sandbox + Stripe (nightly)
 npm run test:coverage        # Coverage-Report
 ```
 
-**CI (PR-Gate):** `.github/workflows/ci.yml` fährt bei jedem PR/Push auf `main` `tsc --noEmit` +
-`npm test` + `npm run test:integration` gegen einen MariaDB-Service-Container — Required Status
-Check, rote Suite = nicht mergebar, `main` ist gegen Direkt-Pushes geschützt. Details, Branch
-Protection und die drei CI-Stolpersteine (Grant-Host, Timezone-Tabellen, Port-Mapping): `docs/ci.md`.
-`scripts/setup-db.ts` versteht dafür `DB_USER_HOST` (Default `localhost`, in CI `%`).
+**CI (PR-Gate):** `.github/workflows/ci.yml` fährt bei jedem PR/Push auf `main` zwei Jobs — `backend`
+(`tsc --noEmit` + `npm test` + `test:integration` gegen einen MariaDB-Service-Container) und `ios`
+(`xcodebuild test` auf `macos-26`, Simulator dynamisch gewählt). Beide sind Required Status Checks,
+rote Suite = nicht mergebar, `main` ist gegen Direkt-Pushes geschützt. Details, Branch Protection und
+die CI-Stolpersteine (Grant-Host, Timezone-Tabellen, Port-Mapping, geteiltes Xcode-Scheme):
+`docs/ci.md`. `scripts/setup-db.ts` versteht dafür `DB_USER_HOST` (Default `localhost`, in CI `%`).
+Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuserdata/` ist gitignored.
 
 ---
 
@@ -268,7 +270,7 @@ Protection und die drei CI-Stolpersteine (Grant-Host, Timezone-Tabellen, Port-Ma
 | `KategorienView.swift` | Kategorienliste mit Farbchips, KategorieFormSheet (Name + Farb-Preset + HEX-Input + Sort-Order), Delete-Confirmation | ✅ |
 | `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Tischverwaltung (Tab "Tische"), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
 | `TischverwaltungView.swift` | Tische & Zonen verwalten: Liste, ZoneFormSheet, TischFormSheet (Zone-Picker), Deaktivieren-Confirm, CRUD via TableStore | ✅ |
-| `zettel-frontendTests/` (XCTest-Target) | 41 Tests: ParseCents (Locale/Rundung/Tausenderpunkt), EuroString (inkl. Roundtrip), PaymentLogic (buildPayments-Summeninvariante, Gemischt-Kanten), VatBreakdown (Formelparität mit Backend-vatCalculation.test.ts), ModelDecoding (wörtliche snake_case-Fixtures via `JSONDecoder.cashbox`, inkl. A4-receipt-Block). Lauf: `xcodebuild test -project zettel-frontend.xcodeproj -scheme zettel-frontend -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)'` | ✅ |
+| `zettel-frontendTests/` (XCTest-Target) | 40 Tests: ParseCents (Locale/Rundung/Tausenderpunkt), EuroString (inkl. Roundtrip), PaymentLogic (buildPayments-Summeninvariante, Gemischt-Kanten), VatBreakdown (Formelparität mit Backend-vatCalculation.test.ts), ModelDecoding (wörtliche snake_case-Fixtures via `JSONDecoder.cashbox`, inkl. A4-receipt-Block). Lauf: `xcodebuild test -project zettel-frontend.xcodeproj -scheme zettel-frontend -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)'` | ✅ |
 | `SyncManager.swift` | Minimaler Offline-Queue-Trigger: POST /sync/offline-queue bei Online-Wechsel/Foreground/Login (max. 3 Runden), pendingCount @Published. `SyncManager.shared` — dieselbe Instanz wird als EnvironmentObject injiziert und vom OfflineBanner direkt gelesen. Vollausbau Phase 3 | ✅ |
 
 ### Noch nicht implementiert ❌ (SwiftUI)
