@@ -193,6 +193,12 @@ npm run test:external        # Fiskaly Sandbox + Stripe (nightly)
 npm run test:coverage        # Coverage-Report
 ```
 
+**CI (PR-Gate):** `.github/workflows/ci.yml` fährt bei jedem PR/Push auf `main` `tsc --noEmit` +
+`npm test` + `npm run test:integration` gegen einen MariaDB-Service-Container — Required Status
+Check, rote Suite = nicht mergebar, `main` ist gegen Direkt-Pushes geschützt. Details, Branch
+Protection und die drei CI-Stolpersteine (Grant-Host, Timezone-Tabellen, Port-Mapping): `docs/ci.md`.
+`scripts/setup-db.ts` versteht dafür `DB_USER_HOST` (Default `localhost`, in CI `%`).
+
 ---
 
 ## Implementierungsstand Backend

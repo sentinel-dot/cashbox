@@ -1,0 +1,91 @@
+name: CI
+
+# PR-Gate für main: keine Änderung kommt rein, ohne dass Typecheck + alle
+# Backend-Suiten gegen eine echte MariaDB grün durchlaufen.
+# Bewusst ohne paths-Filter: ein übersprungener Required Check würde PRs
+# dauerhaft blockieren.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (tsc + unit + integration)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          # Wegwerf-Passwort für den Testlauf; muss zu DB_ADMIN_PASSWORD unten passen.
+          MARIADB_ROOT_PASSWORD: root
+        # Port-Mapping ist Pflicht, kein Container-Job mit Service-Hostname:
+        # src/__tests__/setup.ts lädt .env.test mit override: true, damit gilt
+        # im Testlauf zwingend DB_HOST=localhost / DB_PORT=3306.
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      # setup-db.ts / migrate.ts / db/index.ts laden dotenv OHNE override —
+      # diese Werte gewinnen also gegenüber .env.test.
+      DB_ADMIN_PASSWORD: root
+      # Verbindungen kommen aus dem Docker-Netz, nicht von localhost.
+      DB_USER_HOST: '%'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # Berichte nutzen CONVERT_TZ(…, 'Europe/Berlin') (reportsController,
+      # receiptsController). Ohne geladene Timezone-Tabellen liefert das NULL —
+      # Report-Tests wären dann still 0 statt rot.
+      - name: MariaDB-Timezone-Tabellen laden
+        working-directory: .
+        run: |
+          docker exec ${{ job.services.mariadb.id }} sh -c \
+            'mariadb-tzinfo-to-sql /usr/share/zoneinfo 2>/dev/null | mariadb -uroot -proot mysql'
+
+      - name: Timezone-Tabellen verifizieren
+        working-directory: .
+        run: |
+          RESULT=$(docker exec ${{ job.services.mariadb.id }} \
+            mariadb -uroot -proot -N -B -e \
+            "SELECT IFNULL(CONVERT_TZ(NOW(), '+00:00', 'Europe/Berlin'), 'NULL')")
+          echo "CONVERT_TZ → $RESULT"
+          if [ "$RESULT" = "NULL" ]; then
+            echo "::error::Timezone-Tabellen fehlen — alle Berichte lieferten 0. Abbruch."
+            exit 1
+          fi
+
+      - name: Dependencies installieren
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Legt cashbox_test + die drei DB-User mit ihren Grants an und fährt die
+      # Migrations hoch (identische Logik wie lokal — keine CI-Sonderpfade).
+      - name: Test-DB aufsetzen
+        run: npm run db:setup:test
+
+      - name: Unit- + Compliance-Tests
+        run: npm test
+
+      - name: Integrationstests
+        run: npm run test:integration
