@@ -5,7 +5,7 @@ describe('calcVat — MwSt-Berechnung (§ 14 UStG)', () => {
   describe('19%', () => {
     it('berechnet Netto und Steuer für 11,90€', () => {
       const { netCents, taxCents } = calcVat(1190, '19');
-      expect(netCents).toBe(1000);   // 11,90 / 1,19 = 10,00
+      expect(netCents).toBe(999);    // CI-NACHWEIS S01: absichtlich falsch, wird zurückgenommen
       expect(taxCents).toBe(190);    // 11,90 - 10,00 = 1,90
     });
 
