@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-19 · Suiten: Backend 84 Unit/Compliance + 304 Integration, iOS 40 XCTests — alle grün.
+**Stand:** 2026-07-20 · Suiten: Backend 107 Unit/Compliance + 320 Integration, iOS 40 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -133,7 +133,7 @@ den Wert von S01 untergräbt. Berichtslogik war korrekt, nur die Tests lagen fal
 
 **Gate M1:** Alle B-Pakete in CI grün · eine echte Z-Bericht-Mail zugestellt · Restore-Test protokolliert · Pilot ≥ 2 Wochen ohne Kassendifferenz-Vorfall.
 
-## [ ] S05 — E-Mail-Service Grundgerüst (B1 Teil 1) — ~1,5 d
+## [x] S05 — E-Mail-Service Grundgerüst (B1 Teil 1) — erledigt 2026-07-20
 **Prompt:**
 > Setze Paket S05 aus ROADMAP.md um (OFFEN.md §5): `backend/src/services/email.ts` mit
 > Resend (oder Postmark — kurz begründen), Template-Registry, Migration für `email_log`
@@ -145,6 +145,26 @@ den Wert von S01 untergräbt. Berichtslogik war korrekt, nur die Tests lagen fal
 
 **DoD:** Mail kommt real an (eigene Adresse); email_log-Zeile geschrieben; Fehlversand → Retry-Eintrag.
 
+**Erledigt 2026-07-20:** **Resend** gewählt (REST via `fetch`, kein SDK — eine Abhängigkeit weniger;
+Postmark hätte ab Tag 1 gekostet ohne Vorteil bei diesem Volumen). `backend/src/services/email/`
+mit `send.ts` (15-s-Timeout, **Dry-Run ohne `RESEND_API_KEY`** → Dev/CI versenden nie nach außen),
+`queue.ts`, `templates.ts` (Registry), `layout.ts`/`palette.ts`/`format.ts` (Ledger-Green als HEX aus
+`DS.C`, 600 px, Dark-Mode via `prefers-color-scheme`, Plaintext je Template), `index.ts`
+(`sendTrialWarning`). Template 1 (Trial-Warnung Tag 10 + 13) fertig.
+**Migration V009 = zwei Tabellen mit getrennten Rollen:** `email_queue` operativ (UPDATE-bar, Inhalte
+werden nach Erfolg genullt — DSGVO) und `email_log` INSERT-only via `audit_insert_user`
+(Versandnachweis mit `provider_message_id` — Pflicht, sobald die KassenSichV-Meldemail aus S06 läuft).
+Retry: Claim-Muster wie `offline_queue` (V006), Backoff 1/5/15/60/240 min, danach `failed` + Sentry;
+Idempotenz-Schlüssel als UNIQUE, damit der Cron aus S07 doppelt laufen darf.
+Tests: **+23 Unit** (`unit/emailTemplates`), **+16 Integration** (`integration/email-queue`) →
+107 + 320 grün. REQ-MAIL-001…008 + UC-MAIL-01…03 im Testkonzept.
+**Offen aus der DoD:** der reale Versand an eine eigene Adresse steht noch aus — dafür braucht es
+einen Resend-Account + verifizierte Domain (SPF/DKIM/DMARC). Bis dahin läuft alles im Dry-Run;
+der Pfad ist über den injizierten Sender integrationsgetestet. **→ Zusammen mit S06 nachholen.**
+**Neuer Befund → `OFFEN.md` T10:** `sentry.ts` lädt immer `.env` statt `.env.test` — lokale
+Testläufe melden echte Events ins Produktions-Sentry (in CI harmlos, dort gibt es kein `.env`).
+Nicht mitgefixt (Paket-Regel), aber vor Go-live einzeilig zu beheben.
+
 ## [ ] S06 — E-Mail-Templates komplett (B1 Teil 2) — ~1 d
 **Prompt:**
 > Setze Paket S06 aus ROADMAP.md um: restliche Templates aus OFFEN.md §5 — TSE-Ausfall >48h
@@ -154,6 +174,9 @@ den Wert von S01 untergräbt. Berichtslogik war korrekt, nur die Tests lagen fal
 > Betreff, HTML, Plaintext, Render-Unit-Test. SPF/DKIM/DMARC-Einrichtung als Doku-Abschnitt.
 
 **DoD:** Alle 6 Templates renderbar + getestet; DNS-Anleitung dokumentiert.
+**Zusätzlich aus S05 übernommen:** Resend-Account + verifizierte Domain einrichten und **eine echte
+Mail an die eigene Adresse** zustellen (S05 lief mangels Account komplett im Dry-Run). Erst damit ist
+die S05-DoD vollständig.
 
 ## [ ] S07 — Cron-Jobs (B2, inkl. A9) — ~2 d
 **Prompt:**

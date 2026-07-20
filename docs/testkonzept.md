@@ -81,6 +81,19 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-OPS-003 | `unhandledRejection`/`uncaughtException` beenden den Prozess kontrolliert statt Node hart crashen zu lassen — vorher loggen und an Sentry melden | ROADMAP S03 / OFFEN.md B6 |
 | REQ-OPS-004 | In Production erreicht kein Stack Trace / keine interne Fehlermeldung den Client | app.ts |
 
+### E-Mail (REQ-MAIL)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-MAIL-001 | Beträge in E-Mails sind exakt so formatiert wie im Frontend (`euroString()`: Tausenderpunkt, Dezimalkomma, zwei Nachkommastellen) — der Wirt sieht in der Mail dieselbe Zahl wie auf dem iPad | ROADMAP S05 / OFFEN.md §5 |
+| REQ-MAIL-002 | Datums- und Zeitangaben in E-Mails stehen in Europe/Berlin, nie in UTC (dieselbe Falle wie bei den Berichten, T9) | ROADMAP S05 |
+| REQ-MAIL-003 | Fremdtext (Betriebsname, Gerätename, Fehlertext) wird vor dem Einbetten HTML-escaped — keine Injection über Mail-Inhalte | ROADMAP S05 |
+| REQ-MAIL-004 | Jedes Template liefert Betreff, HTML **und** Plaintext; HTML ist 600 px Single Column mit Dark-Mode-Regeln (Spam-Bewertung + Clients ohne HTML) | OFFEN.md §5 |
+| REQ-MAIL-005 | Ein Fehlversand geht nicht verloren: die Mail bleibt in der Queue und wird mit wachsendem Abstand erneut versucht, bis `max_attempts` erreicht ist (dann `failed` + Sentry) | OFFEN.md §5 |
+| REQ-MAIL-006 | Doppelter Lauf desselben Anlasses erzeugt keine zweite Mail (Idempotenz-Schlüssel als UNIQUE) — Voraussetzung für die Cron-Jobs in S07 | ROADMAP S07 |
+| REQ-MAIL-007 | Jeder tatsächliche Versand wird in `email_log` nachgewiesen (INSERT-only via `audit_insert_user`, mit `provider_message_id`) — bei KassenSichV-Meldemails muss der Versand belegbar sein | OFFEN.md §5 |
+| REQ-MAIL-008 | Nach erfolgreichem Versand werden Betreff und Körper in der Queue genullt (DSGVO-Datenminimierung); der Nachweis bleibt in `email_log` | ROADMAP S05 |
+
 ---
 
 ## 2. Use Cases (Kassenalltag)
@@ -104,6 +117,9 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-15 | Offline-Betrieb / TSE-Nachsignierung | TSE-001/005 |
 | UC-OPS-01 | Deploy/Neustart während des Betriebs (SIGTERM, laufende Zahlung) | OPS-001/003 |
 | UC-OPS-02 | Serverfehler beim Kunden — wird sichtbar, ohne dass jemand Logs liest | OPS-002/004 |
+| UC-MAIL-01 | Trial läuft aus — der Wirt wird rechtzeitig gewarnt (Tag 10 + 13) | MAIL-001…004/006/008 |
+| UC-MAIL-02 | KassenSichV-Pflichtmail (TSE-Ausfall > 48 h) — Versand muss belegbar sein | MAIL-003/004/007 |
+| UC-MAIL-03 | Mail-Anbieter ist kurz nicht erreichbar — nichts geht verloren | MAIL-005 |
 
 ---
 
@@ -145,6 +161,14 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | OPS-002 | UC-OPS-02 | **TC-I integration/errorHandler.test.ts** (5xx → captureException mit tenant/url/method; 4xx → nicht gemeldet); **TC-M Manuell**: Envelope-Nachweis gegen lokalen Ingest (`docs/betrieb.md`) |
 | OPS-003 | UC-OPS-01 | abgedeckt über OPS-001 (derselbe Shutdown-Pfad, Exit-Code 1); Verdrahtung der Handler: `src/index.ts` |
 | OPS-004 | UC-OPS-02 | **TC-I integration/errorHandler.test.ts** (Production: `error` == „Interner Serverfehler.", kein Leak) |
+| MAIL-001 | UC-MAIL-01 | **TC-U unit/emailTemplates.test.ts** (euroString: Tausenderpunkt, 2 Nachkommastellen, negativ, groß) |
+| MAIL-002 | UC-MAIL-01/02 | **TC-U unit/emailTemplates.test.ts** (formatDate/formatDateTime: Sommer-/Winterzeit, 22:30 UTC → Folgetag) |
+| MAIL-003 | UC-MAIL-01/02 | **TC-U unit/emailTemplates.test.ts** (esc, Label-Spalte, Überschrift, Betriebsname im Template) |
+| MAIL-004 | UC-MAIL-01/02 | **TC-U unit/emailTemplates.test.ts** (Registry-Schleife: Betreff + Plaintext + 600px + Dark-Mode je Template) |
+| MAIL-005 | UC-MAIL-03 | **TC-U unit/emailTemplates.test.ts** (backoffMinutes monoton + Deckel); **TC-I integration/email-queue.test.ts** (Retry eingeplant, Wiederaufnahme, `failed` nach max_attempts, Stuck-Claim-Reset) |
+| MAIL-006 | UC-MAIL-01 | **TC-I integration/email-queue.test.ts** (zweites Enqueue → false, nur eine Zeile; day10/day13 getrennt) |
+| MAIL-007 | UC-MAIL-02 | **TC-I integration/email-queue.test.ts** (email_log-Zeile mit provider_message_id; kein Log bei Fehlversand; INSERT via auditDb) |
+| MAIL-008 | UC-MAIL-01 | **TC-I integration/email-queue.test.ts** (subject/body_html/body_text nach Erfolg NULL) |
 
 ---
 
