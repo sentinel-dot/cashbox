@@ -1,9 +1,9 @@
 # OFFEN — Was noch zu tun ist
 
-**Einzige Quelle für alles Offene.** Stand: 2026-07-19 (nach Test-Offensive: A4/A8 gefixt, T1–T4 komplett — Backend 76 Unit/Compliance + 301 Integration, iOS 40 XCTests. Testkonzept: `docs/testkonzept.md`).
+**Einzige Quelle für alles Offene.** Stand: 2026-07-20 (inkl. Sortiment-/Trial-Evaluation; Testkonzept: `docs/testkonzept.md`).
 Erledigtes fliegt raus (Git-History behält es), Neues kommt priorisiert hier rein.
 Spezifikation (DB-Schema, TSE-Flow, Bon-Pflichtfelder): `implementierungsplan.md` §1–15.
-**Abarbeitungsreihenfolge (Session-Pakete S01–S21 + Gates): `ROADMAP.md`** — dort abhaken, hier streichen.
+**Abarbeitungsreihenfolge (Session-Pakete S01–S21 inkl. S13A/S17A–C + Gates): `ROADMAP.md`** — dort abhaken, hier streichen.
 
 ---
 
@@ -33,6 +33,7 @@ Neue Tests: UNIQUE-Backstop (Race-Simulation via Direkt-INSERT), Folgetag-Storno
 | A7 | **`changePrice` ohne Lock/TX**: parallele Preisänderungen können Historie-Reihenfolge ≠ finalem Preis erzeugen | Produkt-Zeile FOR UPDATE + Historie und UPDATE seriell | Nach Pilot |
 | A9 | **closeSession: z_reports-INSERT nach Commit** (anderer DB-User, keine gemeinsame TX möglich) — schlägt er fehl, ist die Session zu ohne Z-Bericht (wird jetzt laut geloggt, Daten rekonstruierbar) | Cron/Monitoring: geschlossene Sessions ohne z_reports-Zeile finden + nachtragen | Vor Go-live |
 | A10 | **Bewusster Trade-off, dokumentieren nicht fixen:** Refresh-Tokens sind stateless — Logout ist rein clientseitig, Session-Kill nur via Geräte-Revoke; 16h-Limit begrenzt den Schaden | — | — |
+| A11 | **TSE-Lifecycle startet aktuell erst beim Bezahlen:** `processTseTransaction()` fährt `ACTIVE → FINISHED` vollständig in `payOrder`/`splitBill`; die Bestellung läuft vorher ohne persistierte TSE-TX. § 2 KassenSichV verlangt den Start unmittelbar mit dem aufzuzeichnenden Vorgang; der AEAO nennt auch Bestellungen/nicht abgeschlossene Vorgänge, und Fiskaly weist für Gastronomie auf langlebige `order`-/`Bestellung-V1`-Transaktionen hin. Das ist wichtiger als die Zahlungsart-Frage: Bar, Karte und gemischt werden bereits korrekt als `CASH`/`NON_CASH` übertragen. | Vor Fiskaly-Live fachlich gegen aktuelle DSFinV-K/Fiskaly-Doku + Steuerberater entscheiden und implementieren: Start bei Bestellbeginn bzw. zulässige Erleichterungsregel, persistente TX-ID/Recovery, Abbruch/Timeout/Offline und Bon-Startzeit. Eigenes Paket S13A + Regressionstests. | Phase 2 |
 
 ---
 
@@ -56,6 +57,7 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 | B6 | ~~**Prozess-Härtung**~~ | Erledigt 2026-07-19 (S03): `src/shutdown.ts` (Drain → Sentry-Flush → Pools, idempotent, 10-s-Notbremse), SIGTERM/SIGINT + `unhandledRejection`/`uncaughtException` in `index.ts`, Pino statt console. Nachweis-Protokolle in `docs/betrieb.md` §2. **Achtung bei S20:** PM2 `kill_timeout: 15000` / systemd `TimeoutStopSec=15`, sonst wirkungslos | ✅ |
 | B7 | ~~**`.env.example` vervollständigen**~~ | Erledigt 2026-07-19 (S03): `ALLOWED_ORIGIN`, `LOG_LEVEL`, `SENTRY_DSN` ergänzt | ✅ |
 | B8 | **A3 + A6 + A9** aus dem Audit | s.o. | 1 d |
+| B9 | **Trial-/Entitlement-Härtung** | 14-Tage-Trial existiert, ist aber nicht launch-sicher: Plan-Auswahl im iOS-Onboarding wird nicht gespeichert (Tenant bleibt `starter`), Copy verspricht automatische Umstellung trotz „keine Kreditkarte“, und die pauschale `subscriptionMiddleware` blockiert nach Ablauf auch sichere Abschluss-/Lesewege wie Session-Schluss, Sync, Bons und Export. Entscheidung: kein permanenter Live-Free-Tier; 14 Tage ohne Kreditkarte, Start erst bei bewusster Aktivierung/erster Kassensitzung, danach kein Auto-Charge. Explizite Entitlement-Matrix: keine neue Schicht nach Ablauf, aber offene Schicht sicher beenden, TSE nachsignieren, Bons/DSFinV-K lesen/exportieren und Billing erreichen. | 1,5–2 d |
 
 ---
 
@@ -64,7 +66,7 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 | # | Punkt | Hinweis |
 |---|---|---|
 | N1 | **DB-Backup-Strategie** | GoBD: 10 Jahre Aufbewahrung — **Pflicht, kein Nice-to-have.** Nightly Dump + Offsite (z.B. Hetzner Storage Box), Restore-Test dokumentieren. Ohne Backup-Konzept keine Verfahrensdokumentation |
-| N2 | **Fiskaly Live** | Live-Account, TSS für Shishabar anlegen, TSE-Client je iPad; Phase-2-Code-Pfade (A1, A2) vorher lösen |
+| N2 | **Fiskaly Live** | Live-Account, TSS für Shishabar anlegen, TSE-Client je iPad; Phase-2-Code-Pfade (A1, A2, A11) vorher lösen |
 | N3 | **ELSTER** | Kassen-Anmeldung (einmalig, manuell) — Pflicht seit 2025 |
 | N4 | **Stripe Live** | Live-Keys, Webhook-Endpoint im Dashboard, Preis-IDs für 3 Pläne |
 | N5 | **Hosting** | Hetzner, Nginx + SSL, PM2 (Cluster erst nach Rate-Limit-Store-Fix §7), GitHub Actions CI/CD (Suites + tsc als Gate) |
@@ -131,6 +133,39 @@ niemand `drainEmailQueue` periodisch auf.
 - EInputRow (Einstellungen-Zeilenfeld) bewusst nicht auf DSTextField (anderes Layoutmuster) — bei Gelegenheit angleichen
 - **Betriebshinweis Kiosk:** `UIRequiresFullScreen` ist von Apple als „wird künftig ignoriert" markiert — echter Kiosk-Betrieb beim Piloten über Guided Access (Dreifachklick) bzw. später MDM Single App Mode
 
+### Sortiment & Betreiber-Aktivierung (evaluiert 2026-07-20)
+
+**Nutzungsszene:** Ein Mitarbeiter tippt im gedimmten, lauten Gastro-Betrieb unter Zeitdruck auf ein
+Landscape-iPad. Er braucht stabile Positionen, große Ziele und eindeutige Farb-/Symbolhinweise; eine
+foto-lastige Speisekarte darf die Kasse nicht langsamer oder unruhiger machen.
+
+- **UX-S1 — Fundament:** `GET /products` liefert nur aktive Produkte, deshalb ist die vorhandene
+  Inaktiv-Statistik immer 0 und deaktivierte Produkte können in der App nicht wieder aktiviert werden.
+  Kategorie-Reihenfolge wird angekündigt, aber `ProductCategoryRef` führt `sort_order` nicht; Produkte
+  haben gar keine persistente Kassen-Reihenfolge und werden alphabetisch sortiert. Der Kategorie-Löschtext
+  behauptet „Produkte werden nicht zugeordnet", während das Backend bei aktiven Produkten 409 liefert.
+- **UX-S2 — Ein gemeinsamer Bereich „Sortiment":** Kategorienleiste links, Produkte rechts, Umschalter
+  **Kassenansicht / Liste**, Inline-Kategorieanlage, Drag-Reihenfolge, Aktiv/Inaktiv-Filter und echte Vorschau
+  der späteren Kassenkacheln. Produkt anlegen zunächst nur mit Name, Preis, Kategorie; Steuer/Modifier als
+  „Weitere Einstellungen" statt drei gleichgewichtiger Tabs.
+- **UX-S3 — Starter-Sortimente:** versionierte Pakete **Shisha-Bar, Café, Späti, leer starten**. Betreiber
+  wählt Kategorien/Produkte per Checkliste, trägt Preise in einer kompakten Tabelle ein und bestätigt
+  MwSt.-Vorschläge ausdrücklich (keine stillen Steuerannahmen). Import idempotent und über denselben
+  GoBD-konformen Produktservice inkl. initialer `product_price_history`, nicht per Direkt-INSERT.
+- **UX-S4 — Visuals in zwei Stufen:** Vor Go-live kuratierte semantische `visual_key`s (Kategorie-Farbe +
+  einheitliche SF-Symbol-/Bundle-Assets), automatisch aus Namen vorgeschlagen und immer optional. Eigene
+  Fotos erst nach Go-live bzw. zusammen mit einem digitalen Menü: PhotosPicker/Kamera, 1:1-Crop,
+  Größen-/MIME-Prüfung, Thumbnails und S3-kompatibler Object Storage. So entsteht jetzt kein CDN-,
+  Upload-, Lizenz- und Datenschutzprojekt für ein rein internes POS-Grid.
+- **UX-S5 — Pfand-Gate für Späti:** Das aktuelle Produkt-/Order-Modell kann Warenpreis und Pfand weder
+  getrennt ausweisen noch eine Pfandrückgabe finanzdatenkonform buchen. Pfandpflichtige Starter-Produkte
+  bleiben deshalb bis zu einem eigenen, finanziell auditierten Paket server- und UI-seitig gesperrt;
+  Pfand darf nicht in `price_cents` versteckt werden. Verbindliche Produkt-/Steuer-/Visual-Spezifikation:
+  `docs/s17-sortiment-starterpakete.md`.
+
+**Zielmetrik:** Ein neuer Betreiber hat in unter 10 Minuten mindestens 3 Kategorien und 15 verkaufsfertige,
+sortierte Produkte; der Kassenbetrieb bleibt auch komplett ohne Bilder hochwertig und schnell.
+
 ---
 
 ## 7. Tests & Qualität
@@ -182,9 +217,10 @@ Nikos Insider-Blick (Deutsche Post ITS, POS-Testing) gezielt nutzen — die Punk
 
 1. **Jetzt (Pilot läuft an):** Pilot-Feedback-Schleife (A4 + T1–T4 sind erledigt, 2026-07-19)
 2. **Vor Go-live (Reihenfolge):** B1 E-Mail → B2 Cron → B3 Passwort-Reset → B6/B7 Prozess-Härtung → B4/B5 → A3/A6/A9 → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
-3. **Phase 2 (TSE scharf):** A1 + A2 lösen → Fiskaly-Sandbox-E2E → N2/N3
+3. **Phase 2 (TSE scharf):** A1 + A2 + A11 lösen → Fiskaly-Sandbox-E2E → N2/N3
 4. **Nach Pilot:** §6 impeccable-Pass komplett, T5, S2–S4
-5. **Phase 3+:** Trinkgeld (nach Steuerberater), SyncManager-Vollausbau, Phase-5-Features
+5. **Vor öffentlichem Go-live:** UX-S1–S3 + Visuals V1 (Roadmap S17A/S17B), B9 (S17C)
+6. **Phase 3+:** Eigene Produktfotos/digitales Menü, Trinkgeld (nach Steuerberater), SyncManager-Vollausbau, Phase-5-Features
 
 ---
 

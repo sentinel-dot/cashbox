@@ -276,6 +276,22 @@ Offline-TSE-Handling absegnen — braucht Wochen Vorlauf), Fiskaly-Live-Account 
 
 **DoD:** Beide A-Punkte in OFFEN.md gestrichen; Race-Test „TSE-TX ohne Bon" beweist die Lösung.
 
+## [ ] S13A — TSE-Lifecycle für Gastro-Bestellungen (A11) — ~2–3 d + Fachentscheid
+**Prompt:**
+> Setze Paket S13A aus ROADMAP.md um (OFFEN.md A11): Der aktuelle Code startet und beendet die
+> Fiskaly-TX vollständig erst beim Bezahlen. Prüfe gegen die dann aktuelle DSFinV-K, den AEAO zu
+> § 146a, § 2 KassenSichV und die Fiskaly-SIGN-DE-Doku, welcher Lifecycle für unsere langlebigen
+> Gastro-Bestellungen gilt (`order`/`Bestellung-V1` bzw. Erleichterungsregel). Lege mir vor der
+> Implementierung die Varianten mit Konsequenzen für createOrder, erstes Item, Zahlung, Split,
+> Abbruch, Storno und Offline-Betrieb vor und dokumentiere die Entscheidung mit Steuerberater-OK.
+> Implementiere danach persistente TSE-TX-Zuordnung + Idempotenz/Recovery; keine TX darf offen
+> vergessen oder doppelt beendet werden. Bar-, Karten- und gemischte Zahlungen müssen weiterhin
+> vollständig in `amounts_per_payment_type` landen. Tests für langen Order-Lifecycle, Abbruch,
+> Timeout/Retry, App-Neustart und parallele Zahlung.
+
+**DoD:** A11 in OFFEN.md gestrichen; schriftlich belegter Lifecycle; Sandbox-E2E zeigt Start bei
+Vorgangsbeginn und genau ein korrektes Ende/Abbruch; Bon enthält ggf. erforderlichen ersten Startzeitpunkt.
+
 ## [ ] S14 — Fiskaly-Sandbox-E2E in CI — ~0,5 d
 **Prompt:**
 > Setze Paket S14 aus ROADMAP.md um: `npm run test:external` (Fiskaly-Sandbox) als
@@ -292,7 +308,9 @@ Offline-TSE-Handling absegnen — braucht Wochen Vorlauf), Fiskaly-Live-Account 
 > S07), Nachsignierungs-Pfad (`receipts.tse_*`-Updates), `tse_outages`-Lebenszyklus,
 > payOrder/splitBill/cancelReceipt-TSE-Aufrufe inkl. der S13-Änderungen. Fokus: Idempotenz
 > (Doppel-Signatur unmöglich?), Crash-Recovery zwischen TSE-Erfolg und DB-Commit,
-> KassenSichV-Meldepflichten (>48h), Beträge/Feldnamen gegen die Fiskaly-Doku. Arbeite wie
+> KassenSichV-Meldepflichten (>48h), Beträge/Feldnamen gegen die Fiskaly-Doku. Zusätzlich den
+> Gastro-Lifecycle aus S13A prüfen: `ACTIVE`-Dauer, vergessene offene TX, `Bestellung-V1`, Abbruch,
+> Bon-Startzeit sowie Bar/Karte/gemischte Zahlungen vollständig prüfen. Arbeite wie
 > beim Finanz-Integritäts-Audit #2: Nicht-Happy-Paths, Races, Retry-Semantik. Ergebnis:
 > Findings mit Schwere + Fix + abgeleiteter Regressionstest. Eintragen in OFFEN.md.
 
@@ -309,7 +327,8 @@ Offline-TSE-Handling absegnen — braucht Wochen Vorlauf), Fiskaly-Live-Account 
 > (`GET /export/dsfinvk`), gegen die amtliche Prüfsoftware (DFKA-Tool / Amadeus Verify —
 > aktuelle Optionen recherchieren) laufen lassen, Abweichungen fixen. Begleitdokument für
 > den Steuerberater-Termin erstellen: receipt_sequences-Konzept, Storno-Gegenbuchung,
-> Offline-TSE-Handling, Z-Bericht-Ablage — je mit Verweis auf Code/Tests.
+> Gastro-Bestell-Lifecycle aus S13A, Offline-TSE-Handling, Z-Bericht-Ablage — je mit Verweis
+> auf Code/Tests.
 
 **DoD:** Prüfsoftware ohne Fehler; schriftliches OK des Steuerberaters liegt vor. **Das ist das Finanzamt-Gate.**
 
@@ -322,6 +341,59 @@ Offline-TSE-Handling absegnen — braucht Wochen Vorlauf), Fiskaly-Live-Account 
 **Vorlauf sofort anstoßen (User, Wochen!):** N8 Rechtliches — AGB/Haftung (Anwalt), AVV-Vorlage,
 **Verfahrensdokumentation** (GoBD-Pflicht; Claude kann den technischen Teil aus CLAUDE.md +
 docs/ generieren), Datenhaltung nach Kündigung.
+
+## [ ] S17A — Sortiment-UX Fundament (UX-S1 + UX-S2) — ~2 d
+**Prompt:**
+> Setze Paket S17A aus ROADMAP.md um (OFFEN.md §6 UX-S1/UX-S2): Produkte und Kategorien werden
+> ein Betreiber-Flow „Sortiment" statt zwei isolierter Verwaltungsseiten. Zuerst Datenvertrag
+> reparieren: Management-Abfrage kann aktive + inaktive Produkte liefern, die Kassenabfrage bleibt
+> active-only; `sort_order` für Produkte ergänzen und für Kategorien bis SwiftUI durchreichen;
+> Sortierung tenant-sicher speichern. Falschen Kategorie-Löschtext an Backend-Verhalten angleichen.
+> iOS: Kategorienleiste links, Produkte rechts, Umschalter Kassenansicht/Liste, Suche,
+> Aktiv/Inaktiv-Filter, Inline-Kategorieanlage, Drag-Reihenfolge und echte Kassenkachel-Vorschau.
+> Neues Produkt als kurzer Hauptflow Name + Preis + Kategorie; Steuer/Modifier progressiv unter
+> „Weitere Einstellungen". Bestehende DS-Komponenten/Design v3.1 weiterverwenden.
+
+**DoD:** Produkt deaktivieren → im Management sichtbar → reaktivieren; Kategorie- und Produktreihenfolge
+entsprechen nach Neustart exakt der Kasse; leeres Sortiment leitet direkt in die Einrichtung; Backend-
+Integrationstests inkl. Tenant-Isolation und iOS-Model-Decoding-/Sortier-Tests grün.
+
+## [ ] S17B — Starter-Sortimente + Visuals V1 (UX-S3 + UX-S4 + UX-S5) — ~2 d
+**Prompt:**
+> Setze Paket S17B aus ROADMAP.md um (OFFEN.md §6 UX-S3/UX-S4/UX-S5): versionierte Starter-Pakete
+> „Shisha-Bar", „Café", „Späti" und „Leer starten". Wizard: Paket → Kategorien/Produkte auswählen →
+> Preise kompakt eintragen → MwSt.-Vorschläge ausdrücklich prüfen/bestätigen → Vorschau → Import.
+> Import idempotent, tenant-isoliert und über einen gemeinsamen Produktservice, der für jedes Produkt
+> den initialen `product_price_history`-Eintrag schreibt; kein Seed-/Direkt-INSERT-Pfad. Für Visuals
+> semantische `visual_key`s verwenden (keine plattformspezifischen Symbolnamen in der DB), gemappt auf
+> kuratierte SF Symbols/Bundle-Assets + Kategorie-Farbe. Vorschlag anhand Produktname, jederzeit
+> änderbar, Bilder immer optional. Keine Uploads/Object-Storage in diesem Paket. Die verbindlichen
+> V1-Produktlisten, MwSt.-Prüfklassen, 39 `visual_key`s, Importregeln und Testmatrix stehen in
+> `docs/s17-sortiment-starterpakete.md`; Abweichungen nur bewusst versioniert. Pfandpflichtige
+> Späti-Zeilen bleiben bis zu einem separaten, finanziell auditierten Pfand-Paket server- und UI-seitig
+> gesperrt — Pfand niemals in `price_cents` einrechnen.
+
+**DoD:** Frischer Tenant erreicht in einem getesteten Durchlauf in <10 Minuten 3 Kategorien + 15
+verkaufsfertige Produkte; Doppeltap/Retry importiert nichts doppelt; Preise sind Cent-Integer und jede
+Historie existiert; Kasse wirkt mit Preset-Visuals und ohne Visuals vollständig; VoiceOver/Dark Mode geprüft;
+Späti-Pfandzeilen können ohne freigegebene Pfand-Capability weder über UI noch API importiert werden.
+
+## [ ] S17C — 14-Tage-Trial ohne Compliance-Sackgasse (B9) — ~1,5–2 d
+**Prompt:**
+> Setze Paket S17C aus ROADMAP.md um (OFFEN.md B9): kein permanenter Live-Free-Tier. Stattdessen
+> unbegrenzter Einrichtungsmodus ohne echte Kassenbuchungen; bewusste „Testbetrieb aktivieren"-Aktion
+> provisioniert/prüft die Live-TSE und startet 14 Tage (`trial_started_at`, `trial_expires_at`).
+> Keine Kreditkarte und keine automatische Belastung; Planwahl im Onboarding tatsächlich speichern,
+> Copy korrigieren und Stripe-Checkout als bewussten Abschluss anbieten. Ersetze die pauschale
+> `subscriptionMiddleware` durch eine getestete Entitlement-Matrix: nach Ablauf keine neue Sitzung,
+> eine bereits offene Sitzung aber geordnet abschließen; Sync/Nachsignierung, Bons, DSFinV-K-Export,
+> Tenant-/Abo-Einstellungen und Checkout bleiben erreichbar. Trial-Restzeit/Banner ab Tag 10; E-Mails
+> aus S05–S07 weiterverwenden. Optionalen unbegrenzten Demo-/Übungsmodus nur als Backlog dokumentieren,
+> niemals mit fiskalisch echten Bons vermischen.
+
+**DoD:** Zeit-Fixture-Tests vor/bei/nach Ablauf; Ablauf mitten in offener Sitzung verliert weder Zahlung
+noch Z-Bericht/TSE-Sync; ausgewählter Plan stimmt in DB/UI/Stripe; Copy enthält nirgends Auto-Charge;
+402/Entitlement-Fehler führt immer zu einem handlungsfähigen Screen mit „Plan buchen".
 
 ## [ ] S18 — T6: `any`-Elimination, Geld-Pfade zuerst — ~1–2 d
 **Prompt:**
