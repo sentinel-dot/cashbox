@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from '../../db/index.js';
 import { enqueueMail, drainEmailQueue } from '../../services/email/queue.js';
-import { sendTrialWarning } from '../../services/email/index.js';
+import {
+  sendTrialWarning,
+  sendTseOutageAlert,
+  sendPasswordReset,
+  sendDailyZReport,
+  sendSubscriptionEvent,
+  sendLongOpenSessionWarning,
+} from '../../services/email/index.js';
 import type { SendInput, SendResult } from '../../services/email/send.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,6 +117,70 @@ describe('E-Mail-Queue — Einreihen', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].idempotency_key).toBe(`trial_warning:${tenantId}:day10`);
     expect(rows[1].idempotency_key).toBe(`trial_warning:${tenantId}:day13`);
+  });
+
+  it('reiht alle S06-Anlässe mit stabilen technischen Idempotenzschlüsseln ein', async () => {
+    const common = {
+      tenantId,
+      tenantName: 'Shishabar',
+      recipient: 'wirt@example.de',
+    };
+
+    await sendTseOutageAlert({
+      ...common,
+      outageId: 77,
+      deviceName: 'iPad Theke',
+      outageStartedAt: new Date('2026-07-18T08:00:00Z'),
+      observedAt: new Date('2026-07-20T09:00:00Z'),
+    });
+    await sendPasswordReset({
+      ...common,
+      requestId: 'request-uuid',
+      resetUrl: 'https://app.cashbox.de/passwort/reset?token=secret-token',
+      expiresAt: new Date('2026-07-20T11:00:00Z'),
+    });
+    await sendDailyZReport({
+      ...common,
+      zReportId: 88,
+      reportDate: new Date('2026-07-20T12:00:00Z'),
+      totalRevenueCents: 3050,
+      payments: [{ method: 'cash', amountCents: 3050 }],
+      differenceCents: 0,
+    });
+    await sendSubscriptionEvent({
+      ...common,
+      stripeEventId: 'evt_123',
+      event: 'past_due',
+    });
+    await sendLongOpenSessionWarning({
+      ...common,
+      sessionId: 99,
+      deviceName: 'iPad Theke',
+      openedAt: new Date('2026-07-19T07:00:00Z'),
+      observedAt: new Date('2026-07-20T09:00:00Z'),
+    });
+
+    const [rows] = await db.execute<any[]>(
+      'SELECT template, idempotency_key, body_html, body_text FROM email_queue ORDER BY id'
+    );
+    expect(rows.map((row) => row.idempotency_key)).toEqual([
+      `tse_outage:${tenantId}:77:48h`,
+      `password_reset:${tenantId}:request-uuid`,
+      `daily_z_report:${tenantId}:88`,
+      `subscription_event:${tenantId}:evt_123`,
+      `long_open_session:${tenantId}:99:24h`,
+    ]);
+    expect(rows.map((row) => row.template)).toEqual([
+      'tse_outage',
+      'password_reset',
+      'daily_z_report',
+      'subscription_event',
+      'long_open_session',
+    ]);
+    expect(rows.every((row) => row.body_html.includes('<!doctype html>'))).toBe(true);
+    expect(rows.every((row) => row.body_text.length > 0)).toBe(true);
+    expect(rows.map((row) => row.idempotency_key).join(':')).not.toContain('secret-token');
+    expect(rows.map((row) => row.idempotency_key).join(':')).not.toContain('wirt@example.de');
   });
 });
 

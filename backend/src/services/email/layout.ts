@@ -26,9 +26,9 @@ export function muted(html: string): string {
   return `<p class="ds-muted" style="margin:0 0 16px;font-family:${fontBody};font-size:14px;line-height:1.55;color:${L.text2};">${html}</p>`;
 }
 
-/** Kleines Label über einem Panel (Pendant zu DSSectionLabel). */
+/** Ruhiges Label über einem Panel (Pendant zu DSSectionLabel). */
 export function sectionLabel(text: string): string {
-  return `<div class="ds-muted" style="margin:0 0 8px;font-family:${fontBody};font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${L.text2};">${esc(text)}</div>`;
+  return `<div class="ds-muted" style="margin:0 0 8px;font-family:${fontBody};font-size:13px;font-weight:600;color:${L.text2};">${esc(text)}</div>`;
 }
 
 export type DetailRow = { label: string; value: string; strong?: boolean; mono?: boolean };
@@ -65,7 +65,7 @@ export function button(href: string, label: string): string {
   </table>`;
 }
 
-/** Hinweisfläche mit farbiger Kante — für Fristen, Pflichtmeldungen, Warnungen. */
+/** Vollflächige Hinweisbox für Fristen, Pflichtmeldungen und Warnungen. */
 export function notice(html: string, tone: 'info' | 'warn' | 'danger' = 'info'): string {
   const map = {
     info: { bg: L.accBg, fg: L.accT, cls: 'ds-notice-info' },
@@ -74,7 +74,7 @@ export function notice(html: string, tone: 'info' | 'warn' | 'danger' = 'info'):
   }[tone];
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;">
-    <tr><td class="${map.cls}" style="padding:16px 18px;background:${map.bg};border-left:4px solid ${map.fg};border-radius:0 10px 10px 0;font-family:${fontBody};font-size:15px;line-height:1.55;color:${map.fg};">${html}</td></tr>
+    <tr><td class="${map.cls}" style="padding:16px 18px;background:${map.bg};border:1px solid ${map.fg};border-radius:10px;font-family:${fontBody};font-size:15px;line-height:1.55;color:${map.fg};">${html}</td></tr>
   </table>`;
 }
 
