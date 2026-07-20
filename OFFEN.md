@@ -48,7 +48,7 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 | # | Paket | Inhalt | Aufwand |
 |---|---|---|---|
-| B1 | **E-Mail-Service** | **Grundgerüst erledigt 2026-07-20 (S05):** `src/services/email/` (Resend via REST, Queue mit Retry + Idempotenz, `email_log`-Nachweis, Ledger-Green-Layout) + Template 1 (Trial-Warnung). **Offen:** Templates 2–6 aus §5 (S06) + SPF/DKIM/DMARC-Einrichtung | 1 d Rest |
+| B1 | **E-Mail-Service** | **Code vollständig 2026-07-20 (S05/S06):** `src/services/email/` (Resend via REST, Queue mit Retry + Idempotenz, `email_log`-Nachweis, Ledger-Green-Layout), alle 6 Template-Gruppen und öffentliche Anlassfunktionen. **Extern offen:** Domain kaufen/festlegen, `mail.<domain>` in Resend mit SPF/DKIM/DMARC verifizieren und Echtmail nach `docs/betrieb.md` §4 zustellen | User-Gate |
 | B2 | **Cron-Jobs** (`src/cron.ts`, node-cron, läuft neben index.ts) | Täglich: Trial-Ablauf-Warnung (Tag 10+13), `past_due`-Sperrung nach Grace Period, Sessions >24h offen → Owner-Mail (GoBD), TSE-Ausfall >48h → Meldung + `tse_outages.notified_at`. Stündlich: `failed`-Offline-Queue-Einträge → Alert; **serverseitiger Offline-Queue-Drain** (Nachsignierung darf nicht davon abhängen, dass das iPad wiederkommt); geschlossene Sessions ohne z_report → Alert (A9) | 2 d |
 | B3 | **Passwort-Reset** | `POST /auth/forgot-password` + `/reset-password`: Token (einmalig, 1h, gehasht in DB) per Mail, Rate-Limit, kein User-Enumeration-Leak (immer 200) | 1 d |
 | B4 | **`versionMiddleware`** | `X-App-Version`-Header, semver-Vergleich gegen `devices.min_app_version` → 426; iOS zeigt Update-Hinweis | 0,5 d |
@@ -77,23 +77,25 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 ## 5. Arbeitspaket: E-Mails (B1)
 
-**Grundgerüst steht (S05, 2026-07-20).** Entschieden: **Resend** (REST via `fetch`, kein SDK — eine
+**Code vollständig (S05/S06, 2026-07-20).** Entschieden: **Resend** (REST via `fetch`, kein SDK — eine
 Abhängigkeit weniger). Implementiert in `backend/src/services/email/`:
 
 | Datei | Inhalt |
 |---|---|
 | `send.ts` | Resend-REST-Aufruf, 15-s-Timeout; **ohne `RESEND_API_KEY` Dry-Run** (Dev/CI versenden nie nach außen) |
 | `queue.ts` | `enqueueMail` (INSERT IGNORE auf `idempotency_key`) + `drainEmailQueue` (atomarer Claim, Backoff 1/5/15/60/240 min, `failed` + Sentry nach `max_attempts`, Stuck-Reset nach 10 min) |
-| `templates.ts` | Registry `TemplateName → Builder`; neues Template = Payload-Typ + Builder + Registry-Eintrag |
+| `templates.ts` | Registry `TemplateName → Builder`; 6 Gruppen vollständig, Subscription-Events als typsichere Varianten `past_due` / `cancelled` / `reactivated` |
 | `layout.ts` / `palette.ts` / `format.ts` | Ledger-Green-Bausteine, `euroString` in Frontend-Parität |
-| `index.ts` | Öffentliche Anlass-Funktionen (bisher `sendTrialWarning`) |
+| `index.ts` | Öffentliche Anlass-Funktionen für Trial, TSE-Ausfall, Passwort-Reset, Z-Bericht, Subscription-Events und Session >24 h |
 
 **Zwei Tabellen mit getrennten Rollen (V009):** `email_queue` operativ/UPDATE-bar (Inhalte werden nach
 Erfolg genullt — DSGVO), `email_log` INSERT-only via `audit_insert_user` (Versandnachweis mit
 `provider_message_id`, Pflicht bei KassenSichV-Meldemails).
 
-**Noch offen:** Templates 2–6 (S06), SPF/DKIM/DMARC + verifizierte Absenderdomain, `MAIL_FROM`/
-`RESEND_API_KEY` in Prod setzen, Drain per Cron (S07 — bisher ruft niemand `drainEmailQueue` periodisch auf).
+**Noch offen (externes Gate):** Hauptdomain festlegen/kaufen, `mail.<domain>` in Resend per
+SPF/DKIM/DMARC verifizieren, `MAIL_FROM`/`RESEND_API_KEY` in Prod setzen und eine Echtmail samt
+`email_log`-Nachweis zustellen (`docs/betrieb.md` §4). Drain per Cron kommt in S07 — bisher ruft
+niemand `drainEmailQueue` periodisch auf.
 
 **Design:** HTML-Templates im Ledger-Green-Look, Tokens aus `DesignSystem.swift` gespiegelt:
 - Palette: Ledger-Green-Primär, Brass-Akzent, olivgetönte Neutrals (Hex-Werte aus DS.C übernehmen)
@@ -103,11 +105,11 @@ Erfolg genullt — DSGVO), `email_log` INSERT-only via `audit_insert_user` (Vers
 
 **Templates (je: Betreff, HTML, Plaintext):**
 1. ~~Trial-Warnung (Tag 10 + 13) — Restzeit, Plan-CTA~~ ✅ erledigt (S05)
-2. TSE-Ausfall >48h — Pflichtmeldung mit Ausfallzeitraum, betroffenem Gerät, Handlungsanweisung (ELSTER-Meldung)
-3. Passwort-Reset — Token-Link, 1h-Hinweis
-4. Z-Bericht-Tageszusammenfassung (opt-in) — Umsatz, Zahlarten, Differenz; der tägliche Berührungspunkt, der die App vom Wettbewerb abhebt
-5. Subscription-Events — Zahlung fehlgeschlagen (past_due), Kündigung bestätigt (+ Datenexport-Hinweis), Reaktivierung
-6. Session >24h offen — GoBD-Warnung an Owner
+2. ~~TSE-Ausfall >48h — Pflichtmeldung mit Ausfallzeitraum, betroffenem Gerät, Handlungsanweisung (ELSTER-Meldung)~~ ✅ S06
+3. ~~Passwort-Reset — Token-Link, 1h-Hinweis~~ ✅ S06
+4. ~~Z-Bericht-Tageszusammenfassung (opt-in) — Umsatz, Zahlarten, Differenz~~ ✅ S06
+5. ~~Subscription-Events — Zahlung fehlgeschlagen (past_due), Kündigung bestätigt (+ Datenexport-Hinweis), Reaktivierung~~ ✅ S06
+6. ~~Session >24h offen — GoBD-Warnung an Owner~~ ✅ S06
 
 ---
 

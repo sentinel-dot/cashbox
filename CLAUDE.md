@@ -13,7 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Suiten:** Backend 110 Unit/Compliance + 320 Integration, iOS 40 XCTests — alle grün (2026-07-20)
+**Suiten:** Backend 126 Unit/Compliance + 321 Integration, iOS 40 XCTests — alle grün (2026-07-20)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -228,7 +228,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | Stripe Webhook | POST /webhooks/stripe (alle Subscription-Events, Idempotenz) | ✅ |
 | Berichte | GET /reports/daily, GET /reports/summary (Plan-Limit: 30/365/3650 Tage) | ✅ |
 | DSFinV-K Export | GET /export/dsfinvk, /:exportId/status, /:exportId/file | ✅ |
-| E-Mail (Resend) | **kein Endpoint** — Service `services/email/` (enqueue + drain), Template 1 von 6 | ✅ |
+| E-Mail (Resend) | **kein Endpoint** — Service `services/email/` (enqueue + drain), 6 von 6 Template-Gruppen inkl. 3 Subscription-Varianten | ✅ |
 
 ### Noch nicht implementiert ❌
 | Bereich | Endpoints | Phase |
@@ -359,7 +359,8 @@ src/
 ├── services/
 │   ├── audit.ts        -- audit_log INSERT via audit_insert_user
 │   ├── email/          -- E-Mail (Resend via REST, kein SDK):
-│   │                      index.ts   = öffentliche Anlass-Funktionen (sendTrialWarning)
+│   │                      index.ts   = öffentliche Anlass-Funktionen für Trial, TSE-Ausfall,
+│   │                                   Passwort-Reset, Z-Bericht, Abo-Status und Langzeit-Session
 │   │                      queue.ts   = enqueueMail (INSERT IGNORE auf idempotency_key)
 │   │                                   + drainEmailQueue (Claim, Backoff, email_log)
 │   │                      send.ts    = Resend-Call, Dry-Run ohne RESEND_API_KEY
@@ -390,7 +391,8 @@ src/
     │                      zReportAggregation (buildZReportData, Mock-Executor),
     │                      sequences (Mock-Conn), fiskalyPayload (centsToFiskaly,
     │                      buildAmountsPerVatRate, aggregatePaymentTypes),
-    │                      emailTemplates (euroString-Parität, Berlin-Zeit, esc,
+    │                      emailTemplates (6 Gruppen, Subscription-Varianten,
+    │                      euroString-Parität, Berlin-Zeit, esc,
     │                      Registry-Vollständigkeit, backoffMinutes),
     │                      sentryConfig (Testlauf meldet nichts — T10-Regression)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),

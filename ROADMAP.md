@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-20 · Suiten: Backend 107 Unit/Compliance + 320 Integration, iOS 40 XCTests — alle grün.
+**Stand:** 2026-07-20 · Suiten: Backend 126 Unit/Compliance + 321 Integration, iOS 40 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -177,6 +177,16 @@ Nicht mitgefixt (Paket-Regel), aber vor Go-live einzeilig zu beheben.
 **Zusätzlich aus S05 übernommen:** Resend-Account + verifizierte Domain einrichten und **eine echte
 Mail an die eigene Adresse** zustellen (S05 lief mangels Account komplett im Dry-Run). Erst damit ist
 die S05-DoD vollständig.
+
+**Code erledigt 2026-07-20, externes Gate offen:** Registry auf exakt 6 Template-Gruppen erweitert:
+TSE-Ausfall >48 h, Passwort-Reset, Z-Bericht-Tageszusammenfassung, Subscription-Event mit den drei
+typsicheren Varianten `past_due`/`cancelled`/`reactivated` und Session >24 h. Alle liefern Betreff,
+Ledger-Green-HTML und Plaintext; fremde Werte werden escaped, Geld bleibt Cent-Integer und Datum/Zeit
+Europe/Berlin. `index.ts` stellt je Anlass eine Queue-Funktion mit technischer, tenant-gescopter
+Idempotenz-ID bereit. Tests: **+16 Unit** (`unit/emailTemplates`, jetzt 39 in der Datei) und
+**+1 Integration** (`integration/email-queue`) → 126 + 321 grün. REQ-MAIL-009…011 und Runbook in
+`docs/betrieb.md` §4. **Checkbox bleibt offen**, bis eine noch zu kaufende/festzulegende Domain als
+`mail.<domain>` verifiziert, eine Echtmail zugestellt und die Resend-ID in `email_log` geprüft wurde.
 
 ## [ ] S07 — Cron-Jobs (B2, inkl. A9) — ~2 d
 **Prompt:**

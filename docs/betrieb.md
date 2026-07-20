@@ -1,6 +1,6 @@
-# Betrieb — Monitoring & Prozess-Lebenszyklus
+# Betrieb — Monitoring, Prozess-Lebenszyklus und E-Mail
 
-Stand: 2026-07-19 (ROADMAP S03). Betrifft `src/sentry.ts`, `src/shutdown.ts`, `src/index.ts`.
+Stand: 2026-07-20 (ROADMAP S03/S06). Betrifft Monitoring, Shutdown und Resend-Betrieb.
 
 ---
 
@@ -123,3 +123,68 @@ PM2/systemd müssen dem Prozess nach `SIGTERM` mindestens 15 s Zeit lassen (10 s
 `.js`-Endungen der relativen Imports nicht auf `.ts` auf (`Cannot find module './sentry.js'`).
 Das betrifft jeden Import in `index.ts` und ist unabhängig von S03 — Tests laufen über
 vitest, Produktion über `npm run build` + `npm start`. Notiert in OFFEN.md (T8).
+
+---
+
+## 4. Transaktionsmails mit Resend
+
+### Sicherheitszustand und Variablen
+
+Ohne `RESEND_API_KEY` arbeitet der Mail-Service absichtlich im Dry-Run: Er rendert und
+protokolliert den Vorgang, sendet aber nichts nach außen. Das bleibt für Development und CI
+der Standard. Produktionswerte gehören ausschließlich in den Secret Store bzw. die nicht
+committete Produktions-`.env`:
+
+| Variable | Produktionswert |
+|---|---|
+| `RESEND_API_KEY` | API-Key des cashbox-Resend-Projekts |
+| `MAIL_FROM` | `cashbox <noreply@mail.<hauptdomain>>` |
+| `APP_URL` | Öffentliche Basis-URL für Abo-, Export-, Reset- und Berichtslinks |
+
+API-Key, Reset-Token und reale Empfängeradressen dürfen weder in Git noch in Nachweisprotokolle.
+Der periodische Queue-Drain folgt erst in S07; für die einmalige Abnahme kann er gezielt über
+einen lokalen, nicht committeten Aufruf gestartet werden.
+
+### Domain, SPF und DKIM
+
+Die Hauptdomain ist noch nicht ausgewählt. Sobald sie vorhanden ist, wird eine dedizierte
+Versand-Subdomain `mail.<hauptdomain>` verwendet. Das isoliert die Versand-Reputation vom
+restlichen Domainverkehr und entspricht der Resend-Empfehlung.
+
+1. Im Resend-Dashboard unter **Domains → Add Domain** `mail.<hauptdomain>` hinzufügen.
+2. Sämtliche dort angezeigten SPF-, DKIM- und Return-Path-DNS-Einträge beim DNS-Provider
+   **wortgetreu** anlegen. Record-Typ, Host und Wert nicht aus Beispielen dieser Doku ableiten:
+   Resend erzeugt sie für die konkrete Domain.
+3. Existiert am exakt selben Host bereits ein SPF-TXT-Record, keinen zweiten `v=spf1`-Record
+   danebenlegen. Die autorisierten Quellen in einem einzigen SPF-Record zusammenführen oder
+   vorab klären, ob Resends separate Return-Path-Subdomain den Konflikt vermeidet.
+4. DNS-Propagation abwarten und in Resend **Verify DNS Records** auslösen. Erst der Status
+   `verified` belegt, dass SPF und DKIM für den Versand erkannt wurden.
+
+Aktuelle Referenz: [Resend — Managing Domains](https://resend.com/docs/dashboard/domains/introduction).
+
+### DMARC stufenweise aktivieren
+
+DMARC kommt nach erfolgreicher SPF-/DKIM-Verifikation als TXT-Record an
+`_dmarc.mail.<hauptdomain>` hinzu. Die Reporting-Adresse muss real existieren und regelmäßig
+ausgewertet werden.
+
+1. Monitoring starten: `v=DMARC1; p=none; rua=mailto:dmarc-reports@<hauptdomain>;`
+2. Aus cashbox und allen anderen legitimen Absendern Testmails senden. In den vollständigen
+   Headern `spf=pass`, `dkim=pass` und `dmarc=pass` prüfen; Reports mindestens mehrere Tage
+   auf unbekannte Quellen kontrollieren.
+3. Erst danach auf `p=quarantine` und schließlich `p=reject` verschärfen. Nie direkt mit
+   `reject` starten, solange nicht alle legitimen Absender inventarisiert sind.
+
+Aktuelle Referenz: [Resend — Implementing DMARC](https://resend.com/docs/dashboard/domains/dmarc).
+
+### Abnahmeprotokoll (REQ-MAIL-011)
+
+S06 ist extern erst abgenommen, wenn alle Punkte belegt sind:
+
+- [ ] Resend-Domainstatus `verified`
+- [ ] `MAIL_FROM`, `APP_URL` und `RESEND_API_KEY` sicher in der Produktionsumgebung gesetzt
+- [ ] Repräsentative Mail an die eigene Adresse zugestellt; HTML und Plaintext geprüft
+- [ ] Header zeigen `spf=pass`, `dkim=pass` und `dmarc=pass`
+- [ ] Resend-Message-ID stimmt mit `email_log.provider_message_id` überein
+- [ ] Datum und anonymisierte Nachweis-ID hier ergänzt: **offen — Domain noch nicht vorhanden**
