@@ -13,6 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
+**Suiten:** Backend 110 Unit/Compliance + 320 Integration, iOS 40 XCTests — alle grün (2026-07-20)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -61,6 +62,9 @@ Dasselbe gilt für das **Frontend (SwiftUI):** Nach jeder Implementierung (neuer
   - `cash_register_sessions.status`, `.closed_at`, `.closing_cash_cents`, `.expected_cash_cents`, `.difference_cents`
   - `offline_queue.status`, `.retry_count`, `.error_message`, `.synced_at`, `.payload_json`, `.processing_started_at`
   - `tse_outages.ended_at`, `.notified_at`, `.reported_to_finanzamt`
+  - `email_queue.status`, `.attempts`, `.next_attempt_at`, `.last_error`, `.processing_started_at`,
+    `.sent_at` sowie das Nullen von `.subject`/`.body_html`/`.body_text` nach Erfolg (DSGVO).
+    **`email_log` dagegen ist INSERT-only** (Versandnachweis, via `audit_insert_user`)
   - `receipts.tse_*` + `.tse_pending` (nur Nachsignierung via Offline-Queue — keine Beträge)
   - `products.price_cents` / `.vat_rate_*` (nur in `changePrice` NACH dem `product_price_history`-INSERT)
 - Storno = neue Gegenbuchung in `cancellations` + neue TSE-Transaktion, nicht Zeile ändern.
@@ -224,6 +228,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | Stripe Webhook | POST /webhooks/stripe (alle Subscription-Events, Idempotenz) | ✅ |
 | Berichte | GET /reports/daily, GET /reports/summary (Plan-Limit: 30/365/3650 Tage) | ✅ |
 | DSFinV-K Export | GET /export/dsfinvk, /:exportId/status, /:exportId/file | ✅ |
+| E-Mail (Resend) | **kein Endpoint** — Service `services/email/` (enqueue + drain), Template 1 von 6 | ✅ |
 
 ### Noch nicht implementiert ❌
 | Bereich | Endpoints | Phase |
@@ -297,7 +302,9 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
   `tenant` (aus JWT), `method`, `url`. **Keine PII**: keine Bodies, Header, IPs, Namen oder
   Beträge (`sendDefaultPii: false`, kein Tracing) — AVV-relevant, beim Erweitern prüfen.
   Ohne `SENTRY_DSN` ist Sentry komplett aus und alle Aufrufe sind No-Ops.
-  `src/sentry.ts` **muss der erste Import in `index.ts` bleiben** (lädt eigene .env).
+  `src/sentry.ts` **muss der erste Import in `index.ts` bleiben** (lädt eigene .env —
+  mit demselben `NODE_ENV`-Pfad-Switch wie `db/index.ts`, sonst meldet der Testlauf
+  echte Events ans Produktionsprojekt; Regressionsschutz: `unit/sentryConfig.test.ts`).
 - **Shutdown** (`src/shutdown.ts`) — Reihenfolge **Server drainen → Sentry flushen →
   DB-Pools schließen → exit**, idempotent gegen ein zweites Signal, 10-s-Notbremse bei
   hängendem Drain. Ausgelöst von SIGTERM/SIGINT sowie `unhandledRejection`/
@@ -351,6 +358,14 @@ src/
 │                          validationMiddleware
 ├── services/
 │   ├── audit.ts        -- audit_log INSERT via audit_insert_user
+│   ├── email/          -- E-Mail (Resend via REST, kein SDK):
+│   │                      index.ts   = öffentliche Anlass-Funktionen (sendTrialWarning)
+│   │                      queue.ts   = enqueueMail (INSERT IGNORE auf idempotency_key)
+│   │                                   + drainEmailQueue (Claim, Backoff, email_log)
+│   │                      send.ts    = Resend-Call, Dry-Run ohne RESEND_API_KEY
+│   │                      templates.ts / layout.ts / palette.ts / format.ts
+│   │                      HINWEIS: drainEmailQueue ruft bisher NIEMAND periodisch auf —
+│   │                               der Cron-Drain kommt in S07.
 │   ├── fiskaly.ts      -- TSE-Operationen + Offline-Fallback (enqueueOffline);
 │   │                      10s-Timeout je Request; befüllt tse_outages
 │   │                      (Offline-Fallback öffnet, Erfolg schließt Eintrag)
@@ -363,7 +378,9 @@ src/
 │   │                      V005__shishabar_seed (Pilot-Testdaten: Tenant, Users, Produkte, Tische),
 │   │                      V006__offline_queue_processing_started_at (atomarer Sync-Claim),
 │   │                      V007__performance_indexes,
-│   │                      V008__cancellations_unique_original (Doppel-Storno-Backstop)
+│   │                      V008__cancellations_unique_original (Doppel-Storno-Backstop),
+│   │                      V009__email_queue_and_log (email_queue operativ,
+│   │                        email_log INSERT-only = Versandnachweis)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/
@@ -372,9 +389,14 @@ src/
     │                      cancellationNegation (buildCancellationValues),
     │                      zReportAggregation (buildZReportData, Mock-Executor),
     │                      sequences (Mock-Conn), fiskalyPayload (centsToFiskaly,
-    │                      buildAmountsPerVatRate, aggregatePaymentTypes)
+    │                      buildAmountsPerVatRate, aggregatePaymentTypes),
+    │                      emailTemplates (euroString-Parität, Berlin-Zeit, esc,
+    │                      Registry-Vollständigkeit, backoffMinutes),
+    │                      sentryConfig (Testlauf meldet nichts — T10-Regression)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
     │                      devices, e2e-tagesablauf (kompletter Kassentag),
+    │                      email-queue (Enqueue/Idempotenz, Drain, email_log-Nachweis,
+    │                      Retry + failed, Stuck-Claim, Tenant-Isolation),
     │                      errorHandler (5xx→Sentry, 4xx nicht, kein Leak in Prod),
     │                      export, mixed-payments, modifierGroups, offline-queue,
     │                      onboarding, orders, payments, products, receipts,

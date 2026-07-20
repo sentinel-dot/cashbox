@@ -16,7 +16,10 @@
 // relevant (N8) und muss so bleiben.
 
 import dotenv from 'dotenv';
-dotenv.config();
+// Denselben Pfad-Switch wie db/index.ts: ohne ihn lädt auch der Testlauf die
+// Entwickler-.env samt echtem DSN — und meldet Testfehler ans Produktionsprojekt
+// (genau das Dashboard, auf dem die Alert-Regel sitzt). OFFEN.md T10.
+dotenv.config({ path: process.env['NODE_ENV'] === 'test' ? '.env.test' : '.env' });
 
 import * as Sentry from '@sentry/node';
 import { logger } from './logger.js';

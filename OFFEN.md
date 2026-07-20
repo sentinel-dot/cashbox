@@ -48,7 +48,7 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 | # | Paket | Inhalt | Aufwand |
 |---|---|---|---|
-| B1 | **E-Mail-Service** | Siehe Arbeitspaket §5 (Resend/Postmark + Ledger-Green-Templates) | 2–3 d |
+| B1 | **E-Mail-Service** | **Grundgerüst erledigt 2026-07-20 (S05):** `src/services/email/` (Resend via REST, Queue mit Retry + Idempotenz, `email_log`-Nachweis, Ledger-Green-Layout) + Template 1 (Trial-Warnung). **Offen:** Templates 2–6 aus §5 (S06) + SPF/DKIM/DMARC-Einrichtung | 1 d Rest |
 | B2 | **Cron-Jobs** (`src/cron.ts`, node-cron, läuft neben index.ts) | Täglich: Trial-Ablauf-Warnung (Tag 10+13), `past_due`-Sperrung nach Grace Period, Sessions >24h offen → Owner-Mail (GoBD), TSE-Ausfall >48h → Meldung + `tse_outages.notified_at`. Stündlich: `failed`-Offline-Queue-Einträge → Alert; **serverseitiger Offline-Queue-Drain** (Nachsignierung darf nicht davon abhängen, dass das iPad wiederkommt); geschlossene Sessions ohne z_report → Alert (A9) | 2 d |
 | B3 | **Passwort-Reset** | `POST /auth/forgot-password` + `/reset-password`: Token (einmalig, 1h, gehasht in DB) per Mail, Rate-Limit, kein User-Enumeration-Leak (immer 200) | 1 d |
 | B4 | **`versionMiddleware`** | `X-App-Version`-Header, semver-Vergleich gegen `devices.min_app_version` → 426; iOS zeigt Update-Hinweis | 0,5 d |
@@ -77,7 +77,23 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 
 ## 5. Arbeitspaket: E-Mails (B1)
 
-**Service:** Resend oder Postmark (REST, kein SMTP-Gefrickel). `src/services/email.ts` mit Template-Registry, Versand-Log in neuer Tabelle `email_log` (INSERT-only: tenant_id, template, recipient, sent_at, provider_message_id) — bei KassenSichV-Meldemails muss der Versand nachweisbar sein. Fehlversand → Retry via Queue-Pattern analog offline_queue.
+**Grundgerüst steht (S05, 2026-07-20).** Entschieden: **Resend** (REST via `fetch`, kein SDK — eine
+Abhängigkeit weniger). Implementiert in `backend/src/services/email/`:
+
+| Datei | Inhalt |
+|---|---|
+| `send.ts` | Resend-REST-Aufruf, 15-s-Timeout; **ohne `RESEND_API_KEY` Dry-Run** (Dev/CI versenden nie nach außen) |
+| `queue.ts` | `enqueueMail` (INSERT IGNORE auf `idempotency_key`) + `drainEmailQueue` (atomarer Claim, Backoff 1/5/15/60/240 min, `failed` + Sentry nach `max_attempts`, Stuck-Reset nach 10 min) |
+| `templates.ts` | Registry `TemplateName → Builder`; neues Template = Payload-Typ + Builder + Registry-Eintrag |
+| `layout.ts` / `palette.ts` / `format.ts` | Ledger-Green-Bausteine, `euroString` in Frontend-Parität |
+| `index.ts` | Öffentliche Anlass-Funktionen (bisher `sendTrialWarning`) |
+
+**Zwei Tabellen mit getrennten Rollen (V009):** `email_queue` operativ/UPDATE-bar (Inhalte werden nach
+Erfolg genullt — DSGVO), `email_log` INSERT-only via `audit_insert_user` (Versandnachweis mit
+`provider_message_id`, Pflicht bei KassenSichV-Meldemails).
+
+**Noch offen:** Templates 2–6 (S06), SPF/DKIM/DMARC + verifizierte Absenderdomain, `MAIL_FROM`/
+`RESEND_API_KEY` in Prod setzen, Drain per Cron (S07 — bisher ruft niemand `drainEmailQueue` periodisch auf).
 
 **Design:** HTML-Templates im Ledger-Green-Look, Tokens aus `DesignSystem.swift` gespiegelt:
 - Palette: Ledger-Green-Primär, Brass-Akzent, olivgetönte Neutrals (Hex-Werte aus DS.C übernehmen)
@@ -86,7 +102,7 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 - Absender: `noreply@<domain>`, SPF/DKIM/DMARC einrichten (sonst landet die KassenSichV-Pflichtmail im Spam)
 
 **Templates (je: Betreff, HTML, Plaintext):**
-1. Trial-Warnung (Tag 10 + 13) — Restzeit, Plan-CTA
+1. ~~Trial-Warnung (Tag 10 + 13) — Restzeit, Plan-CTA~~ ✅ erledigt (S05)
 2. TSE-Ausfall >48h — Pflichtmeldung mit Ausfallzeitraum, betroffenem Gerät, Handlungsanweisung (ELSTER-Meldung)
 3. Passwort-Reset — Token-Link, 1h-Hinweis
 4. Z-Bericht-Tageszusammenfassung (opt-in) — Umsatz, Zahlarten, Differenz; der tägliche Berührungspunkt, der die App vom Wettbewerb abhebt
@@ -126,6 +142,7 @@ Erledigt 2026-07-19: T1 (5 Unit-Dateien: splitPartition, cancellationNegation, z
 | T7 | ~~**Test-Target verlangt iOS 26.2, App nur 18.2**~~ | Entschieden + umgesetzt 2026-07-20: **App-Mindestversion auf iOS 26.2 angehoben** (Niko-Entscheidung: nur aktuelles iPadOS ab 26 unterstützen), nicht das Test-Target gesenkt. Alle vier Build-Configs (App + `zettel-frontendTests`, Debug + Release) stehen jetzt einheitlich auf `IPHONEOS_DEPLOYMENT_TARGET = 26.2`; das Test-Target lief zusätzlich auf `TARGETED_DEVICE_FAMILY = "1,2"` und ist jetzt wie die App auf `2` (iPad-only). Damit testen App und Tests dieselbe Mindestversion, und `macos-26` in CI ist Konsequenz statt offener Punkt (Preview-Status bewusst akzeptiert). Nachweis: 40 XCTests grün auf iPad Pro 11" (M5), iOS 26.3. **Folge für S04:** das Pilot-iPad muss iPadOS 26 laufen können (iPad Pro ab A12X, iPad Air ab 3. Gen, iPad ab 8. Gen, iPad mini ab 5. Gen) — vor dem TestFlight-Build prüfen | ✅ |
 | T9 | ~~**Report-Tests nachts 2 h flaky (UTC vs. Europe/Berlin)**~~ | Gefunden + behoben 2026-07-20 (während S03, um 00:13 CEST aufgeschlagen). `reports.test.ts`/`cancellations.test.ts` berechneten „heute" als **UTC**-Datum (`toISOString().slice(0,10)`), die Berichte bucketen aber via `CONVERT_TZ` nach **Europe/Berlin**. Zwischen 00:00–02:00 Berliner Zeit (22:00–24:00 UTC) laufen die Daten auseinander → Tests fragen den Vortag ab, bekommen korrekt 0, werden rot. **Die Berichtslogik war richtig** — nur die Tests lagen falsch. Relevanz: CI läuft in UTC, das PR-Gate aus S01 wäre jede Nacht 2 h lang unzuverlässig gewesen. Fix: `berlinDate()`/`berlinDateDaysAgo()` in `testHelpers.ts`; die UTC-Idiom-Stellen in `products`/`receipts-list`/`export` sind unkritisch (Berechtigung bzw. 60-Tage-Abstand, `exportController` nutzt kein CONVERT_TZ) und blieben unverändert | ✅ |
 | T8 | **`npm run dev` startet nicht** | `ts-node src/index.ts` scheitert im CommonJS-Modus an den `.js`-Endungen der relativen Imports (`Cannot find module './sentry.js'`) — betrifft jeden Import in `index.ts`, nicht nur den neuen. Bestandsproblem, bei S03 aufgefallen, weil dort erstmals lokal gestartet wurde. Tests laufen über vitest (löst korrekt auf), Produktion über `npm run build` + `npm start` — deshalb bisher unbemerkt. Fix: `tsx` statt `ts-node` als dev-Runner (löst `.js`→`.ts` auf), oder ts-node ESM-Loader. Nicht dringend, aber jeder neue Entwickler stolpert sofort darüber (vgl. S5 Docker Compose) | Gelegenheit / vor S5 |
+| T10 | ~~**Testläufe melden echte Events ans Produktions-Sentry**~~ | Gefunden + behoben 2026-07-20 (bei S05). `src/sentry.ts` rief `dotenv.config()` ohne Pfad und lud damit immer `.env`, nie `.env.test` — lokal steht dort seit S03 ein echter DSN, also ging jeder Testfehler ins EU-Produktionsprojekt (aufgefallen, weil der `failed`-Pfad der E-Mail-Queue `captureException` ruft). In CI war es harmlos (kein `.env`), lokal verfälschte es genau das Dashboard, auf dem die Alert-Regel sitzt. Fix: derselbe Pfad-Switch wie in `db/index.ts`; Regressionsschutz in `unit/sentryConfig.test.ts` (schlägt an, wenn der Switch verschwindet **oder** jemand einen DSN in `.env.test` einträgt). Log sagt im Testlauf jetzt „Sentry deaktiviert" | ✅ |
 | T6 | **Backend: `any` eliminieren (237 Stellen, davon 160 `db.execute<any[]>`)** | Request-Seite ist via Zod schon typisiert (`z.infer`), die DB-Seite nicht. Plan: (1) Row-Interfaces pro Tabelle in `src/db/types.ts` (`OrderRow`, `ReceiptRow`, …) und `db.execute<OrderRow[]>` — Achtung: mysql2-Generics sind reine Casts, keine Runtime-Prüfung, daher Spalten-Drift weiter durch Integrationstests absichern; (2) `ResultSetHeader` statt `<any>` für INSERT/UPDATE-Ergebnisse; (3) `catch (err: unknown)` + Narrowing statt `err: any`; (4) ESLint `@typescript-eslint/no-explicit-any: error` als Ratchet, Geld-Pfade zuerst (payments, splitBill, cancellations, sessions). iOS ist sauber (nur KeychainHelper nutzt `[String: Any]` — Security-C-API, unvermeidbar) | Vor Go-live, schrittweise |
 
 ---
