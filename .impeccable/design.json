@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-20T21:23:34Z",
+  "title": "Design System: cashbox",
+  "extensions": {
+    "colorMeta": {
+      "canvas-light": { "role": "neutral", "displayName": "Ledger Paper Light", "canonical": "#F4F6F1", "tonalRamp": ["#282F1E", "#434E32", "#5D6D46", "#788C5A", "#91A573", "#AAB992", "#CED7C1", "#F3F5EF"] },
+      "canvas-dark": { "role": "neutral", "displayName": "Ledger Paper Dark", "canonical": "#121410", "tonalRamp": ["#262B22", "#404739", "#59634F", "#738066", "#8C9980", "#A6B09C", "#CCD2C6", "#F2F4F1"] },
+      "surface-light": { "role": "neutral", "displayName": "Porcelain Surface Light", "canonical": "#FFFFFF", "tonalRamp": ["#262626", "#404040", "#595959", "#737373", "#8C8C8C", "#A6A6A6", "#CCCCCC", "#F2F2F2"] },
+      "surface-dark": { "role": "neutral", "displayName": "Porcelain Surface Dark", "canonical": "#1B1E17", "tonalRamp": ["#272B21", "#414837", "#5B654D", "#758264", "#8E9B7D", "#A7B29A", "#CDD3C5", "#F2F4F1"] },
+      "surface-muted-light": { "role": "neutral", "displayName": "Quiet Surface Light", "canonical": "#ECEFE6", "tonalRamp": ["#292F1E", "#444E32", "#606D46", "#7B8C5A", "#95A573", "#ACB992", "#D0D7C1", "#F3F5EF"] },
+      "surface-muted-dark": { "role": "neutral", "displayName": "Quiet Surface Dark", "canonical": "#262A20", "tonalRamp": ["#272B21", "#414837", "#5C654D", "#768263", "#8F9C7D", "#A8B29A", "#CDD3C5", "#F3F4F1"] },
+      "ink-light": { "role": "neutral", "displayName": "Register Ink Light", "canonical": "#1A1F17", "tonalRamp": ["#252C21", "#3D4936", "#56664C", "#6F8462", "#889D7B", "#A2B399", "#CAD4C4", "#F2F4F0"] },
+      "ink-dark": { "role": "neutral", "displayName": "Register Ink Dark", "canonical": "#F1F3EC", "tonalRamp": ["#2A2F1E", "#464E31", "#626D45", "#7E8D59", "#97A672", "#AEBA92", "#D1D8C0", "#F3F5EF"] },
+      "ink-secondary-light": { "role": "neutral", "displayName": "Muted Ink Light", "canonical": "#596052", "tonalRamp": ["#262923", "#40453B", "#596052", "#737C6A", "#8C9583", "#A6AD9F", "#CCD0C8", "#F2F3F1"] },
+      "ink-secondary-dark": { "role": "neutral", "displayName": "Muted Ink Dark", "canonical": "#A2AA95", "tonalRamp": ["#272A22", "#414739", "#5C634F", "#767F66", "#8F9980", "#A8B09C", "#CDD2C6", "#F3F4F1"] },
+      "border-light": { "role": "neutral", "displayName": "Hairline Olive Light", "canonical": "#DDE2D4", "tonalRamp": ["#282E1F", "#434C33", "#5E6B48", "#79895C", "#93A376", "#ABB794", "#CFD6C2", "#F3F5F0"] },
+      "border-dark": { "role": "neutral", "displayName": "Hairline Olive Dark", "canonical": "#31362B", "tonalRamp": ["#272B22", "#404739", "#5A634F", "#748066", "#8D997F", "#A7B09C", "#CDD2C6", "#F2F4F1"] },
+      "ledger-green-light": { "role": "primary", "displayName": "Ledger Green Light", "canonical": "#4A7310", "tonalRamp": ["#2B4309", "#487010", "#659D16", "#82C91C", "#9BE336", "#B1E962", "#D3F3A5", "#F4FCE9"] },
+      "ledger-green-dark": { "role": "primary", "displayName": "Ledger Green Dark", "canonical": "#6D9A28", "tonalRamp": ["#2B3D10", "#48651A", "#648E25", "#81B62F", "#9AD049", "#B1DA71", "#D2EAAE", "#F4FAEB"] },
+      "ledger-soft-light": { "role": "primary", "displayName": "Ledger Wash Light", "canonical": "#EDF3DE", "tonalRamp": ["#2E3814", "#4D5D22", "#6B8330", "#8AA83D", "#A3C257", "#B8CF7C", "#D6E4B4", "#F5F8EC"] },
+      "ledger-soft-dark": { "role": "primary", "displayName": "Ledger Wash Dark", "canonical": "#232B15", "tonalRamp": ["#2A3319", "#46562A", "#62783B", "#7E9A4B", "#97B465", "#AEC487", "#D1DEBA", "#F3F7EE"] },
+      "ledger-text-light": { "role": "primary", "displayName": "Ledger Ink Light", "canonical": "#3C5E0C", "tonalRamp": ["#2B4409", "#48710E", "#659E14", "#82CC1A", "#9BE533", "#B2EB61", "#D3F3A5", "#F4FCE8"] },
+      "ledger-text-dark": { "role": "primary", "displayName": "Ledger Ink Dark", "canonical": "#AECB6E", "tonalRamp": ["#2D3814", "#4B5E22", "#69832F", "#87A93D", "#A1C256", "#B6D07C", "#D5E4B4", "#F5F8EC"] },
+      "ledger-pressed-light": { "role": "primary", "displayName": "Ledger Pressed Light", "canonical": "#3C5E0C", "tonalRamp": ["#2B4409", "#48710E", "#659E14", "#82CC1A", "#9BE533", "#B2EB61", "#D3F3A5", "#F4FCE8"] },
+      "ledger-pressed-dark": { "role": "primary", "displayName": "Ledger Pressed Dark", "canonical": "#587F1D", "tonalRamp": ["#2B3E0E", "#486818", "#659121", "#81BB2B", "#9BD444", "#B1DE6E", "#D3ECAC", "#F4FAEA"] },
+      "night-olive": { "role": "neutral", "displayName": "Night Olive", "canonical": "#1C2413", "tonalRamp": ["#27321A", "#41532C", "#5B753E", "#75964F", "#8EB069", "#A7C18A", "#CDDCBC", "#F2F6EE"] },
+      "night-olive-dark": { "role": "neutral", "displayName": "Night Olive Dark", "canonical": "#141A0D", "tonalRamp": ["#273319", "#41552B", "#5C773C", "#76994D", "#8FB366", "#A8C388", "#CDDDBB", "#F3F6EE"] },
+      "brand-leaf": { "role": "primary", "displayName": "Brand Leaf", "canonical": "#AECB6E", "tonalRamp": ["#2D3814", "#4B5E22", "#69832F", "#87A93D", "#A1C256", "#B6D07C", "#D5E4B4", "#F5F8EC"] },
+      "brass-light": { "role": "secondary", "displayName": "Brass Signal Light", "canonical": "#9A6A0B", "tonalRamp": ["#473105", "#775208", "#A7730C", "#D6930F", "#F0AD29", "#F3BF58", "#F8DBA0", "#FDF6E7"] },
+      "brass-dark": { "role": "secondary", "displayName": "Brass Signal Dark", "canonical": "#D9AC46", "tonalRamp": ["#3F300D", "#6A5016", "#94701E", "#BE9027", "#D8AA41", "#E1BD6B", "#EED9AA", "#FBF6EA"] },
+      "brass-soft-light": { "role": "secondary", "displayName": "Brass Wash Light", "canonical": "#F8F0DC", "tonalRamp": ["#40310D", "#6A5215", "#95731E", "#BF9426", "#D9AD40", "#E1BF6A", "#EEDBAA", "#FBF6EA"] },
+      "brass-soft-dark": { "role": "secondary", "displayName": "Brass Wash Dark", "canonical": "#2C240E", "tonalRamp": ["#3A2F12", "#614F1F", "#876F2B", "#AE8E37", "#C8A851", "#D4BB78", "#E6D8B2", "#F9F5EC"] },
+      "brass-text-light": { "role": "secondary", "displayName": "Brass Ink Light", "canonical": "#7C5507", "tonalRamp": ["#483204", "#795307", "#A9740A", "#D9950C", "#F3AE26", "#F5C056", "#FADB9E", "#FEF6E7"] },
+      "brass-text-dark": { "role": "secondary", "displayName": "Brass Ink Dark", "canonical": "#E2BE67", "tonalRamp": ["#40310C", "#6B5214", "#96721D", "#C19325", "#DAAD3E", "#E2BF69", "#EFDAA9", "#FBF6EA"] },
+      "danger-light": { "role": "semantic", "displayName": "Register Red Light", "canonical": "#BC3A2B", "tonalRamp": ["#3E130E", "#682018", "#912D21", "#BB3A2B", "#D45344", "#DE796E", "#ECB3AC", "#FAECEA"] },
+      "danger-dark": { "role": "semantic", "displayName": "Register Red Dark", "canonical": "#E1745F", "tonalRamp": ["#40150C", "#6B2214", "#96301C", "#C13E24", "#DB573E", "#E37C69", "#EFB4A9", "#FBECEA"] },
+      "danger-soft-light": { "role": "semantic", "displayName": "Register Red Wash Light", "canonical": "#FAECE9", "tonalRamp": ["#3E170E", "#682618", "#913521", "#BB442B", "#D45E44", "#DE816E", "#ECB7AC", "#FAEDEA"] },
+      "danger-soft-dark": { "role": "semantic", "displayName": "Register Red Wash Dark", "canonical": "#371711", "tonalRamp": ["#3A1812", "#61291E", "#88392A", "#AF4936", "#C96350", "#D58677", "#E7BAB1", "#F9EEEC"] },
+      "danger-text-light": { "role": "semantic", "displayName": "Register Red Ink Light", "canonical": "#9E2F22", "tonalRamp": ["#3F130E", "#691F17", "#932C20", "#BD3829", "#D65242", "#DF786C", "#EDB2AB", "#FAECEA"] },
+      "danger-text-dark": { "role": "semantic", "displayName": "Register Red Ink Dark", "canonical": "#EE9C86", "tonalRamp": ["#431609", "#702410", "#9D3216", "#C9411C", "#E35A36", "#E97F62", "#F2B6A6", "#FCEDE9"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Große Geldbeträge und wenige Peak Moments." },
+      "title": { "displayName": "Title", "purpose": "Seitentitel und primäre Sheet-Aufgaben." },
+      "heading": { "displayName": "Heading", "purpose": "Karten, Dialoge und wichtige Abschnitte." },
+      "body": { "displayName": "Body", "purpose": "Standardtext und Bedienlabels." },
+      "body-strong": { "displayName": "Body Strong", "purpose": "Buttons und wichtige Bedienlabels." },
+      "subheadline": { "displayName": "Subheadline", "purpose": "Sekundäre Informationen und kompakte Zeilen." },
+      "caption": { "displayName": "Caption", "purpose": "Metadaten, Status und Hilfstexte." },
+      "label": { "displayName": "Section Label", "purpose": "Uppercase-Gruppenlabels in Sidebar und Formularen." },
+      "money": { "displayName": "Money", "purpose": "Stabile Geldbeträge mit Tabellenziffern." },
+      "money-display": { "displayName": "Money Display", "purpose": "Kassensummen, KPIs und Abschlussmomente." },
+      "mono": { "displayName": "Document Mono", "purpose": "Beleg-, TSE- und Dokumentdaten." }
+    },
+    "motion": [
+      { "name": "press", "value": "ease-out 100ms", "purpose": "Unmittelbare taktile Reaktion für Buttons." },
+      { "name": "fast", "value": "ease-out 120ms", "purpose": "Fokus, Auswahl und kleine Zustandswechsel." },
+      { "name": "base", "value": "ease-out 180ms", "purpose": "Standardwechsel in Navigation und Controls." },
+      { "name": "slow", "value": "ease-out 250ms", "purpose": "Banner und größere, aber arbeitsnahe Zustandswechsel." },
+      { "name": "success-draw", "value": "ease-out 400ms 100ms", "purpose": "Exklusiv für Zahlungserfolg und korrekten Kassenabschluss." },
+      { "name": "skeleton", "value": "linear 1100ms infinite", "purpose": "Ladeschimmer; bei Reduce Motion statisch." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Die eine dominante Aktion eines Arbeitsbereichs.",
+      "html": "<button class=\"ds-btn-primary\">Speichern</button>",
+      "css": ".ds-btn-primary { min-height: 52px; padding: 0 24px; border: 0; border-radius: 10px; background: #4A7310; color: #FFFFFF; font: 600 17px -apple-system, BlinkMacSystemFont, sans-serif; transition: background 100ms ease-out, transform 100ms ease-out; } .ds-btn-primary:hover { background: #3C5E0C; } .ds-btn-primary:active { background: #3C5E0C; transform: scale(.985); } .ds-btn-primary:focus-visible { outline: 3px solid #AECB6E; outline-offset: 2px; } @media (prefers-color-scheme: dark) { .ds-btn-primary { background: #6D9A28; } .ds-btn-primary:hover, .ds-btn-primary:active { background: #587F1D; } }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ruhige Alternative ohne Konkurrenz zur Primäraktion.",
+      "html": "<button class=\"ds-btn-secondary\">Abbrechen</button>",
+      "css": ".ds-btn-secondary { min-height: 52px; padding: 0 24px; border: 0; border-radius: 10px; background: #ECEFE6; color: #1A1F17; font: 600 17px -apple-system, BlinkMacSystemFont, sans-serif; transition: opacity 100ms ease-out, transform 100ms ease-out; } .ds-btn-secondary:hover { opacity: .82; } .ds-btn-secondary:active { opacity: .7; transform: scale(.985); } .ds-btn-secondary:focus-visible { outline: 3px solid #AECB6E; outline-offset: 2px; } @media (prefers-color-scheme: dark) { .ds-btn-secondary { background: #262A20; color: #F1F3EC; } }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Ausschließlich für Storno, Löschen und irreversible Gefahr.",
+      "html": "<button class=\"ds-btn-destructive\">Stornieren</button>",
+      "css": ".ds-btn-destructive { min-height: 52px; padding: 0 24px; border: 0; border-radius: 10px; background: #FAECE9; color: #9E2F22; font: 600 17px -apple-system, BlinkMacSystemFont, sans-serif; transition: opacity 100ms ease-out, transform 100ms ease-out; } .ds-btn-destructive:hover { opacity: .82; } .ds-btn-destructive:active { opacity: .7; transform: scale(.985); } .ds-btn-destructive:focus-visible { outline: 3px solid #E1745F; outline-offset: 2px; } @media (prefers-color-scheme: dark) { .ds-btn-destructive { background: #371711; color: #EE9C86; } }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Stabiles 50-pt-Feld mit sichtbarem Fokus und reserviertem Fehlerraum.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">NAME</span><input class=\"ds-field-input\" value=\"Doppel-Apfel\"></label>",
+      "css": ".ds-field { display: grid; gap: 8px; width: 320px; color: #596052; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-field-label { font-size: 12px; font-weight: 600; letter-spacing: .7px; } .ds-field-input { height: 50px; padding: 0 14px; border: 1px solid #DDE2D4; border-radius: 10px; background: #F4F6F1; color: #1A1F17; font: 400 17px -apple-system, BlinkMacSystemFont, sans-serif; outline: 0; transition: border-color 120ms ease-out; } .ds-field-input:hover { border-color: #A2AA95; } .ds-field-input:focus { border: 1.5px solid #4A7310; } .ds-field-input:focus-visible { outline: 3px solid #AECB6E66; outline-offset: 2px; } @media (prefers-color-scheme: dark) { .ds-field { color: #A2AA95; } .ds-field-input { background: #121410; border-color: #31362B; color: #F1F3EC; } .ds-field-input:focus { border-color: #6D9A28; } }"
+    },
+    {
+      "name": "Payment Status Pill",
+      "kind": "chip",
+      "refersTo": "status-payment",
+      "description": "Brass signalisiert eine offene Zahlung, ohne Fehleralarm zu imitieren.",
+      "html": "<span class=\"ds-pill-payment\"><span class=\"ds-pill-dot\"></span>Zahlung angefordert</span>",
+      "css": ".ds-pill-payment { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 100px; background: #F8F0DC; color: #7C5507; font: 600 13px -apple-system, BlinkMacSystemFont, sans-serif; } .ds-pill-payment:hover { filter: brightness(.98); } .ds-pill-payment:focus-visible { outline: 3px solid #D9AC46; outline-offset: 2px; } .ds-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; } @media (prefers-color-scheme: dark) { .ds-pill-payment { background: #2C240E; color: #E2BE67; } }"
+    },
+    {
+      "name": "Ledger Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flacher Arbeitscontainer mit Tonwert und Hairline statt Schatten.",
+      "html": "<section class=\"ds-card\"><div class=\"ds-card-label\">UMSATZ HEUTE</div><strong class=\"ds-card-money\">1.248,50&nbsp;€</strong></section>",
+      "css": ".ds-card { width: 260px; padding: 20px; border: 1px solid #DDE2D4; border-radius: 14px; background: #FFFFFF; color: #1A1F17; font-family: -apple-system, BlinkMacSystemFont, sans-serif; transition: border-color 120ms ease-out; } .ds-card:hover { border-color: #A2AA95; } .ds-card:focus-within { outline: 3px solid #AECB6E66; outline-offset: 2px; } .ds-card-label { margin-bottom: 8px; color: #596052; font-size: 12px; font-weight: 600; letter-spacing: .7px; } .ds-card-money { color: #3C5E0C; font: 700 30px ui-rounded, -apple-system, sans-serif; font-variant-numeric: tabular-nums; } @media (prefers-color-scheme: dark) { .ds-card { background: #1B1E17; border-color: #31362B; color: #F1F3EC; } .ds-card-label { color: #A2AA95; } .ds-card-money { color: #AECB6E; } }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "description": "Kompakte Auswahl mit ruhigem, gleitendem Surface-Thumb.",
+      "html": "<div class=\"ds-segmented\" role=\"group\"><button class=\"ds-segment is-selected\">7 % ermäßigt</button><button class=\"ds-segment\">19 % regulär</button></div>",
+      "css": ".ds-segmented { display: inline-flex; gap: 3px; padding: 3px; border-radius: 11px; background: #ECEFE6; } .ds-segment { min-width: 138px; height: 38px; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #596052; font: 500 15px -apple-system, BlinkMacSystemFont, sans-serif; transition: background 180ms ease-out, color 180ms ease-out, border-color 180ms ease-out; } .ds-segment:hover { color: #1A1F17; } .ds-segment.is-selected { border-color: #DDE2D4; background: #FFFFFF; color: #3C5E0C; font-weight: 600; } .ds-segment:focus-visible { outline: 3px solid #AECB6E; outline-offset: 1px; } @media (prefers-color-scheme: dark) { .ds-segmented { background: #262A20; } .ds-segment { color: #A2AA95; } .ds-segment:hover { color: #F1F3EC; } .ds-segment.is-selected { border-color: #31362B; background: #1B1E17; color: #AECB6E; } }"
+    },
+    {
+      "name": "Sidebar Navigation Row",
+      "kind": "nav",
+      "refersTo": "nav-selected",
+      "description": "Stabile 46-pt-Zeile; Auswahl liegt als leise Ledger-Fläche im Raster.",
+      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-row is-selected\">Tische <span class=\"ds-nav-badge\">12</span></button><button class=\"ds-nav-row\">Produkte</button></nav>",
+      "css": ".ds-nav { display: grid; gap: 2px; width: 228px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-nav-row { display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: #596052; font-size: 16px; font-weight: 500; text-align: left; transition: background 120ms ease-out, color 120ms ease-out; } .ds-nav-row:hover { background: #ECEFE6; color: #1A1F17; } .ds-nav-row.is-selected { background: #EDF3DE; color: #3C5E0C; font-weight: 600; } .ds-nav-row:focus-visible { outline: 3px solid #AECB6E; outline-offset: 1px; } .ds-nav-badge { padding: 3px 8px; border-radius: 100px; background: #FFFFFF; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; } @media (prefers-color-scheme: dark) { .ds-nav-row { color: #A2AA95; } .ds-nav-row:hover { background: #262A20; color: #F1F3EC; } .ds-nav-row.is-selected { background: #232B15; color: #AECB6E; } .ds-nav-badge { background: #1B1E17; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Der ruhige Tresen",
+    "overview": "cashbox wirkt wie ein präzises Werkzeug auf einem aufgeräumten, modernen Tresen: Apple-nativ, futuristisch-minimal und so ruhig, dass der Betreiber jederzeit erkennt, was zählt. Die Zukunftsqualität entsteht aus Klarheit, unmittelbarer Reaktion und sauberer Systemintegration – nicht aus Neon, Effektschichten oder erfundenen Bedienmetaphern.\n\nDas bestehende Ledger-Green-System bleibt die funktionale Basis, wird aber bewusst sparsam eingesetzt. Fast alle Flächen sind olivgetönte Neutrals; Grün markiert Primäraktion, Auswahl und Geldzustand, Brass eine angeforderte Zahlung oder Warnung, Rot ausschließlich Fehler und destruktive Vorgänge. Lebendigkeit kommt aus taktilen Press-Zuständen, flüssiger Systembewegung, Haptik und wenigen klaren Peak Moments. Weitere Farbe darf später ergänzt werden, aber nur als semantisch begründete Rolle.\n\nDas System lehnt laute Lieferdienst-Optik, überladenes ERP, sterile Behördenoberflächen und foto-lastige Menügrids ab. Es ist dicht genug für professionelle Arbeit, großzügig genug für Touch und eigenständig genug, um nicht wie ein graues Standard-Adminpanel zu wirken.",
+    "keyCharacteristics": [
+      "Native iPadOS-Präzision für einen festen Landscape-Kassenplatz.",
+      "Flache, tonal geschichtete Oberflächen mit 1-pt-Hairlines statt Schatten.",
+      "Restrained Color: ein seltener Ledger-Green-Akzent plus Brass und Rot mit festen Rollen.",
+      "SF Pro für Bedienung, SF Rounded mit Tabellenziffern für Geld, SF Mono für Belegdaten.",
+      "Ruhige Grundfläche, lebendige Reaktion: Press, Auswahl, Erfolg und Störung sind spürbar.",
+      "Touch-first, VoiceOver-fähig, Dark Mode und Reduce Motion als Systemzustände."
+    ],
+    "rules": [
+      { "name": "The Earned Color Rule", "body": "Ledger Green markiert nur Primäraktion, Auswahl oder Geld; Brass nur offene Aufmerksamkeit; Rot nur Gefahr. Neue Farben brauchen vor der Einführung eine exklusive semantische Rolle.", "section": "colors" },
+      { "name": "The Quiet Future Rule", "body": "Futuristisch bedeutet präzise, reaktionsschnell und systemnah – niemals Neonverlauf, dekoratives Leuchten oder handgebautes Glas.", "section": "colors" },
+      { "name": "The System Type Rule", "body": "Keine Display-Schrift, keine hart codierten Font-Sonderwege und keine Web-Typografie. Alle UI-Texte laufen durch `dsFont`, alle Beträge durch die Money-Tokens.", "section": "typography" },
+      { "name": "The Stable Money Rule", "body": "Beträge nutzen Tabellenziffern und eine gemeinsame deutsche Euroformatierung, damit Listen fluchten und Zahlen bei Updates nicht springen.", "section": "typography" },
+      { "name": "The Flat Counter Rule", "body": "Flächen liegen ruhig auf dem Tresen. Tiefe entsteht nur durch Systemmodalität, Tonwert und Hairline – nicht durch dekorative Schatten.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** Systemtypografie, SF Symbols, native Sheets und bekannte iPadOS-Interaktionen als Basis verwenden.",
+      "**Do** mindestens 44 × 44 pt große Trefferflächen, auch wenn das sichtbare Symbol kleiner ist.",
+      "**Do** Ledger Green (`#4A7310` / `#6D9A28`) selten und nur für Primäraktion, Auswahl oder Geldzustand einsetzen.",
+      "**Do** Lebendigkeit durch eindeutige Press-Zustände, Haptik, Skeletons und wenige Success Moments erzeugen.",
+      "**Do** Dark Mode, VoiceOver, AX1 Dynamic Type und Reduce Motion bei jeder neuen Komponente mitdenken.",
+      "**Do** Status mit Farbe, SF Symbol und verständlichem Text gemeinsam ausdrücken.",
+      "**Do** weitere Farbe erst ergänzen, wenn sie eine neue, exklusive semantische Rolle besitzt."
+    ],
+    "donts": [
+      "**Don't** eine laute Lieferdienst-Optik mit konkurrierenden Farben, Badges und Aktionsreizen bauen.",
+      "**Don't** ein überladenes ERP oder All-in-one-Dashboard durch dichte, gleichgewichtige Panels imitieren.",
+      "**Don't** eine sterile Behörden- oder Bankoberfläche aus grauen Tabellen ohne Hierarchie erzeugen.",
+      "**Don't** eine foto-lastige Speisekarte zum Standard für das interne POS-Grid machen.",
+      "**Don't** dekorativen Futurismus mit Neonverläufen, handgebautem Glas oder orbitalen Dashboard-Metaphern einsetzen.",
+      "**Don't** Geräte-, Terminal- oder Systemzustände vortäuschen oder internen Phasenjargon anzeigen.",
+      "**Don't** Minimalismus als leblose generische Graufläche missverstehen; Rhythmus, Hierarchie und gezielte Rückmeldung bleiben Pflicht.",
+      "**Don't** Schatten, dicke Farbstreifen, eigenwillige Scrollbars oder Web-Controls zur Dekoration einführen.",
+      "**Don't** Status allein über Farbe oder Bewegung vermitteln."
+    ]
+  }
+}

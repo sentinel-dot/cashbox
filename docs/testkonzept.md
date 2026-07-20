@@ -94,6 +94,9 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-MAIL-006 | Doppelter Lauf desselben Anlasses erzeugt keine zweite Mail (Idempotenz-Schlüssel als UNIQUE) — Voraussetzung für die Cron-Jobs in S07 | ROADMAP S07 |
 | REQ-MAIL-007 | Jeder tatsächliche Versand wird in `email_log` nachgewiesen (INSERT-only via `audit_insert_user`, mit `provider_message_id`) — bei KassenSichV-Meldemails muss der Versand belegbar sein | OFFEN.md §5 |
 | REQ-MAIL-008 | Nach erfolgreichem Versand werden Betreff und Körper in der Queue genullt (DSGVO-Datenminimierung); der Nachweis bleibt in `email_log` | ROADMAP S05 |
+| REQ-MAIL-009 | Die sechs Template-Gruppen decken Trial-Warnung, TSE-Ausfall >48 h, Passwort-Reset, Z-Bericht, Subscription-Events und Session >24 h ab; jede enthält die anlassbezogenen Pflichtinformationen in HTML und Plaintext | ROADMAP S06 / OFFEN.md §5 |
+| REQ-MAIL-010 | Öffentliche Anlassfunktionen verwenden ausschließlich stabile technische IDs im Idempotenzschlüssel; Reset-Token, Empfänger und Betriebsnamen dürfen dort nicht auftauchen | ROADMAP S06 |
+| REQ-MAIL-011 | Produktionsversand wird erst mit einer eigenen, in Resend SPF-/DKIM-verifizierten Domain und eingerichtetem DMARC aktiviert; ohne API-Key bleibt der Dienst im sicheren Dry-Run | ROADMAP S05/S06 |
 
 ---
 
@@ -119,8 +122,12 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-OPS-01 | Deploy/Neustart während des Betriebs (SIGTERM, laufende Zahlung) | OPS-001/003 |
 | UC-OPS-02 | Serverfehler beim Kunden — wird sichtbar, ohne dass jemand Logs liest | OPS-002/004 |
 | UC-MAIL-01 | Trial läuft aus — der Wirt wird rechtzeitig gewarnt (Tag 10 + 13) | MAIL-001…004/006/008 |
-| UC-MAIL-02 | KassenSichV-Pflichtmail (TSE-Ausfall > 48 h) — Versand muss belegbar sein | MAIL-003/004/007 |
+| UC-MAIL-02 | KassenSichV-Pflichtmail (TSE-Ausfall > 48 h) — Versand muss belegbar sein | MAIL-003/004/007/009…011 |
 | UC-MAIL-03 | Mail-Anbieter ist kurz nicht erreichbar — nichts geht verloren | MAIL-005 |
+| UC-MAIL-04 | Passwort vergessen — der einmalige Reset-Link ist eine Stunde gültig | MAIL-003/004/009/010 |
+| UC-MAIL-05 | Tagesabschluss — Owner erhält opt-in Umsatz, Zahlarten und Kassendifferenz | MAIL-001…004/009 |
+| UC-MAIL-06 | Abo-Status ändert sich — past_due, Kündigung und Reaktivierung führen zu einer handlungsfähigen Nachricht | MAIL-003/004/009/010 |
+| UC-MAIL-07 | Schicht bleibt länger als 24 Stunden offen — Owner erhält eine GoBD-Warnung | MAIL-002…004/009/010 |
 
 ---
 
@@ -171,6 +178,9 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | MAIL-006 | UC-MAIL-01 | **TC-I integration/email-queue.test.ts** (zweites Enqueue → false, nur eine Zeile; day10/day13 getrennt) |
 | MAIL-007 | UC-MAIL-02 | **TC-I integration/email-queue.test.ts** (email_log-Zeile mit provider_message_id; kein Log bei Fehlversand; INSERT via auditDb) |
 | MAIL-008 | UC-MAIL-01 | **TC-I integration/email-queue.test.ts** (subject/body_html/body_text nach Erfolg NULL) |
+| MAIL-009 | UC-MAIL-01/02/04…07 | **TC-U unit/emailTemplates.test.ts** (exakt sechs Registry-Einträge; Pflichtinhalt, Berlin-Zeit, Cent-Format, CTA und HTML-Escaping je Gruppe; alle drei Subscription-Varianten; Z-Bericht-Differenz ±/0) |
+| MAIL-010 | UC-MAIL-02/04…07 | **TC-U unit/emailTemplates.test.ts** (`emailIdempotencyKey` deterministisch/tenant-gescoped); **TC-I integration/email-queue.test.ts** (alle fünf S06-Anlassfunktionen und exakte technische Schlüssel, keine Token-/Empfängerwerte) |
+| MAIL-011 | UC-MAIL-02 | **TC-M Manuell**: Resend-Domain `verified`, Testmail zugestellt, Header `spf=pass`, `dkim=pass`, `dmarc=pass`, Provider-ID in `email_log`; Runbook `docs/betrieb.md` §4 |
 
 ---
 

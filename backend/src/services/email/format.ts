@@ -52,3 +52,13 @@ export function daysUntil(until: Date, now: Date = new Date()): number {
 export function dayCountLabel(days: number): string {
   return days === 1 ? '1 Tag' : `${days} Tage`;
 }
+
+/** Vergangene volle Stunden zwischen zwei Zeitpunkten (nie negativ). */
+export function elapsedHours(from: Date, until: Date = new Date()): number {
+  return Math.max(0, Math.floor((until.getTime() - from.getTime()) / 3_600_000));
+}
+
+/** "1 Stunde" / "49 Stunden" — für offene Sitzungen und TSE-Ausfälle. */
+export function hourCountLabel(hours: number): string {
+  return hours === 1 ? '1 Stunde' : `${hours} Stunden`;
+}
