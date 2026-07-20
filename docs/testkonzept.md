@@ -80,6 +80,7 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-OPS-002 | 5xx werden ans Error-Monitoring gemeldet (Sentry), 4xx nicht; Kontext ist tenant_id (aus JWT), URL und Methode — keine Bodies, Header oder Beträge (DSGVO/AVV) | ROADMAP S03 / OFFEN.md S1 |
 | REQ-OPS-003 | `unhandledRejection`/`uncaughtException` beenden den Prozess kontrolliert statt Node hart crashen zu lassen — vorher loggen und an Sentry melden | ROADMAP S03 / OFFEN.md B6 |
 | REQ-OPS-004 | In Production erreicht kein Stack Trace / keine interne Fehlermeldung den Client | app.ts |
+| REQ-OPS-005 | Ein Testlauf meldet nichts ans Error-Monitoring — Testfehler dürfen das Produktions-Dashboard nicht verfälschen, auf dem die Alert-Regeln sitzen | OFFEN.md T10 |
 
 ### E-Mail (REQ-MAIL)
 
@@ -161,6 +162,7 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | OPS-002 | UC-OPS-02 | **TC-I integration/errorHandler.test.ts** (5xx → captureException mit tenant/url/method; 4xx → nicht gemeldet); **TC-M Manuell**: Envelope-Nachweis gegen lokalen Ingest (`docs/betrieb.md`) |
 | OPS-003 | UC-OPS-01 | abgedeckt über OPS-001 (derselbe Shutdown-Pfad, Exit-Code 1); Verdrahtung der Handler: `src/index.ts` |
 | OPS-004 | UC-OPS-02 | **TC-I integration/errorHandler.test.ts** (Production: `error` == „Interner Serverfehler.", kein Leak) |
+| OPS-005 | UC-OPS-02 | **TC-U unit/sentryConfig.test.ts** (unter NODE_ENV=test ist `sentryEnabled === false` und kein DSN in der Umgebung) |
 | MAIL-001 | UC-MAIL-01 | **TC-U unit/emailTemplates.test.ts** (euroString: Tausenderpunkt, 2 Nachkommastellen, negativ, groß) |
 | MAIL-002 | UC-MAIL-01/02 | **TC-U unit/emailTemplates.test.ts** (formatDate/formatDateTime: Sommer-/Winterzeit, 22:30 UTC → Folgetag) |
 | MAIL-003 | UC-MAIL-01/02 | **TC-U unit/emailTemplates.test.ts** (esc, Label-Spalte, Überschrift, Betriebsname im Template) |

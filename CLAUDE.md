@@ -13,7 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Suiten:** Backend 107 Unit/Compliance + 320 Integration, iOS 40 XCTests — alle grün (2026-07-20)
+**Suiten:** Backend 110 Unit/Compliance + 320 Integration, iOS 40 XCTests — alle grün (2026-07-20)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -302,7 +302,9 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
   `tenant` (aus JWT), `method`, `url`. **Keine PII**: keine Bodies, Header, IPs, Namen oder
   Beträge (`sendDefaultPii: false`, kein Tracing) — AVV-relevant, beim Erweitern prüfen.
   Ohne `SENTRY_DSN` ist Sentry komplett aus und alle Aufrufe sind No-Ops.
-  `src/sentry.ts` **muss der erste Import in `index.ts` bleiben** (lädt eigene .env).
+  `src/sentry.ts` **muss der erste Import in `index.ts` bleiben** (lädt eigene .env —
+  mit demselben `NODE_ENV`-Pfad-Switch wie `db/index.ts`, sonst meldet der Testlauf
+  echte Events ans Produktionsprojekt; Regressionsschutz: `unit/sentryConfig.test.ts`).
 - **Shutdown** (`src/shutdown.ts`) — Reihenfolge **Server drainen → Sentry flushen →
   DB-Pools schließen → exit**, idempotent gegen ein zweites Signal, 10-s-Notbremse bei
   hängendem Drain. Ausgelöst von SIGTERM/SIGINT sowie `unhandledRejection`/
@@ -389,7 +391,8 @@ src/
     │                      sequences (Mock-Conn), fiskalyPayload (centsToFiskaly,
     │                      buildAmountsPerVatRate, aggregatePaymentTypes),
     │                      emailTemplates (euroString-Parität, Berlin-Zeit, esc,
-    │                      Registry-Vollständigkeit, backoffMinutes)
+    │                      Registry-Vollständigkeit, backoffMinutes),
+    │                      sentryConfig (Testlauf meldet nichts — T10-Regression)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
     │                      devices, e2e-tagesablauf (kompletter Kassentag),
     │                      email-queue (Enqueue/Idempotenz, Drain, email_log-Nachweis,
