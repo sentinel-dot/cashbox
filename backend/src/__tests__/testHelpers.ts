@@ -35,6 +35,7 @@ export async function cleanTestDB(): Promise<void> {
   const tables = [
     'stripe_events',
     'subscription_events', 'tse_outages', 'audit_log', 'offline_queue',
+    'email_log', 'email_queue',
     'cancellations', 'payment_splits', 'payments', 'receipts',
     'order_item_removals', 'order_item_modifiers', 'order_items', 'orders', 'cash_movements',
     'z_reports', 'cash_register_sessions', 'receipt_sequences',
