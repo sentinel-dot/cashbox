@@ -136,4 +136,55 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertNil(receipt.tseSignature)
         XCTAssertEqual(receipt.payments[0].amountCents, 2500)
     }
+
+    // ── Product: GET /products?include_inactive=1 (S17A: sort_order + Kategorie) ──
+
+    func testProductDecoding_mitSortOrderUndKategorie() throws {
+        // wörtliche GET /products-Response nach S17A (sort_order auf Produkt + Kategorie)
+        let json = """
+        {
+          "id": 5, "name": "Shisha Klassik", "price_cents": 1500,
+          "vat_rate_inhouse": "19", "vat_rate_takeaway": "19",
+          "is_active": false, "sort_order": 20,
+          "created_at": "2026-07-21T10:00:00.000Z",
+          "category": { "id": 2, "name": "Shisha", "color": "#6e5a9e", "sort_order": 10 },
+          "modifier_groups": []
+        }
+        """
+        let product = try decode(Product.self, json)
+        XCTAssertEqual(product.id, 5)
+        XCTAssertEqual(product.sortOrder, 20)
+        XCTAssertFalse(product.isActive)
+        let cat = try XCTUnwrap(product.category)
+        XCTAssertEqual(cat.sortOrder, 10)
+        XCTAssertEqual(cat.name, "Shisha")
+    }
+
+    func testProductDecoding_ohneKategorie() throws {
+        let json = """
+        {
+          "id": 6, "name": "Feuerzeug", "price_cents": 150,
+          "vat_rate_inhouse": "19", "vat_rate_takeaway": "19",
+          "is_active": true, "sort_order": 10,
+          "created_at": "2026-07-21T10:00:00.000Z",
+          "category": null,
+          "modifier_groups": []
+        }
+        """
+        let product = try decode(Product.self, json)
+        XCTAssertNil(product.category)
+        XCTAssertEqual(product.sortOrder, 10)
+    }
+
+    // ── ProductCategoryRef: GET /products/categories liefert sort_order ──
+
+    func testCategoryRefDecoding_mitSortOrder() throws {
+        // listCategories liefert zusätzlich is_active — unbekannte Keys sind tolerierbar
+        let json = """
+        { "id": 3, "name": "Snacks", "color": null, "sort_order": 30, "is_active": true }
+        """
+        let cat = try decode(ProductCategoryRef.self, json)
+        XCTAssertEqual(cat.sortOrder, 30)
+        XCTAssertNil(cat.color)
+    }
 }
