@@ -21,6 +21,7 @@ struct SortimentView: View {
     @State private var statusFilter: StatusFilter = .aktiv
 
     @State private var showQuickCreate  = false
+    @State private var showWizard       = false
     @State private var editingProduct:  Product? = nil
     @State private var togglingProduct: Product? = nil
     @State private var editingCategory: ProductCategoryRef? = nil
@@ -64,6 +65,7 @@ struct SortimentView: View {
                     activeCount:   activeCount,
                     inactiveCount: inactiveCount,
                     onReorder:     { showReorder = true },
+                    onWizard:      { showWizard = true },
                     onAdd:         { showQuickCreate = true }
                 )
 
@@ -90,6 +92,10 @@ struct SortimentView: View {
             await productStore.loadProducts(includeInactive: true)
             await productStore.loadCategories()
         }
+        // Immersiver Einrichtungs-Flow → Full-Screen-Cover (native Modalität)
+        .fullScreenCover(isPresented: $showWizard) {
+            SortimentWizardView()
+        }
         .sheet(isPresented: $showQuickCreate) {
             ProduktQuickCreateSheet(
                 categories:        productStore.allCategories,
@@ -101,8 +107,11 @@ struct SortimentView: View {
             ProduktEditSheet(
                 product:    product,
                 categories: productStore.allCategories,
-                onSave:     { name, catId, isActive in
-                    await updateProduct(product, name: name, categoryId: catId, isActive: isActive)
+                onSave:     { name, catId, isActive, visualChanged, visualKey in
+                    await updateProduct(
+                        product, name: name, categoryId: catId, isActive: isActive,
+                        visualChanged: visualChanged, visualKey: visualKey
+                    )
                 },
                 onChangePrice: { cents in await changePrice(product, cents: cents) }
             )
@@ -190,12 +199,13 @@ struct SortimentView: View {
                 .padding(20)
             }
         } else if productStore.products.isEmpty {
+            // Leeres Sortiment leitet direkt in die Einrichtung (S17B-Wizard)
             DSEmptyState(
-                icon: "tag.slash",
+                icon: "shippingbox",
                 title: "Noch keine Produkte",
-                message: "Lege dein Sortiment an: Kategorien links, Produkte hier.",
-                actionLabel: "Erstes Produkt anlegen",
-                action: { showQuickCreate = true }
+                message: "Starte mit einem fertigen Paket für Shisha-Bar, Café oder Späti — oder leg einzeln los.",
+                actionLabel: "Starter-Sortiment einrichten",
+                action: { showWizard = true }
             )
         } else if filtered.isEmpty {
             DSEmptyState(
@@ -243,16 +253,22 @@ struct SortimentView: View {
             try await productStore.createProduct(
                 name: data.name, priceCents: data.priceCents,
                 vatRateInhouse: data.vatRateInhouse, vatRateTakeaway: data.vatRateTakeaway,
-                categoryId: data.categoryId
+                categoryId: data.categoryId, visualKey: data.visualKey
             )
             showQuickCreate = false
         } catch let e as AppError { error = e; showError = true }
         catch { self.error = .unknown(error.localizedDescription); showError = true }
     }
 
-    private func updateProduct(_ product: Product, name: String?, categoryId: Int?, isActive: Bool?) async {
+    private func updateProduct(
+        _ product: Product, name: String?, categoryId: Int?, isActive: Bool?,
+        visualChanged: Bool = false, visualKey: String? = nil
+    ) async {
         do {
             try await productStore.updateProduct(id: product.id, name: name, isActive: isActive, categoryId: categoryId)
+            if visualChanged {
+                try await productStore.updateVisual(id: product.id, visualKey: visualKey)
+            }
             editingProduct = nil
         } catch let e as AppError { error = e; showError = true }
         catch { self.error = .unknown(error.localizedDescription); showError = true }
@@ -314,6 +330,7 @@ private struct SortimentToolbar: View {
     let activeCount:   Int
     let inactiveCount: Int
     let onReorder:     () -> Void
+    let onWizard:      () -> Void
     let onAdd:         () -> Void
 
     @State private var searchFocused = false
@@ -369,6 +386,15 @@ private struct SortimentToolbar: View {
             .frame(width: 280)
 
             Spacer()
+
+            Button(action: onWizard) {
+                HStack(spacing: 7) {
+                    Image(systemName: "shippingbox")
+                        .dsFont(.raw(14, weight: .semibold))
+                    Text("Starter-Sortiment")
+                }
+            }
+            .buttonStyle(DSSecondaryButton(height: 42, fullWidth: false))
 
             Button(action: onReorder) {
                 HStack(spacing: 7) {
@@ -667,6 +693,7 @@ struct ProduktQuickCreateSheet: View {
         let vatRateInhouse:  String
         let vatRateTakeaway: String
         let categoryId:      Int?
+        let visualKey:       String?
     }
 
     let categories:       [ProductCategoryRef]
@@ -679,9 +706,19 @@ struct ProduktQuickCreateSheet: View {
     @State private var showMore  = false
     @State private var vatInhouse  = "19"
     @State private var vatTakeaway = "19"
+    @State private var chosenVisual: String? = nil
+    @State private var visualChosenManually = false
+    @State private var showVisualPicker = false
     @State private var isSaving  = false
 
     private var priceCents: Int? { parseCents(priceText) }
+
+    /// Heuristik ist nur Vorbelegung — eine manuelle Wahl wird nie überschrieben (§6.4)
+    private var effectiveVisual: String? {
+        if visualChosenManually { return chosenVisual }
+        let catName = categories.first { $0.id == selectedCat }?.name
+        return suggestedVisualKey(forName: name, categoryName: catName)
+    }
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && (priceCents ?? 0) > 0
     }
@@ -716,6 +753,37 @@ struct ProduktQuickCreateSheet: View {
                             }
                         }
                     }
+                }
+
+                // Symbol — optional, Heuristik belegt nur vor
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Symbol (optional)")
+                    Button {
+                        showVisualPicker = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            if let visual = ProduktVisualCatalog.visual(for: effectiveVisual) {
+                                ProductVisualView(visual: visual, size: 22, tint: DS.C.text2)
+                            } else {
+                                Image(systemName: "textformat")
+                                    .dsFont(.raw(18))
+                                    .foregroundColor(DS.C.text2)
+                            }
+                            Text(ProduktVisualCatalog.label(for: effectiveVisual))
+                                .dsFont(.sub)
+                                .foregroundColor(DS.C.text)
+                            Spacer()
+                            Text("Ändern")
+                                .dsFont(.subBold)
+                                .foregroundColor(DS.C.accT)
+                        }
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
+                        .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Symbol: \(ProduktVisualCatalog.label(for: effectiveVisual))")
                 }
 
                 // Steuer progressiv — Default 19/19 ist für die meisten Produkte richtig
@@ -759,7 +827,8 @@ struct ProduktQuickCreateSheet: View {
                             priceCents: cents,
                             vatRateInhouse: vatInhouse,
                             vatRateTakeaway: vatTakeaway,
-                            categoryId: selectedCat
+                            categoryId: selectedCat,
+                            visualKey: effectiveVisual
                         ))
                         isSaving = false
                     }
@@ -775,6 +844,13 @@ struct ProduktQuickCreateSheet: View {
             }
         }
         .presentationDetents([.large])
+        .sheet(isPresented: $showVisualPicker) {
+            VisualPickerSheet(selectedKey: effectiveVisual) { key in
+                chosenVisual = key
+                visualChosenManually = true
+                showVisualPicker = false
+            }
+        }
         .onAppear { selectedCat = preselectedCatId }
     }
 }
@@ -808,19 +884,22 @@ struct SCatChip: View {
 private struct ProduktEditSheet: View {
     let product:       Product
     let categories:    [ProductCategoryRef]
-    let onSave:        (String?, Int?, Bool?) async -> Void
+    let onSave:        (String?, Int?, Bool?, Bool, String?) async -> Void
     let onChangePrice: (Int) async -> Void
 
     @State private var name        = ""
     @State private var selectedCat: Int? = nil
     @State private var isActive    = true
     @State private var newPriceText = ""
+    @State private var visualKey:  String? = nil
+    @State private var showVisualPicker = false
     @State private var isSaving    = false
 
     private var newPriceCents: Int? { parseCents(newPriceText) }
+    private var visualChanged: Bool { visualKey != product.visualKey }
     private var isDirty: Bool {
         name != product.name || selectedCat != product.category?.id
-            || isActive != product.isActive || !newPriceText.isEmpty
+            || isActive != product.isActive || !newPriceText.isEmpty || visualChanged
     }
 
     var body: some View {
@@ -908,6 +987,39 @@ private struct ProduktEditSheet: View {
                     }
                 }
 
+                // Symbol (S17B: optional, „Ohne Symbol" gleichwertig)
+                VStack(alignment: .leading, spacing: 8) {
+                    DSSectionLabel(text: "Symbol")
+                    Button {
+                        showVisualPicker = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            if let visual = ProduktVisualCatalog.visual(for: visualKey) {
+                                ProductVisualView(visual: visual, size: 22,
+                                                  tint: product.category.map { Color(hex: $0.color ?? "#888888") } ?? DS.C.text2)
+                            } else {
+                                Image(systemName: "textformat")
+                                    .dsFont(.raw(18))
+                                    .foregroundColor(DS.C.text2)
+                            }
+                            Text(ProduktVisualCatalog.label(for: visualKey))
+                                .dsFont(.sub)
+                                .foregroundColor(DS.C.text)
+                            Spacer()
+                            Text("Ändern")
+                                .dsFont(.subBold)
+                                .foregroundColor(DS.C.accT)
+                        }
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: DS.R.input).fill(DS.C.bg))
+                        .overlay(RoundedRectangle(cornerRadius: DS.R.input).strokeBorder(DS.C.brdAdaptive, lineWidth: 1))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Symbol: \(ProduktVisualCatalog.label(for: visualKey))")
+                    .accessibilityHint("Doppeltippen, um das Symbol zu ändern")
+                }
+
                 // Modifikatoren (read-only Übersicht)
                 if !product.modifierGroups.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -941,7 +1053,9 @@ private struct ProduktEditSheet: View {
                         await onSave(
                             name.trimmingCharacters(in: .whitespaces),
                             selectedCat,
-                            isActive
+                            isActive,
+                            visualChanged,
+                            visualKey
                         )
                         isSaving = false
                     }
@@ -957,10 +1071,17 @@ private struct ProduktEditSheet: View {
             }
         }
         .presentationDetents([.large])
+        .sheet(isPresented: $showVisualPicker) {
+            VisualPickerSheet(selectedKey: visualKey) { key in
+                visualKey = key
+                showVisualPicker = false
+            }
+        }
         .onAppear {
             name        = product.name
             selectedCat = product.category?.id
             isActive    = product.isActive
+            visualKey   = product.visualKey
         }
     }
 }

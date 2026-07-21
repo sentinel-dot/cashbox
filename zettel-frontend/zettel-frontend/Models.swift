@@ -199,6 +199,10 @@ struct Product: Identifiable, Codable {
     let vatRateTakeaway: String?
     let isActive: Bool
     let sortOrder: Int
+    /// Semantischer Visual-Schlüssel (S17B) — bewusst String statt Enum:
+    /// unbekannte Werte künftiger Versionen dürfen weder Decoding noch Kasse
+    /// brechen (Katalog rendert sie defensiv als `generic`).
+    let visualKey: String?
     let createdAt: String
     let category: ProductCategoryRef?
     let modifierGroups: [ModifierGroup]

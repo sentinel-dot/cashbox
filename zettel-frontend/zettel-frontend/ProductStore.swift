@@ -62,14 +62,20 @@ final class ProductStore: ObservableObject {
     func createProduct(
         name: String, priceCents: Int,
         vatRateInhouse: String, vatRateTakeaway: String,
-        categoryId: Int?, sortOrder: Int? = nil
+        categoryId: Int?, sortOrder: Int? = nil, visualKey: String? = nil
     ) async throws {
         let body = CreateProductBody(
             name: name, priceCents: priceCents,
             vatRateInhouse: vatRateInhouse, vatRateTakeaway: vatRateTakeaway,
-            categoryId: categoryId, sortOrder: sortOrder
+            categoryId: categoryId, sortOrder: sortOrder, visualKey: visualKey
         )
         let _: ProductIdResponse = try await api.post("/products", body: body)
+        await loadProducts(includeInactive: true)
+    }
+
+    /// Visual setzen oder entfernen — nil wird als JSON-null gesendet („Ohne Symbol")
+    func updateVisual(id: Int, visualKey: String?) async throws {
+        let _: OkResponse = try await api.patch("/products/\(id)", body: UpdateVisualBody(visualKey: visualKey))
         await loadProducts(includeInactive: true)
     }
 
@@ -105,6 +111,23 @@ final class ProductStore: ObservableObject {
         let _: OkResponse = try await api.patch("/products/categories/reorder", body: body)
         await loadCategories()
         await loadProducts(includeInactive: true)
+    }
+
+    // ── Starter-Sortimente (S17B) ──────────────────────────────────────────
+
+    func loadPresets() async throws -> [AssortmentPreset] {
+        try await api.get("/products/presets")
+    }
+
+    /// Import mit Idempotency-Key — Retry MUSS denselben Key wiederverwenden.
+    func importPreset(_ body: PresetImportBody, idempotencyKey: String) async throws -> PresetImportResult {
+        let result: PresetImportResult = try await api.post(
+            "/products/presets/import", body: body,
+            headers: ["Idempotency-Key": idempotencyKey]
+        )
+        await loadProducts(includeInactive: true)
+        await loadCategories()
+        return result
     }
 
     // ── Kategorie-CRUD ─────────────────────────────────────────────────────
@@ -161,15 +184,15 @@ final class ProductStore: ObservableObject {
         )
 
         store.products = [
-            Product(id: 1,  name: "Cappuccino",      priceCents: 350,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 10, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
-            Product(id: 2,  name: "Latte Macchiato", priceCents: 420,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 20, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
-            Product(id: 3,  name: "Espresso",        priceCents: 280,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 30, createdAt: "", category: cat1, modifierGroups: []),
-            Product(id: 4,  name: "Ayran",            priceCents: 250,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 40, createdAt: "", category: cat1, modifierGroups: []),
-            Product(id: 5,  name: "Wasser 0,5l",      priceCents: 200,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 50, createdAt: "", category: cat1, modifierGroups: []),
-            Product(id: 6,  name: "Shisha Miete",     priceCents: 1500, vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 60, createdAt: "", category: cat2, modifierGroups: [tabakGroup]),
-            Product(id: 7,  name: "Kohle Extra",      priceCents: 300,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 70, createdAt: "", category: cat2, modifierGroups: []),
-            Product(id: 8,  name: "Chips",            priceCents: 200,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, sortOrder: 80, createdAt: "", category: cat3, modifierGroups: []),
-            Product(id: 9,  name: "Nüsse",            priceCents: 250,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, sortOrder: 90, createdAt: "", category: cat3, modifierGroups: []),
+            Product(id: 1,  name: "Cappuccino",      priceCents: 350,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 10, visualKey: nil, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
+            Product(id: 2,  name: "Latte Macchiato", priceCents: 420,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 20, visualKey: nil, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
+            Product(id: 3,  name: "Espresso",        priceCents: 280,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 30, visualKey: nil, createdAt: "", category: cat1, modifierGroups: []),
+            Product(id: 4,  name: "Ayran",            priceCents: 250,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 40, visualKey: nil, createdAt: "", category: cat1, modifierGroups: []),
+            Product(id: 5,  name: "Wasser 0,5l",      priceCents: 200,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 50, visualKey: nil, createdAt: "", category: cat1, modifierGroups: []),
+            Product(id: 6,  name: "Shisha Miete",     priceCents: 1500, vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 60, visualKey: nil, createdAt: "", category: cat2, modifierGroups: [tabakGroup]),
+            Product(id: 7,  name: "Kohle Extra",      priceCents: 300,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 70, visualKey: nil, createdAt: "", category: cat2, modifierGroups: []),
+            Product(id: 8,  name: "Chips",            priceCents: 200,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, sortOrder: 80, visualKey: nil, createdAt: "", category: cat3, modifierGroups: []),
+            Product(id: 9,  name: "Nüsse",            priceCents: 250,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, sortOrder: 90, visualKey: nil, createdAt: "", category: cat3, modifierGroups: []),
         ]
         return store
     }
@@ -186,6 +209,19 @@ private struct CreateProductBody: Encodable {
     let vatRateTakeaway: String
     let categoryId:      Int?
     let sortOrder:       Int?
+    let visualKey:       String?
+}
+
+private struct UpdateVisualBody: Encodable {
+    let visualKey: String?
+
+    // nil muss als explizites JSON-null ankommen (Visual entfernen),
+    // encodeIfPresent würde den Key weglassen → Backend-Refine „min. 1 Feld" schlägt fehl
+    enum CodingKeys: String, CodingKey { case visualKey }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(visualKey, forKey: .visualKey)
+    }
 }
 
 private struct UpdateProductBody: Encodable {

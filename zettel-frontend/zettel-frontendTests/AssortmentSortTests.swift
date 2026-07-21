@@ -17,7 +17,7 @@ final class AssortmentSortTests: XCTestCase {
         Product(
             id: id, name: name, priceCents: 100,
             vatRateInhouse: "19", vatRateTakeaway: "19",
-            isActive: true, sortOrder: sort, createdAt: "",
+            isActive: true, sortOrder: sort, visualKey: nil, createdAt: "",
             category: cat, modifierGroups: []
         )
     }

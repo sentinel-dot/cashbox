@@ -10,16 +10,30 @@ struct ProductCard: View {
     var dimmed:  Bool = false
     let onTap:   () -> Void
 
+    /// Kategorie-Farbe als Tint fürs Visual — Fallback: gedämpfte Textfarbe
+    private var visualTint: Color {
+        if let hex = product.category?.color { return Color(hex: hex) }
+        return DS.C.text2
+    }
+
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(product.name)
-                    .dsFont(.raw(16, weight: .semibold))
-                    .foregroundColor(DS.C.text)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top, spacing: 8) {
+                    // S17B: optionales semantisches Visual (dekorativ, VoiceOver liest
+                    // Name + Preis) — nil rendert die gleichwertige Textkachel
+                    if let visual = ProduktVisualCatalog.visual(for: product.visualKey) {
+                        ProductVisualView(visual: visual, size: 22, tint: visualTint)
+                            .padding(.top, 1)
+                    }
+                    Text(product.name)
+                        .dsFont(.raw(16, weight: .semibold))
+                        .foregroundColor(DS.C.text)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 if let catName = product.category?.name {
                     Text(catName)
