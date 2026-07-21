@@ -169,6 +169,7 @@ struct ProductCategoryRef: Codable, Identifiable {
     let id: Int
     let name: String
     let color: String?
+    let sortOrder: Int
 }
 
 struct ModifierOption: Identifiable, Codable {
@@ -197,12 +198,35 @@ struct Product: Identifiable, Codable {
     let vatRateInhouse: String
     let vatRateTakeaway: String?
     let isActive: Bool
+    let sortOrder: Int
+    /// Semantischer Visual-Schlüssel (S17B) — bewusst String statt Enum:
+    /// unbekannte Werte künftiger Versionen dürfen weder Decoding noch Kasse
+    /// brechen (Katalog rendert sie defensiv als `generic`).
+    let visualKey: String?
     let createdAt: String
     let category: ProductCategoryRef?
     let modifierGroups: [ModifierGroup]
 
     var hasRequiredModifiers: Bool {
         modifierGroups.contains { $0.isRequired }
+    }
+}
+
+/// Kassen-Reihenfolge — spiegelt exakt die Backend-Sortierung
+/// `c.sort_order, c.name, p.sort_order, p.name, p.id` (Produkte ohne Kategorie zuletzt).
+func assortmentSorted(_ products: [Product]) -> [Product] {
+    products.sorted { a, b in
+        switch (a.category, b.category) {
+        case let (ca?, cb?):
+            if ca.sortOrder != cb.sortOrder { return ca.sortOrder < cb.sortOrder }
+            if ca.name != cb.name           { return ca.name < cb.name }
+        case (nil, _?): return false
+        case (_?, nil): return true
+        case (nil, nil): break
+        }
+        if a.sortOrder != b.sortOrder { return a.sortOrder < b.sortOrder }
+        if a.name != b.name           { return a.name < b.name }
+        return a.id < b.id
     }
 }
 

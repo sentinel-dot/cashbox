@@ -9,8 +9,7 @@ import SwiftUI
 enum NavItem: String, Hashable, CaseIterable {
     // Übersicht
     case tische       = "Tische"
-    case produkte     = "Produkte"
-    case kategorien   = "Kategorien"
+    case sortiment    = "Sortiment"
     // Abrechnung
     case kassensitzung = "Kassensitzung"
     case berichte      = "Berichte"
@@ -23,8 +22,7 @@ enum NavItem: String, Hashable, CaseIterable {
     var icon: String {
         switch self {
         case .tische:        return "square.grid.2x2"
-        case .produkte:      return "tag"
-        case .kategorien:    return "folder"
+        case .sortiment:     return "tag"
         case .kassensitzung: return "building.columns"
         case .berichte:      return "chart.bar"
         case .zbericht:      return "doc.text"
@@ -34,7 +32,7 @@ enum NavItem: String, Hashable, CaseIterable {
 
     var section: NavSection {
         switch self {
-        case .tische, .produkte, .kategorien:          return .uebersicht
+        case .tische, .sortiment:                      return .uebersicht
         case .kassensitzung, .berichte, .zbericht:     return .abrechnung
         case .einstellungen:                           return .system
         }
@@ -299,7 +297,7 @@ private struct AppSidebar: View {
             ]
         }
         return [
-            (.uebersicht,  [.tische, .produkte, .kategorien]),
+            (.uebersicht,  [.tische, .sortiment]),
             (.abrechnung,  [.kassensitzung, .berichte, .zbericht]),
             (.system,      [.einstellungen]),
         ]
@@ -522,10 +520,8 @@ private struct AppContent: View {
                 ZBerichtView()
             case .berichte:
                 BerichteView()
-            case .produkte:
-                ProdukteView()
-            case .kategorien:
-                KategorienView()
+            case .sortiment:
+                SortimentView()
             case .einstellungen:
                 EinstellungenView()
             }

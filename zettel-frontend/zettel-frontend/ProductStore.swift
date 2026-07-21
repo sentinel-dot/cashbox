@@ -9,7 +9,7 @@ final class ProductStore: ObservableObject {
     // ── Published State ────────────────────────────────────────────────────
     @Published private(set) var products:      [Product]            = []
     @Published private(set) var categories:    [ProductCategoryRef] = []  // nur Kategorien mit mind. 1 Produkt
-    @Published private(set) var allCategories: [ProductCategoryRef] = []  // alle Kategorien (für KategorienView)
+    @Published private(set) var allCategories: [ProductCategoryRef] = []  // alle Kategorien (für SortimentView)
     @Published private(set) var isLoading = false
     @Published private(set) var error: AppError?
 
@@ -18,11 +18,14 @@ final class ProductStore: ObservableObject {
 
     // ── Public Interface ───────────────────────────────────────────────────
 
-    func loadProducts() async {
+    /// - Parameter includeInactive: `true` = Management-Ansicht (Sortiment) inkl.
+    ///   deaktivierter Produkte; Default `false` = Kassenansicht (nur aktive).
+    func loadProducts(includeInactive: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
         do {
-            products = try await api.get("/products")
+            let path = includeInactive ? "/products?include_inactive=1" : "/products"
+            products = assortmentSorted(try await api.get(path))
             // Kategorien aus Produkten ableiten — Reihenfolge beibehalten, deduplizieren
             var seen = Set<Int>()
             categories = products
@@ -46,9 +49,12 @@ final class ProductStore: ObservableObject {
         }
     }
 
+    /// Kassen-Pfad: liefert IMMER nur aktive Produkte — auch wenn der Store
+    /// gerade die Management-Ansicht (inkl. inaktiver) geladen hat.
     func products(for categoryId: Int?) -> [Product] {
-        guard let id = categoryId else { return products }
-        return products.filter { $0.category?.id == id }
+        let active = products.filter { $0.isActive }
+        guard let id = categoryId else { return active }
+        return active.filter { $0.category?.id == id }
     }
 
     // ── Produkt-CRUD ───────────────────────────────────────────────────────
@@ -56,34 +62,72 @@ final class ProductStore: ObservableObject {
     func createProduct(
         name: String, priceCents: Int,
         vatRateInhouse: String, vatRateTakeaway: String,
-        categoryId: Int?
+        categoryId: Int?, sortOrder: Int? = nil, visualKey: String? = nil
     ) async throws {
         let body = CreateProductBody(
             name: name, priceCents: priceCents,
             vatRateInhouse: vatRateInhouse, vatRateTakeaway: vatRateTakeaway,
-            categoryId: categoryId
+            categoryId: categoryId, sortOrder: sortOrder, visualKey: visualKey
         )
         let _: ProductIdResponse = try await api.post("/products", body: body)
-        await loadProducts()
+        await loadProducts(includeInactive: true)
     }
 
-    func updateProduct(id: Int, name: String?, vatRateInhouse: String?, isActive: Bool?, categoryId: Int?) async throws {
-        let body = UpdateProductBody(name: name, vatRateInhouse: vatRateInhouse, isActive: isActive, categoryId: categoryId)
+    /// Visual setzen oder entfernen — nil wird als JSON-null gesendet („Ohne Symbol")
+    func updateVisual(id: Int, visualKey: String?) async throws {
+        let _: OkResponse = try await api.patch("/products/\(id)", body: UpdateVisualBody(visualKey: visualKey))
+        await loadProducts(includeInactive: true)
+    }
+
+    func updateProduct(id: Int, name: String? = nil, isActive: Bool? = nil, categoryId: Int? = nil) async throws {
+        let body = UpdateProductBody(name: name, isActive: isActive, categoryId: categoryId)
         let _: OkResponse = try await api.patch("/products/\(id)", body: body)
-        await loadProducts()
+        await loadProducts(includeInactive: true)
     }
 
     /// Preisänderung — erstellt einen product_price_history-Eintrag (GoBD: kein UPDATE auf price_cents)
-    func changePrice(productId: Int, newPriceCents: Int, reason: String) async throws {
+    func changePrice(productId: Int, newPriceCents: Int) async throws {
         let body = ChangePriceBody(priceCents: newPriceCents)
         let _: EmptyResponse = try await api.post("/products/\(productId)/price", body: body)
-        await loadProducts()
+        await loadProducts(includeInactive: true)
     }
 
     func deleteProduct(id: Int) async throws {
         try await api.delete("/products/\(id)")
-        products.removeAll { $0.id == id }
-        categories = products.compactMap { $0.category }.uniqued()
+        await loadProducts(includeInactive: true)
+    }
+
+    // ── Reorder (S17A) ─────────────────────────────────────────────────────
+
+    /// Sendet die komplette geordnete ID-Liste einer Kategorie ans Backend.
+    func reorderProducts(categoryId: Int?, orderedIds: [Int]) async throws {
+        let body = ReorderProductsBody(categoryId: categoryId, productIds: orderedIds)
+        let _: OkResponse = try await api.patch("/products/reorder", body: body)
+        await loadProducts(includeInactive: true)
+    }
+
+    func reorderCategories(orderedIds: [Int]) async throws {
+        let body = ReorderCategoriesBody(categoryIds: orderedIds)
+        let _: OkResponse = try await api.patch("/products/categories/reorder", body: body)
+        await loadCategories()
+        await loadProducts(includeInactive: true)
+    }
+
+    // ── Starter-Sortimente (S17B) ──────────────────────────────────────────
+
+    func loadPresets() async throws -> [AssortmentPreset] {
+        try await api.get("/products/presets")
+    }
+
+    /// Import mit Idempotency-Key — Retry MUSS denselben Key wiederverwenden.
+    func importPreset(_ body: PresetImportBody, idempotencyKey: String) async throws -> PresetImportResult {
+        let result: PresetImportResult = try await api.post(
+            "/products/presets/import", body: body,
+            headers: ["Idempotency-Key": idempotencyKey]
+        )
+        await loadProducts(includeInactive: true)
+        await loadCategories()
+        return result
     }
 
     // ── Kategorie-CRUD ─────────────────────────────────────────────────────
@@ -92,20 +136,20 @@ final class ProductStore: ObservableObject {
         let body = CreateCategoryBody(name: name, color: color, sortOrder: sortOrder)
         let _: ProductIdResponse = try await api.post("/products/categories", body: body)
         await loadCategories()
-        await loadProducts()
+        await loadProducts(includeInactive: true)
     }
 
     func updateCategory(id: Int, name: String?, color: String?, sortOrder: Int?) async throws {
         let body = UpdateCategoryBody(name: name, color: color, sortOrder: sortOrder)
         let _: OkResponse = try await api.patch("/products/categories/\(id)", body: body)
         await loadCategories()
-        await loadProducts()
+        await loadProducts(includeInactive: true)
     }
 
     func deleteCategory(id: Int) async throws {
         try await api.delete("/products/categories/\(id)")
         await loadCategories()
-        await loadProducts()
+        await loadProducts(includeInactive: true)
     }
 
     func clearError() { error = nil }
@@ -114,9 +158,9 @@ final class ProductStore: ObservableObject {
 
     static var preview: ProductStore {
         let store = ProductStore()
-        let cat1 = ProductCategoryRef(id: 1, name: "Getränke",  color: "#1a6fff")
-        let cat2 = ProductCategoryRef(id: 2, name: "Shisha",    color: "#9b59b6")
-        let cat3 = ProductCategoryRef(id: 3, name: "Snacks",    color: "#e67e22")
+        let cat1 = ProductCategoryRef(id: 1, name: "Getränke",  color: "#1a6fff", sortOrder: 10)
+        let cat2 = ProductCategoryRef(id: 2, name: "Shisha",    color: "#9b59b6", sortOrder: 20)
+        let cat3 = ProductCategoryRef(id: 3, name: "Snacks",    color: "#e67e22", sortOrder: 30)
         store.categories    = [cat1, cat2, cat3]
         store.allCategories = [cat1, cat2, cat3]
 
@@ -140,15 +184,15 @@ final class ProductStore: ObservableObject {
         )
 
         store.products = [
-            Product(id: 1,  name: "Cappuccino",      priceCents: 350,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
-            Product(id: 2,  name: "Latte Macchiato", priceCents: 420,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
-            Product(id: 3,  name: "Espresso",        priceCents: 280,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, createdAt: "", category: cat1, modifierGroups: []),
-            Product(id: 4,  name: "Ayran",            priceCents: 250,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, createdAt: "", category: cat1, modifierGroups: []),
-            Product(id: 5,  name: "Wasser 0,5l",      priceCents: 200,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, createdAt: "", category: cat1, modifierGroups: []),
-            Product(id: 6,  name: "Shisha Miete",     priceCents: 1500, vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, createdAt: "", category: cat2, modifierGroups: [tabakGroup]),
-            Product(id: 7,  name: "Kohle Extra",      priceCents: 300,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, createdAt: "", category: cat2, modifierGroups: []),
-            Product(id: 8,  name: "Chips",            priceCents: 200,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, createdAt: "", category: cat3, modifierGroups: []),
-            Product(id: 9,  name: "Nüsse",            priceCents: 250,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, createdAt: "", category: cat3, modifierGroups: []),
+            Product(id: 1,  name: "Cappuccino",      priceCents: 350,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 10, visualKey: nil, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
+            Product(id: 2,  name: "Latte Macchiato", priceCents: 420,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 20, visualKey: nil, createdAt: "", category: cat1, modifierGroups: [milchGroup]),
+            Product(id: 3,  name: "Espresso",        priceCents: 280,  vatRateInhouse: "19", vatRateTakeaway: "7",  isActive: true, sortOrder: 30, visualKey: nil, createdAt: "", category: cat1, modifierGroups: []),
+            Product(id: 4,  name: "Ayran",            priceCents: 250,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 40, visualKey: nil, createdAt: "", category: cat1, modifierGroups: []),
+            Product(id: 5,  name: "Wasser 0,5l",      priceCents: 200,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 50, visualKey: nil, createdAt: "", category: cat1, modifierGroups: []),
+            Product(id: 6,  name: "Shisha Miete",     priceCents: 1500, vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 60, visualKey: nil, createdAt: "", category: cat2, modifierGroups: [tabakGroup]),
+            Product(id: 7,  name: "Kohle Extra",      priceCents: 300,  vatRateInhouse: "19", vatRateTakeaway: "19", isActive: true, sortOrder: 70, visualKey: nil, createdAt: "", category: cat2, modifierGroups: []),
+            Product(id: 8,  name: "Chips",            priceCents: 200,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, sortOrder: 80, visualKey: nil, createdAt: "", category: cat3, modifierGroups: []),
+            Product(id: 9,  name: "Nüsse",            priceCents: 250,  vatRateInhouse: "7",  vatRateTakeaway: "7",  isActive: true, sortOrder: 90, visualKey: nil, createdAt: "", category: cat3, modifierGroups: []),
         ]
         return store
     }
@@ -164,13 +208,44 @@ private struct CreateProductBody: Encodable {
     let vatRateInhouse:  String
     let vatRateTakeaway: String
     let categoryId:      Int?
+    let sortOrder:       Int?
+    let visualKey:       String?
+}
+
+private struct UpdateVisualBody: Encodable {
+    let visualKey: String?
+
+    // nil muss als explizites JSON-null ankommen (Visual entfernen),
+    // encodeIfPresent würde den Key weglassen → Backend-Refine „min. 1 Feld" schlägt fehl
+    enum CodingKeys: String, CodingKey { case visualKey }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(visualKey, forKey: .visualKey)
+    }
 }
 
 private struct UpdateProductBody: Encodable {
-    let name:           String?
-    let vatRateInhouse: String?
-    let isActive:       Bool?
-    let categoryId:     Int?
+    let name:       String?
+    let isActive:   Bool?
+    let categoryId: Int?
+}
+
+private struct ReorderProductsBody: Encodable {
+    let categoryId: Int?
+    let productIds: [Int]
+
+    // categoryId = nil bedeutet „Produkte ohne Kategorie" und muss als
+    // JSON-null ankommen — encodeIfPresent würde den Key weglassen (422 im Backend).
+    enum CodingKeys: String, CodingKey { case categoryId, productIds }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(categoryId, forKey: .categoryId)
+        try c.encode(productIds, forKey: .productIds)
+    }
+}
+
+private struct ReorderCategoriesBody: Encodable {
+    let categoryIds: [Int]
 }
 
 private struct ChangePriceBody: Encodable {

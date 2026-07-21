@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
 
-const PLAN_LIMITS = {
+// Exportiert für Bulk-Prüfungen (Preset-Import prüft current + N statt current + 1)
+export const PLAN_LIMITS = {
   starter:  { devices: 1,  tables: 10,  products: 50 },
   pro:      { devices: 3,  tables: 30,  products: 200 },
   business: { devices: 10, tables: Infinity, products: Infinity },
 } as const;
 
-type Plan = keyof typeof PLAN_LIMITS;
+export type Plan = keyof typeof PLAN_LIMITS;
 type Resource = keyof typeof PLAN_LIMITS.starter;
 
 // Factory: gibt Middleware zurück die prüft ob Limit für eine Ressource erreicht ist

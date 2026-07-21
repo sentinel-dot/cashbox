@@ -472,3 +472,229 @@ describe('Rollen-Guards Produkte (staff)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+// ─── S17A: include_inactive (Management-Ansicht) ─────────────────────────────
+
+describe('GET /products?include_inactive (S17A)', () => {
+  let token: string; let tenantId: number;
+
+  beforeEach(async () => {
+    ({ token, tenantId } = await setup(db));
+    await db.execute(
+      `INSERT INTO products (tenant_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway, is_active)
+       VALUES (?, 'Aktiv', 1000, '19', '19', TRUE), (?, 'Inaktiv', 2000, '19', '19', FALSE)`,
+      [tenantId, tenantId]
+    );
+  });
+  afterEach(() => { /* cleanup in setup.ts */ });
+
+  it('Default: liefert nur aktive Produkte (Kasse unverändert)', async () => {
+    const res = await request(app).get('/products').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.some((p: any) => p.name === 'Aktiv')).toBe(true);
+    expect(res.body.some((p: any) => p.name === 'Inaktiv')).toBe(false);
+  });
+
+  it('include_inactive=1: liefert auch inaktive Produkte mit is_active=false', async () => {
+    const res = await request(app)
+      .get('/products?include_inactive=1')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const inactive = res.body.find((p: any) => p.name === 'Inaktiv');
+    expect(inactive).toBeDefined();
+    expect(inactive.is_active).toBe(false);
+  });
+
+  it('400 bei ungültigem include_inactive-Wert', async () => {
+    const res = await request(app)
+      .get('/products?include_inactive=2')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('400 bei unbekanntem Query-Param (strict)', async () => {
+    const res = await request(app)
+      .get('/products?was_anderes=1')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('Tenant-Isolation: include_inactive zeigt keine fremden Produkte', async () => {
+    const [t2] = await db.execute(`INSERT INTO tenants (name, address, plan, subscription_status) VALUES ('B', 'X', 'starter', 'active')`) as any;
+    await db.execute(`INSERT INTO receipt_sequences (tenant_id, last_number) VALUES (?, 0)`, [t2.insertId]);
+    await db.execute(
+      `INSERT INTO products (tenant_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway, is_active)
+       VALUES (?, 'FremdInaktiv', 1000, '19', '19', FALSE)`,
+      [t2.insertId]
+    );
+    const res = await request(app)
+      .get('/products?include_inactive=1')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.every((p: any) => p.name !== 'FremdInaktiv')).toBe(true);
+  });
+});
+
+// ─── S17A: sort_order Persistenz + Sortierung ────────────────────────────────
+
+describe('sort_order (S17A)', () => {
+  let token: string; let tenantId: number;
+
+  beforeEach(async () => { ({ token, tenantId } = await setup(db)); });
+  afterEach(() => { /* cleanup in setup.ts */ });
+
+  it('POST /products persistiert expliziten sort_order', async () => {
+    const res = await request(app)
+      .post('/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'X', price_cents: 1000, vat_rate_inhouse: '19', sort_order: 42 });
+    expect(res.status).toBe(201);
+    expect(res.body.sort_order).toBe(42);
+    const [rows] = await db.execute<any[]>('SELECT sort_order FROM products WHERE id = ?', [res.body.id]);
+    expect(rows[0].sort_order).toBe(42);
+  });
+
+  it('POST /products ohne sort_order hängt ans Ende an (MAX+10)', async () => {
+    const [c] = await db.execute(`INSERT INTO product_categories (tenant_id, name) VALUES (?, 'Kat')`, [tenantId]) as any;
+    await db.execute(
+      `INSERT INTO products (tenant_id, category_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway, sort_order)
+       VALUES (?, ?, 'Erstes', 1000, '19', '19', 30)`,
+      [tenantId, c.insertId]
+    );
+    const res = await request(app)
+      .post('/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Zweites', price_cents: 1000, vat_rate_inhouse: '19', category_id: c.insertId });
+    expect(res.status).toBe(201);
+    expect(res.body.sort_order).toBe(40);
+  });
+
+  it('GET /products sortiert nach Kategorie-sort_order, dann Produkt-sort_order', async () => {
+    const [c1] = await db.execute(`INSERT INTO product_categories (tenant_id, name, sort_order) VALUES (?, 'Zweite Kat', 20)`, [tenantId]) as any;
+    const [c2] = await db.execute(`INSERT INTO product_categories (tenant_id, name, sort_order) VALUES (?, 'Erste Kat', 10)`, [tenantId]) as any;
+    await db.execute(
+      `INSERT INTO products (tenant_id, category_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway, sort_order) VALUES
+       (?, ?, 'B-Prod-Spät', 1000, '19', '19', 20),
+       (?, ?, 'A-Prod-Früh', 1000, '19', '19', 10),
+       (?, ?, 'Z-Prod-Erste-Kat', 1000, '19', '19', 10)`,
+      [tenantId, c1.insertId, tenantId, c1.insertId, tenantId, c2.insertId]
+    );
+    const res = await request(app).get('/products').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const names = res.body.map((p: any) => p.name);
+    expect(names).toEqual(['Z-Prod-Erste-Kat', 'A-Prod-Früh', 'B-Prod-Spät']);
+    // Kategorie-sort_order wird mitgeliefert (iOS braucht ihn zum Spiegeln)
+    expect(res.body[0].category.sort_order).toBe(10);
+    expect(res.body[0].sort_order).toBe(10);
+  });
+});
+
+// ─── S17A: Reorder-Endpoints ─────────────────────────────────────────────────
+
+describe('PATCH /products/reorder + /products/categories/reorder (S17A)', () => {
+  let token: string; let tenantId: number;
+  let catId: number; let p1: number; let p2: number; let p3: number;
+
+  beforeEach(async () => {
+    ({ token, tenantId } = await setup(db));
+    const [c] = await db.execute(`INSERT INTO product_categories (tenant_id, name, sort_order) VALUES (?, 'Kat', 10)`, [tenantId]) as any;
+    catId = c.insertId;
+    const insert = async (name: string, sort: number) => {
+      const [r] = await db.execute(
+        `INSERT INTO products (tenant_id, category_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway, sort_order)
+         VALUES (?, ?, ?, 1000, '19', '19', ?)`,
+        [tenantId, catId, name, sort]
+      ) as any;
+      return r.insertId as number;
+    };
+    p1 = await insert('Eins', 10);
+    p2 = await insert('Zwei', 20);
+    p3 = await insert('Drei', 30);
+  });
+  afterEach(() => { /* cleanup in setup.ts */ });
+
+  it('sortiert Produkte um und persistiert (idempotent bei Doppelaufruf)', async () => {
+    const body = { category_id: catId, product_ids: [p3, p1, p2] };
+    const res1 = await request(app).patch('/products/reorder').set('Authorization', `Bearer ${token}`).send(body);
+    expect(res1.status).toBe(200);
+    const res2 = await request(app).patch('/products/reorder').set('Authorization', `Bearer ${token}`).send(body);
+    expect(res2.status).toBe(200);
+
+    const [rows] = await db.execute<any[]>(
+      'SELECT id, sort_order FROM products WHERE tenant_id = ? ORDER BY sort_order',
+      [tenantId]
+    );
+    expect(rows.map(r => r.id)).toEqual([p3, p1, p2]);
+    expect(rows.map(r => r.sort_order)).toEqual([10, 20, 30]);
+  });
+
+  it('404 wenn eine ID zu anderem Tenant gehört — nichts wird geändert (Tenant-Isolation)', async () => {
+    const [t2] = await db.execute(`INSERT INTO tenants (name, address, plan, subscription_status) VALUES ('B', 'X', 'starter', 'active')`) as any;
+    await db.execute(`INSERT INTO receipt_sequences (tenant_id, last_number) VALUES (?, 0)`, [t2.insertId]);
+    const [pf] = await db.execute(
+      `INSERT INTO products (tenant_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway) VALUES (?, 'Fremd', 1000, '19', '19')`,
+      [t2.insertId]
+    ) as any;
+
+    const res = await request(app)
+      .patch('/products/reorder')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category_id: catId, product_ids: [pf.insertId, p1, p2] });
+    expect(res.status).toBe(404);
+
+    const [rows] = await db.execute<any[]>(
+      'SELECT sort_order FROM products WHERE id = ?', [p1]
+    );
+    expect(rows[0].sort_order).toBe(10);
+  });
+
+  it('404 wenn Produkt nicht in der angegebenen Kategorie liegt', async () => {
+    const res = await request(app)
+      .patch('/products/reorder')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category_id: null, product_ids: [p1, p2] });
+    expect(res.status).toBe(404);
+  });
+
+  it('422 bei Duplikaten in product_ids', async () => {
+    const res = await request(app)
+      .patch('/products/reorder')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category_id: catId, product_ids: [p1, p1] });
+    expect(res.status).toBe(422);
+  });
+
+  it('staff darf nicht umsortieren → 403', async () => {
+    const { token: staffToken } = await setup(db, 'staff');
+    const res = await request(app)
+      .patch('/products/reorder')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ category_id: catId, product_ids: [p1, p2, p3] });
+    expect(res.status).toBe(403);
+  });
+
+  it('sortiert Kategorien um', async () => {
+    const [c2] = await db.execute(`INSERT INTO product_categories (tenant_id, name, sort_order) VALUES (?, 'Kat2', 20)`, [tenantId]) as any;
+    const res = await request(app)
+      .patch('/products/categories/reorder')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category_ids: [c2.insertId, catId] });
+    expect(res.status).toBe(200);
+
+    const [rows] = await db.execute<any[]>(
+      'SELECT id FROM product_categories WHERE tenant_id = ? ORDER BY sort_order', [tenantId]
+    );
+    expect(rows.map(r => r.id)).toEqual([c2.insertId, catId]);
+  });
+
+  it('Tenant-Isolation: Kategorien-Reorder mit fremder ID → 404', async () => {
+    const [t2] = await db.execute(`INSERT INTO tenants (name, address, plan, subscription_status) VALUES ('B', 'X', 'starter', 'active')`) as any;
+    await db.execute(`INSERT INTO receipt_sequences (tenant_id, last_number) VALUES (?, 0)`, [t2.insertId]);
+    const [cf] = await db.execute(`INSERT INTO product_categories (tenant_id, name) VALUES (?, 'FremdKat')`, [t2.insertId]) as any;
+
+    const res = await request(app)
+      .patch('/products/categories/reorder')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category_ids: [cf.insertId, catId] });
+    expect(res.status).toBe(404);
+  });
+});

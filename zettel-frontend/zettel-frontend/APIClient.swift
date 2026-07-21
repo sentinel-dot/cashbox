@@ -54,6 +54,11 @@ class APIClient {
         try await request(path, method: "POST", body: body)
     }
 
+    /// POST mit Zusatz-Headern (z.B. Idempotency-Key beim Preset-Import)
+    func post<T: Decodable, B: Encodable>(_ path: String, body: B, headers: [String: String]) async throws -> T {
+        try await request(path, method: "POST", body: body, extraHeaders: headers)
+    }
+
     func patch<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
         try await request(path, method: "PATCH", body: body)
     }
@@ -68,7 +73,8 @@ class APIClient {
         _ path: String,
         method: String,
         body: B?,
-        allowRefresh: Bool = true
+        allowRefresh: Bool = true,
+        extraHeaders: [String: String] = [:]
     ) async throws -> T {
         guard let url = URL(string: baseURL + path) else {
             throw AppError.networkError("Ungültige URL: \(path)")
@@ -84,6 +90,9 @@ class APIClient {
         }
         if let device = deviceToken {
             req.setValue(device, forHTTPHeaderField: "X-Device-Token")
+        }
+        for (field, value) in extraHeaders {
+            req.setValue(value, forHTTPHeaderField: field)
         }
         if let body {
             req.httpBody = try JSONEncoder.cashbox.encode(body)
@@ -104,7 +113,7 @@ class APIClient {
         // wiederholen — statt den Kassierer mitten in der Schicht auszuloggen.
         if http.statusCode == 401, allowRefresh, authToken != nil, path != "/auth/refresh" {
             if await attemptTokenRefresh() {
-                return try await request(path, method: method, body: body, allowRefresh: false)
+                return try await request(path, method: method, body: body, allowRefresh: false, extraHeaders: extraHeaders)
             }
         }
 

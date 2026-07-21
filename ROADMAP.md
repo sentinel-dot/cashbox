@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-20 · Suiten: Backend 126 Unit/Compliance + 321 Integration, iOS 40 XCTests — alle grün.
+**Stand:** 2026-07-21 · Suiten: Backend 139 Unit/Compliance + 354 Integration, iOS 71 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -342,7 +342,7 @@ Vorgangsbeginn und genau ein korrektes Ende/Abbruch; Bon enthält ggf. erforderl
 **Verfahrensdokumentation** (GoBD-Pflicht; Claude kann den technischen Teil aus CLAUDE.md +
 docs/ generieren), Datenhaltung nach Kündigung.
 
-## [ ] S17A — Sortiment-UX Fundament (UX-S1 + UX-S2) — ~2 d
+## [x] S17A — Sortiment-UX Fundament (UX-S1 + UX-S2) — erledigt 2026-07-21
 **Prompt:**
 > Setze Paket S17A aus ROADMAP.md um (OFFEN.md §6 UX-S1/UX-S2): Produkte und Kategorien werden
 > ein Betreiber-Flow „Sortiment" statt zwei isolierter Verwaltungsseiten. Zuerst Datenvertrag
@@ -358,7 +358,18 @@ docs/ generieren), Datenhaltung nach Kündigung.
 entsprechen nach Neustart exakt der Kasse; leeres Sortiment leitet direkt in die Einrichtung; Backend-
 Integrationstests inkl. Tenant-Isolation und iOS-Model-Decoding-/Sortier-Tests grün.
 
-## [ ] S17B — Starter-Sortimente + Visuals V1 (UX-S3 + UX-S4 + UX-S5) — ~2 d
+**Erledigt 2026-07-21:** V010 (`products.sort_order`, Backfill pro Kategorie alphabetisch ×10);
+`GET /products?include_inactive=1` (safeParse strict, Kasse bleibt Default-active-only); Sortierung
+`(c IS NULL), c.sort_order, c.name, p.sort_order, p.name, p.id` — iOS spiegelt sie 1:1 in
+`assortmentSorted` (Komparator-Unit-Tests); `POST /products` persistiert `sort_order` (Append MAX+10);
+`PATCH /products/reorder` + `/products/categories/reorder` (TX, tenant-verifiziert → 404, idempotent).
+iOS: `SortimentView` ersetzt ProdukteView+KategorienView (gelöscht), `ProductCard` aus OrderView
+extrahiert (Kasse und Vorschau rendern dieselbe Komponente), Reihenfolge-Modus als native List +
+`.onMove` (VoiceOver-Rearrange inklusive), Kategorie-Löschtext an 409 angeglichen, `products(for:)`
+filtert als Verteidigungslinie immer auf aktiv. Tests: Backend 126 + **336** (+15), iOS **51** (+11).
+REQ-SORT-001…006 im Testkonzept.
+
+## [x] S17B — Starter-Sortimente + Visuals V1 (UX-S3 + UX-S4 + UX-S5) — erledigt 2026-07-21
 **Prompt:**
 > Setze Paket S17B aus ROADMAP.md um (OFFEN.md §6 UX-S3/UX-S4/UX-S5): versionierte Starter-Pakete
 > „Shisha-Bar", „Café", „Späti" und „Leer starten". Wizard: Paket → Kategorien/Produkte auswählen →
@@ -377,6 +388,23 @@ Integrationstests inkl. Tenant-Isolation und iOS-Model-Decoding-/Sortier-Tests g
 verkaufsfertige Produkte; Doppeltap/Retry importiert nichts doppelt; Preise sind Cent-Integer und jede
 Historie existiert; Kasse wirkt mit Preset-Visuals und ohne Visuals vollständig; VoiceOver/Dark Mode geprüft;
 Späti-Pfandzeilen können ohne freigegebene Pfand-Capability weder über UI noch API importiert werden.
+
+**Erledigt 2026-07-21:** V011 (visual_key + origin_* mit Tenant-UNIQUE + `preset_imports`);
+typisierte V1-Presetdaten exakt nach Spec (13 Build-Time-Unit-Tests); gemeinsamer GoBD-Service
+`services/products.ts` (inaktiv → Historie → Verify → aktiv; härtet auch POST /products — Failure-
+Injection-Tests beweisen: nie ein aktives Produkt ohne Historie, Retry repariert statt dupliziert);
+GET /products/presets + POST /products/presets/import (Idempotency-Key, Replay 200, Stale-Takeover,
+Pfand-Gate 400 serverseitig, review_confirmed-Pflicht, Tabak-Namenspflicht, Bulk-Plan-Limit,
+Audit-Snapshot) mit 18 Integrationstests inkl. Parallel-Doppeltap. iOS: ProduktVisualCatalog (39 Keys,
+generic-Fallback, 4 eigene monochrome Template-PDF-Assets), Namensheuristik (alle V1-Namen + Negativ-
+fälle getestet), 8-Schritte-Wizard nach OnboardingView-Muster (Full-Screen-Cover, ein UUID-Key je
+Import-Serie, Sammel-/Einzelbestätigung via `WizardReviewState`), Visual-Picker auch in QuickCreate/
+Edit-Sheet. Endpunkt-Doku: **`docs/api.md` (neu)**. Tests: Backend **139** Unit + **354** Integration,
+iOS **71** XCTests — alle grün. REQ-PRESET-001…010.
+**Offen (bewusst):** Spec-§10-Paket-0-Gates (Steuerberater-Matrix-Freigabe, Pilot-Bestätigung
+shisha_bar@1, Pfand-Produktentscheidung) sind fachliche Go-live-Gates beim User — Code ist fertig,
+Freigaben stehen aus (S17-Gate/N9). Manuelle AX1-/VoiceOver-/Dark-Mode-Durchsicht des Wizards auf
+echtem iPad beim nächsten Pilot-Termin protokollieren.
 
 ## [ ] S17C — 14-Tage-Trial ohne Compliance-Sackgasse (B9) — ~1,5–2 d
 **Prompt:**

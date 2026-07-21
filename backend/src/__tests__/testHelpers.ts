@@ -33,7 +33,7 @@ export function berlinDateDaysAgo(n: number): string {
 export async function cleanTestDB(): Promise<void> {
   // Reihenfolge: abhängige Tabellen zuerst, tenants zuletzt
   const tables = [
-    'stripe_events',
+    'stripe_events', 'preset_imports',
     'subscription_events', 'tse_outages', 'audit_log', 'offline_queue',
     'email_log', 'email_queue',
     'cancellations', 'payment_splits', 'payments', 'receipts',
