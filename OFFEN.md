@@ -149,20 +149,22 @@ foto-lastige Speisekarte darf die Kasse nicht langsamer oder unruhiger machen.
   links, Kassenansicht (echte `ProductCard`-Kacheln) / Liste, Suche, Aktiv/Inaktiv-Filter,
   Inline-Kategorieanlage, Reihenfolge-Modus (native List + `.onMove`, VoiceOver-Rearrange),
   Quick-Create Name+Preis+Kategorie mit „Weitere Einstellungen" (DisclosureGroup).
-- **UX-S3 — Starter-Sortimente:** versionierte Pakete **Shisha-Bar, Café, Späti, leer starten**. Betreiber
-  wählt Kategorien/Produkte per Checkliste, trägt Preise in einer kompakten Tabelle ein und bestätigt
-  MwSt.-Vorschläge ausdrücklich (keine stillen Steuerannahmen). Import idempotent und über denselben
-  GoBD-konformen Produktservice inkl. initialer `product_price_history`, nicht per Direkt-INSERT.
-- **UX-S4 — Visuals in zwei Stufen:** Vor Go-live kuratierte semantische `visual_key`s (Kategorie-Farbe +
-  einheitliche SF-Symbol-/Bundle-Assets), automatisch aus Namen vorgeschlagen und immer optional. Eigene
-  Fotos erst nach Go-live bzw. zusammen mit einem digitalen Menü: PhotosPicker/Kamera, 1:1-Crop,
-  Größen-/MIME-Prüfung, Thumbnails und S3-kompatibler Object Storage. So entsteht jetzt kein CDN-,
-  Upload-, Lizenz- und Datenschutzprojekt für ein rein internes POS-Grid.
-- **UX-S5 — Pfand-Gate für Späti:** Das aktuelle Produkt-/Order-Modell kann Warenpreis und Pfand weder
-  getrennt ausweisen noch eine Pfandrückgabe finanzdatenkonform buchen. Pfandpflichtige Starter-Produkte
-  bleiben deshalb bis zu einem eigenen, finanziell auditierten Paket server- und UI-seitig gesperrt;
-  Pfand darf nicht in `price_cents` versteckt werden. Verbindliche Produkt-/Steuer-/Visual-Spezifikation:
-  `docs/s17-sortiment-starterpakete.md`.
+- ~~**UX-S3 — Starter-Sortimente**~~ **erledigt 2026-07-21 (S17B):** `GET /products/presets` +
+  `POST /products/presets/import` (Idempotency-Key, `preset_imports`-Claim, Origin-UNIQUE je Tenant),
+  gemeinsamer GoBD-Produktservice `createProductWithHistory` (inaktiv → Historie → Verify → aktiv —
+  härtet auch `POST /products`), 8-Schritte-Wizard (`SortimentWizardView`) mit ausdrücklicher
+  MwSt.-Bestätigung (Sammel nur für Standardzeilen, Einzelbestätigung für `recipe_review`/
+  `printed_price_review`). V1-Daten exakt nach `docs/s17-sortiment-starterpakete.md`. Vertrag: `docs/api.md`.
+- ~~**UX-S4 — Visuals V1**~~ **erledigt 2026-07-21 (S17B):** 39 semantische `visual_key`s
+  (`products.visual_key`, Whitelist serverseitig), `ProduktVisualCatalog` (SF Symbols + 4 eigene
+  monochrome Template-Assets, generic-Fallback für unbekannte Keys), Namensheuristik als Picker-
+  Vorbelegung (`VisualSuggestion.swift`, nie automatisch überschreibend), Kachel mit und ohne Visual
+  gleichwertig. **Stufe 2 (eigene Fotos/Object Storage) bleibt bewusst nach Go-live** — siehe §9/Backlog.
+- ~~**UX-S5 — Pfand-Gate für Späti**~~ **Gate aktiv seit 2026-07-21 (S17B):** die elf
+  `deposit_cents=25`-Zeilen werden server- (400 `deposit_gate`) und UI-seitig (gesperrte Zeile
+  „Pfandfunktion erforderlich") abgewiesen; Pfand steckt nie in `price_cents`. **Offen bleibt das
+  separate, finanziell auditierte Pfand-Paket** (getrennter Ausweis, signierte Pfandrückgabe,
+  Bon/TSE-Abbildung) — erst danach werden die Späti-Pfandzeilen freigeschaltet (Spec §5.4).
 
 **Zielmetrik:** Ein neuer Betreiber hat in unter 10 Minuten mindestens 3 Kategorien und 15 verkaufsfertige,
 sortierte Produkte; der Kassenbetrieb bleibt auch komplett ohne Bilder hochwertig und schnell.
@@ -220,7 +222,7 @@ Nikos Insider-Blick (Deutsche Post ITS, POS-Testing) gezielt nutzen — die Punk
 2. **Vor Go-live (Reihenfolge):** B1 E-Mail → B2 Cron → B3 Passwort-Reset → B6/B7 Prozess-Härtung → B4/B5 → A3/A6/A9 → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
 3. **Phase 2 (TSE scharf):** A1 + A2 + A11 lösen → Fiskaly-Sandbox-E2E → N2/N3
 4. **Nach Pilot:** §6 impeccable-Pass komplett, T5, S2–S4
-5. **Vor öffentlichem Go-live:** UX-S3 + Visuals V1 (Roadmap S17B — UX-S1/S2 erledigt 2026-07-21), B9 (S17C)
+5. **Vor öffentlichem Go-live:** B9 (S17C) — UX-S1–S5 erledigt 2026-07-21 (S17A/S17B); Späti-Pfandzeilen bleiben bis zum separaten Pfand-Paket gesperrt
 6. **Phase 3+:** Eigene Produktfotos/digitales Menü, Trinkgeld (nach Steuerberater), SyncManager-Vollausbau, Phase-5-Features
 
 ---

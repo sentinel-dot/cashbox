@@ -13,7 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Suiten:** Backend 126 Unit/Compliance + 336 Integration, iOS 51 XCTests — alle grün (2026-07-21)
+**Suiten:** Backend 139 Unit/Compliance + 354 Integration, iOS 71 XCTests — alle grün (2026-07-21)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -218,6 +218,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | Devices | POST /devices/register, /:id/revoke, GET / | ✅ |
 | Products | GET /products (`?include_inactive=1` = Management-Ansicht; Default = Kasse, nur aktive), POST /products (persistiert `sort_order`, Default MAX+10 je Kategorie), PATCH+DELETE /:id, GET+POST+PATCH+DELETE /products/categories | ✅ |
 | Sortiment-Reorder | PATCH /products/reorder + PATCH /products/categories/reorder (komplette geordnete ID-Liste, TX, tenant-verifiziert 404, owner/manager) — S17A | ✅ |
+| Starter-Presets | GET /products/presets (alle Rollen) + POST /products/presets/import (owner/manager, Idempotency-Key-Header, Pfand-Gate, Review-Pflicht, Bulk-Plan-Limit) — S17B, Vertrag: `docs/api.md`. **Produkt-Anlage läuft app-weit über `services/products.ts → createProductWithHistory`** (inaktiv → Historie → Verify → aktiv; kein zweiter INSERT-Pfad!) | ✅ |
 | Preisänderung | POST /products/:id/price (→ product_price_history, GoBD) | ✅ |
 | Modifier Groups | CRUD /modifier-groups + /options | ✅ |
 | Tische/Zonen | CRUD /tables + /zones | ✅ |
@@ -273,10 +274,14 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | `ZBerichtView.swift` | Z-Bericht aus lastZReport (SessionStore), KPI-Kacheln, Kassenbestand mit Differenzanzeige, Empty-State | ✅ |
 | `BerichteView.swift` | Täglich/Zeitraum-Tab, Datumsnavigation, KPI-Kacheln, Sessionsliste, MwSt-Aufschlüsselung, Quick-Buttons (7/30 Tage) | ✅ |
 | `SortimentView.swift` | S17A: EIN Bereich für Produkte + Kategorien (ersetzt ProdukteView + KategorienView, beide gelöscht 2026-07-21). Kategorienleiste links (Inline-Anlage, Kontextmenü Bearbeiten/Löschen), rechts Kassenansicht (ProductCard-Kacheln) / Liste, Suche, Aktiv/Inaktiv-Filter, Reihenfolge-Sheet (native List + `.onMove`), Quick-Create (Name+Preis+Kategorie, „Weitere Einstellungen" progressiv), Edit-Sheet mit GoBD-Preispfad, Löschtext == Backend-409-Verhalten | ✅ |
-| `ProductCard.swift` | Die Kassenkachel, aus OrderView extrahiert (`OProductCard` → `ProductCard`, internal) — OrderView (Kasse) und SortimentView (Vorschau) rendern exakt dieselbe Komponente; `dimmed`-Zustand + „Inaktiv"-Pill fürs Management | ✅ |
+| `ProductCard.swift` | Die Kassenkachel, aus OrderView extrahiert (`OProductCard` → `ProductCard`, internal) — OrderView (Kasse) und SortimentView (Vorschau) rendern exakt dieselbe Komponente; `dimmed`-Zustand + „Inaktiv"-Pill fürs Management; optionaler Visual-Slot (S17B: Kategorie-Tint, `accessibilityHidden`) | ✅ |
+| `SortimentWizardView.swift` | S17B: 8-Schritte-Wizard (Paket → Auswahl → Namen&Preise → MwSt. → Visuals → Vorschau → Import → Ergebnis) nach OnboardingView-Muster; Pfand-/Vorlagen-Sperren, Sammel- vs. Einzelbestätigung (`WizardReviewState`), ein UUID-Idempotency-Key pro Import-Serie, `VisualPickerSheet` (39 Keys + „Ohne Symbol") | ✅ |
+| `ProduktVisualCatalog.swift` | 39 semantische Keys → SF Symbols/4 Bundle-Assets (`product.shisha`, `.shisha.refill`, `.croissant`, `.pretzel` — eigene monochrome Template-PDFs), generic-Fallback für unbekannte Keys/fehlende Assets, lokalisierte Labels, `ProductVisualView` | ✅ |
+| `VisualSuggestion.swift` | Namensheuristik (§6.4): Ganze-Wort-Matching nach Normalisierung (Diakritika, ß→ss, Mengenangaben), spezifischste Regel zuerst, Kategorie sekundär, kein Treffer ⇒ nil — nur Picker-Vorbelegung | ✅ |
+| `PresetModels.swift` | Decodables für GET /products/presets + Import-Vertrag (visual_key als String? — zukunftstolerant), `WizardReviewState` (pure, getestet) | ✅ |
 | `EinstellungenView.swift` | Betriebsdaten (GET/PATCH /tenants/me), Tischverwaltung (Tab "Tische"), Mitarbeiterverwaltung (CRUD via UsersStore), UserFormSheet, Soft-Delete-Bestätigung | ✅ |
 | `TischverwaltungView.swift` | Tische & Zonen verwalten: Liste, ZoneFormSheet, TischFormSheet (Zone-Picker), Deaktivieren-Confirm, CRUD via TableStore | ✅ |
-| `zettel-frontendTests/` (XCTest-Target) | 51 Tests: ParseCents (Locale/Rundung/Tausenderpunkt), EuroString (inkl. Roundtrip), PaymentLogic (buildPayments-Summeninvariante, Gemischt-Kanten), VatBreakdown (Formelparität mit Backend-vatCalculation.test.ts), ModelDecoding (wörtliche snake_case-Fixtures via `JSONDecoder.cashbox`, inkl. A4-receipt-Block + S17A-sort_order-Fixtures), AssortmentSort (Komparator == Backend-SQL). Lauf: `xcodebuild test -project zettel-frontend.xcodeproj -scheme zettel-frontend -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)'` | ✅ |
+| `zettel-frontendTests/` (XCTest-Target) | 71 Tests: ParseCents (Locale/Rundung/Tausenderpunkt), EuroString (inkl. Roundtrip), PaymentLogic (buildPayments-Summeninvariante, Gemischt-Kanten), VatBreakdown (Formelparität mit Backend-vatCalculation.test.ts), ModelDecoding (wörtliche snake_case-Fixtures via `JSONDecoder.cashbox`, inkl. A4-receipt-Block + S17A-sort_order-Fixtures), AssortmentSort (Komparator == Backend-SQL), PresetDecoding (Wire-Format, unbekannte Keys tolerant), VisualCatalog (39 Keys exhaustiv, Fallbacks, Assets), VisualSuggestion (alle V1-Namen + Negativfälle), WizardReviewState (Sammel deckt Risikozeilen nicht). Lauf: `xcodebuild test -project zettel-frontend.xcodeproj -scheme zettel-frontend -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)'` | ✅ |
 | `SyncManager.swift` | Minimaler Offline-Queue-Trigger: POST /sync/offline-queue bei Online-Wechsel/Foreground/Login (max. 3 Runden), pendingCount @Published. `SyncManager.shared` — dieselbe Instanz wird als EnvironmentObject injiziert und vom OfflineBanner direkt gelesen. Vollausbau Phase 3 | ✅ |
 
 ### Noch nicht implementiert ❌ (SwiftUI)
@@ -372,6 +377,12 @@ src/
 │   │                      10s-Timeout je Request; befüllt tse_outages
 │   │                      (Offline-Fallback öffnet, Erfolg schließt Eintrag)
 │   ├── priceHistory.ts -- product_price_history INSERT
+│   ├── products.ts     -- createProductWithHistory: DER Produktanlage-Pfad (S17B) —
+│   │                      inaktiv → Historie (auditDb) → Verify → aktivieren;
+│   │                      Origin-Retry repariert, reaktiviert nie Betreiber-Deaktiviertes
+│   ├── presets/        -- presetTypes.ts (VISUAL_KEYS-Whitelist 39, VatReview,
+│   │                      COLOR_ROLE_HEX) + presetData.ts (shisha_bar@1, cafe@1,
+│   │                      spaeti@1, empty@1 — wörtlich aus docs/s17-sortiment-starterpakete.md)
 │   ├── receipts.ts     -- Bon-Generierung + Pflichtfeld-Prüfung
 │   └── sequences.ts    -- receipt_sequences FOR UPDATE
 ├── db/
@@ -382,7 +393,10 @@ src/
 │   │                      V007__performance_indexes,
 │   │                      V008__cancellations_unique_original (Doppel-Storno-Backstop),
 │   │                      V009__email_queue_and_log (email_queue operativ,
-│   │                        email_log INSERT-only = Versandnachweis)
+│   │                        email_log INSERT-only = Versandnachweis),
+│   │                      V010__products_sort_order (persistente Kassen-Reihenfolge),
+│   │                      V011__visual_key_preset_origin (visual_key, origin_* +
+│   │                        UNIQUE je Tenant, preset_imports = Idempotenz-Anker)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/
@@ -395,14 +409,18 @@ src/
     │                      emailTemplates (6 Gruppen, Subscription-Varianten,
     │                      euroString-Parität, Berlin-Zeit, esc,
     │                      Registry-Vollständigkeit, backoffMinutes),
-    │                      sentryConfig (Testlauf meldet nichts — T10-Regression)
+    │                      sentryConfig (Testlauf meldet nichts — T10-Regression),
+    │                      presetData (V1-Counts, Eindeutigkeit, MwSt.-Leitplanken,
+    │                      Pfand exakt 11 — S17B)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
     │                      devices, e2e-tagesablauf (kompletter Kassentag),
     │                      email-queue (Enqueue/Idempotenz, Drain, email_log-Nachweis,
     │                      Retry + failed, Stuck-Claim, Tenant-Isolation),
     │                      errorHandler (5xx→Sentry, 4xx nicht, kein Leak in Prod),
     │                      export, mixed-payments, modifierGroups, offline-queue,
-    │                      onboarding, orders, payments, products, receipts,
+    │                      onboarding, orders, payments, presets (Import-Idempotenz,
+    │                      Failure-Injection/Repair, Pfand-Gate, gehärteter POST),
+    │                      products, receipts,
     │                      receipts-list, reports, sessions, split-bill,
     │                      stripe-webhooks, tables, tenants, users
     │                   -- Tenant-Isolation-Tests sind in jeder dieser Dateien

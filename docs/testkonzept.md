@@ -109,6 +109,21 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-SORT-005 | Reorder-Endpoints (`PATCH /products/reorder`, `PATCH /products/categories/reorder`) sind tenant-verifiziert (fremde ID → 404, nichts geändert), owner/manager-only, transaktional und idempotent | CLAUDE.md Tenant-Isolation |
 | REQ-SORT-006 | Der Kategorie-Löschdialog in iOS beschreibt das echte Backend-Verhalten (Soft-Delete; 409 bei aktiven Produkten) — keine falschen Versprechen („Produkte werden nicht zugeordnet") | OFFEN.md UX-S1 |
 
+### Starter-Sortimente (REQ-PRESET)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-PRESET-001 | Die V1-Presetdaten entsprechen exakt der Spezifikation: Shisha-Bar 4/21, Café 4/25, Späti 5/27 + 3 Tabakvorlagen, Leer 0/0; IDs/Keys eindeutig, MwSt nur 7/19, `price_cents` immer null | docs/s17-sortiment-starterpakete.md §3–5, §11 |
+| REQ-PRESET-002 | Es gibt genau EINEN Produktanlage-Pfad (`createProductWithHistory`): inaktiv anlegen → initiale `product_price_history` via auditDb → Werte verifizieren → aktivieren. Ein aktives Produkt ohne Historie ist unmöglich; das härtet auch `POST /products` | Spec §8.3 |
+| REQ-PRESET-003 | Der Import ist auf DB-Ebene idempotent: UNIQUE `(tenant, origin_preset_id, origin_item_key)` + `preset_imports`-Claim je `(tenant, Idempotency-Key)`. Replay liefert das gespeicherte Ergebnis (200), paralleler Doppeltap verarbeitet genau einmal, Retry nach Fehler repariert inaktive Reste statt zu duplizieren | Spec §8.2 |
+| REQ-PRESET-004 | Vom Betreiber deaktivierte Import-Produkte werden durch Re-Import NIE still reaktiviert; Namensgleichheit ist nie ein automatischer Merge (skip/create explizit) | Spec §8.2 |
+| REQ-PRESET-005 | Serverseitige Re-Validierung gegen die eigene Preset-Definition: unbekannte Keys 400, Standard-/Speisen-Sätze nicht frei änderbar, `recipe_review`/`printed_price_review` nur mit Einzelbestätigung, Tabakvorlagen nur mit konkretem Namen, Bulk-Plan-Limit | Spec §2.3, §5.3, §8.1 |
+| REQ-PRESET-006 | Pfand-Gate: die elf `deposit_cents=25`-Zeilen werden server- UND UI-seitig abgewiesen (400 `deposit_gate`), bis ein eigenes auditiertes Pfand-Paket existiert; Pfand nie in `price_cents` | Spec §5.4 / OFFEN.md UX-S5 |
+| REQ-PRESET-007 | `visual_key` ist eine 39er-Whitelist (semantische Keys, nie SF-Symbol-Namen in der DB); `null` = gleichwertige Textkachel; unbekannte Zukunftswerte rendern defensiv als `generic` und brechen weder Decoding noch Verkauf | Spec §6.1–6.2 |
+| REQ-PRESET-008 | Die Namensheuristik ist nur Picker-Vorbelegung: Ganze-Wort-Matching (kein „tee" in „Teekanne"), spezifischste Regel zuerst, Kategorie sekundär, kein Treffer ⇒ nil (nie `generic`), manuelle Wahl wird nie überschrieben | Spec §6.4 |
+| REQ-PRESET-009 | Wizard-Bestätigungen: Sammelbestätigung deckt ausschließlich Standard-/Speisenzeilen; Risikozeilen brauchen Einzelbestätigung; Import erst wenn alle ausgewählten Zeilen bestätigt und bepreist (> 0) sind | Spec §2.3, §9 |
+| REQ-PRESET-010 | Jeder Import wird als `preset.imported` mit vollständigem Snapshot (Preset, Version, `tax_basis_version`, bestätigte Werte) im Audit-Log dokumentiert | Spec §8.3.6 |
+
 ---
 
 ## 2. Use Cases (Kassenalltag)
@@ -140,6 +155,7 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-MAIL-06 | Abo-Status ändert sich — past_due, Kündigung und Reaktivierung führen zu einer handlungsfähigen Nachricht | MAIL-003/004/009/010 |
 | UC-MAIL-07 | Schicht bleibt länger als 24 Stunden offen — Owner erhält eine GoBD-Warnung | MAIL-002…004/009/010 |
 | UC-16 | Sortiment pflegen (Produkt deaktivieren → reaktivieren, Reihenfolge ziehen, Kategorie anlegen/löschen) | SORT-001…006, TENANT-* |
+| UC-17 | Frischer Tenant richtet Starter-Sortiment ein (< 10 min, 3 Kategorien + 15 Produkte; Doppeltap/Timeout/Retry sicher) | PRESET-001…010, TENANT-* |
 
 ---
 
@@ -199,6 +215,16 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | SORT-004 | UC-16 | **TC-I products.test.ts** (Ordering-Assertion Kategorie→Produkt); **TC-IOS AssortmentSortTests** (Komparator-Tabelle inkl. Tie-Breaker + nil-Kategorie zuletzt), **TC-IOS ModelDecodingTests** (sort_order-Fixtures) |
 | SORT-005 | UC-16 | **TC-I products.test.ts** (Reorder happy + idempotent (2×), fremde ID → 404 + unverändert, falsche Kategorie → 404, Duplikate → 422, staff → 403) |
 | SORT-006 | UC-16 | Copy-Review SortimentView (Dialogtext beschreibt Soft-Delete + 409-Fall; Server-409-Meldung wird angezeigt) |
+| PRESET-001 | UC-17 | **TC-U unit/presetData.test.ts** (Counts, Eindeutigkeit, Referenzen, MwSt.-Leitplanken, recipe_review-Allowlist, exakt 11 Pfandzeilen) |
+| PRESET-002 | UC-17 | **TC-I presets.test.ts** (Failure-Injection: History-Fehler ⇒ 500 + inaktiver Rest ohne Historie; gehärteter POST /products ebenso; Happy Path: je Produkt exakt eine initiale History-Zeile) |
+| PRESET-003 | UC-17 | **TC-I presets.test.ts** (Replay 200 mit gespeichertem Ergebnis; neuer Key ⇒ alles already_imported; paralleler Doppeltap via Promise.all; Retry nach Fehler ⇒ `repaired`, gleiche Produkt-ID) |
+| PRESET-004 | UC-17 | **TC-I presets.test.ts** (deaktiviertes Import-Produkt bleibt nach Re-Import deaktiviert; Namenskollision skip/create) |
+| PRESET-005 | UC-17 | **TC-I presets.test.ts** (400/422-Matrix: unbekannter Key, Satzabweichung, review_required, custom_name_required, Float-/0-Preis, vat_confirmed, fehlender Idempotency-Key; Plan-Limit 403; staff 403; Tenant-Isolation-`it()`) |
+| PRESET-006 | UC-17 | **TC-I presets.test.ts** (deposit_gate 400 serverseitig, keine Zeile angelegt); **TC-IOS PresetDecodingTests** (isDepositBlocked), Wizard-UI-Sperre |
+| PRESET-007 | UC-17 | **TC-I presets.test.ts** (visual_key-Whitelist 422); **TC-IOS VisualCatalogTests** (39 Keys exhaustiv, generic-Fallback, Bundle-Assets vorhanden), **TC-IOS PresetDecodingTests** (unbekannter Key decodiert + rendert generic) |
+| PRESET-008 | UC-17 | **TC-IOS VisualSuggestionTests** (alle V1-Presetnamen exakt + Negativfälle: leer, Emoji, nur Menge, Teekanne/Nussecke, Groß-/Kleinschreibung, Umlaute) |
+| PRESET-009 | UC-17 | **TC-IOS WizardReviewStateTests** (Sammelbestätigung deckt Risikozeilen nicht; Einzelbestätigung je Zeile; leere Auswahl) |
+| PRESET-010 | UC-17 | **TC-I presets.test.ts** (implizit über Happy Path); Audit-Snapshot-Sichtprüfung `audit_log.action = 'preset.imported'` |
 
 ---
 
