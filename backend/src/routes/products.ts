@@ -14,6 +14,7 @@ import {
   listProducts,   createProduct,  updateProduct,  deleteProduct, changePrice,
   reorderProducts, reorderCategories,
 } from '../controllers/productsController.js';
+import { importPresetSchema, listPresets, importPreset } from '../controllers/presetsController.js';
 
 const IMMUTABLE_PRICE_FIELDS = ['price_cents', 'vat_rate_inhouse', 'vat_rate_takeaway'];
 
@@ -40,6 +41,10 @@ router.post('/categories',     requireRole('owner', 'manager'), validationMiddle
 router.patch('/categories/reorder', requireRole('owner', 'manager'), validationMiddleware(reorderCategoriesSchema), reorderCategories);
 router.patch('/categories/:id', requireRole('owner', 'manager'), validationMiddleware(updateCategorySchema), updateCategory);
 router.delete('/categories/:id', requireRole('owner', 'manager'), deleteCategory);
+
+// ─── Starter-Sortimente (S17B) — VOR den /:id-Routen registrieren ────────────
+router.get( '/presets',        listPresets);
+router.post('/presets/import', requireRole('owner', 'manager'), validationMiddleware(importPresetSchema), importPreset);
 
 // ─── Produkte ─────────────────────────────────────────────────────────────────
 router.get('/',          listProducts);
