@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-20 · Suiten: Backend 126 Unit/Compliance + 321 Integration, iOS 40 XCTests — alle grün.
+**Stand:** 2026-07-21 · Suiten: Backend 126 Unit/Compliance + 336 Integration, iOS 51 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -342,7 +342,7 @@ Vorgangsbeginn und genau ein korrektes Ende/Abbruch; Bon enthält ggf. erforderl
 **Verfahrensdokumentation** (GoBD-Pflicht; Claude kann den technischen Teil aus CLAUDE.md +
 docs/ generieren), Datenhaltung nach Kündigung.
 
-## [ ] S17A — Sortiment-UX Fundament (UX-S1 + UX-S2) — ~2 d
+## [x] S17A — Sortiment-UX Fundament (UX-S1 + UX-S2) — erledigt 2026-07-21
 **Prompt:**
 > Setze Paket S17A aus ROADMAP.md um (OFFEN.md §6 UX-S1/UX-S2): Produkte und Kategorien werden
 > ein Betreiber-Flow „Sortiment" statt zwei isolierter Verwaltungsseiten. Zuerst Datenvertrag
@@ -357,6 +357,17 @@ docs/ generieren), Datenhaltung nach Kündigung.
 **DoD:** Produkt deaktivieren → im Management sichtbar → reaktivieren; Kategorie- und Produktreihenfolge
 entsprechen nach Neustart exakt der Kasse; leeres Sortiment leitet direkt in die Einrichtung; Backend-
 Integrationstests inkl. Tenant-Isolation und iOS-Model-Decoding-/Sortier-Tests grün.
+
+**Erledigt 2026-07-21:** V010 (`products.sort_order`, Backfill pro Kategorie alphabetisch ×10);
+`GET /products?include_inactive=1` (safeParse strict, Kasse bleibt Default-active-only); Sortierung
+`(c IS NULL), c.sort_order, c.name, p.sort_order, p.name, p.id` — iOS spiegelt sie 1:1 in
+`assortmentSorted` (Komparator-Unit-Tests); `POST /products` persistiert `sort_order` (Append MAX+10);
+`PATCH /products/reorder` + `/products/categories/reorder` (TX, tenant-verifiziert → 404, idempotent).
+iOS: `SortimentView` ersetzt ProdukteView+KategorienView (gelöscht), `ProductCard` aus OrderView
+extrahiert (Kasse und Vorschau rendern dieselbe Komponente), Reihenfolge-Modus als native List +
+`.onMove` (VoiceOver-Rearrange inklusive), Kategorie-Löschtext an 409 angeglichen, `products(for:)`
+filtert als Verteidigungslinie immer auf aktiv. Tests: Backend 126 + **336** (+15), iOS **51** (+11).
+REQ-SORT-001…006 im Testkonzept.
 
 ## [ ] S17B — Starter-Sortimente + Visuals V1 (UX-S3 + UX-S4 + UX-S5) — ~2 d
 **Prompt:**

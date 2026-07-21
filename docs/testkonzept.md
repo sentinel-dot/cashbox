@@ -98,6 +98,17 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-MAIL-010 | Öffentliche Anlassfunktionen verwenden ausschließlich stabile technische IDs im Idempotenzschlüssel; Reset-Token, Empfänger und Betriebsnamen dürfen dort nicht auftauchen | ROADMAP S06 |
 | REQ-MAIL-011 | Produktionsversand wird erst mit einer eigenen, in Resend SPF-/DKIM-verifizierten Domain und eingerichtetem DMARC aktiviert; ohne API-Key bleibt der Dienst im sicheren Dry-Run | ROADMAP S05/S06 |
 
+### Sortiment (REQ-SORT)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-SORT-001 | `GET /products` liefert per Default nur aktive Produkte (Kasse); `?include_inactive=1` liefert zusätzlich inaktive für die Management-Ansicht — deaktivierte Produkte sind reaktivierbar | OFFEN.md UX-S1 / ROADMAP S17A |
+| REQ-SORT-002 | Query-Params der Produktliste werden strikt validiert (safeParse, unbekannte Keys → 400) — kein stilles Ignorieren | CLAUDE.md Validierung |
+| REQ-SORT-003 | Produkte haben eine persistente Kassen-Reihenfolge (`products.sort_order`); `POST /products` persistiert sie (Default: Ende der Kategorie, MAX+10) | OFFEN.md UX-S1 |
+| REQ-SORT-004 | Die Produktliste ist deterministisch sortiert: Kategorie-sort_order → Kategorie-Name → Produkt-sort_order → Produkt-Name → ID; Produkte ohne Kategorie zuletzt. iOS spiegelt exakt dieselbe Ordnung (`assortmentSorted`) | ROADMAP S17A DoD |
+| REQ-SORT-005 | Reorder-Endpoints (`PATCH /products/reorder`, `PATCH /products/categories/reorder`) sind tenant-verifiziert (fremde ID → 404, nichts geändert), owner/manager-only, transaktional und idempotent | CLAUDE.md Tenant-Isolation |
+| REQ-SORT-006 | Der Kategorie-Löschdialog in iOS beschreibt das echte Backend-Verhalten (Soft-Delete; 409 bei aktiven Produkten) — keine falschen Versprechen („Produkte werden nicht zugeordnet") | OFFEN.md UX-S1 |
+
 ---
 
 ## 2. Use Cases (Kassenalltag)
@@ -128,6 +139,7 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-MAIL-05 | Tagesabschluss — Owner erhält opt-in Umsatz, Zahlarten und Kassendifferenz | MAIL-001…004/009 |
 | UC-MAIL-06 | Abo-Status ändert sich — past_due, Kündigung und Reaktivierung führen zu einer handlungsfähigen Nachricht | MAIL-003/004/009/010 |
 | UC-MAIL-07 | Schicht bleibt länger als 24 Stunden offen — Owner erhält eine GoBD-Warnung | MAIL-002…004/009/010 |
+| UC-16 | Sortiment pflegen (Produkt deaktivieren → reaktivieren, Reihenfolge ziehen, Kategorie anlegen/löschen) | SORT-001…006, TENANT-* |
 
 ---
 
@@ -181,6 +193,12 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | MAIL-009 | UC-MAIL-01/02/04…07 | **TC-U unit/emailTemplates.test.ts** (exakt sechs Registry-Einträge; Pflichtinhalt, Berlin-Zeit, Cent-Format, CTA und HTML-Escaping je Gruppe; alle drei Subscription-Varianten; Z-Bericht-Differenz ±/0) |
 | MAIL-010 | UC-MAIL-02/04…07 | **TC-U unit/emailTemplates.test.ts** (`emailIdempotencyKey` deterministisch/tenant-gescoped); **TC-I integration/email-queue.test.ts** (alle fünf S06-Anlassfunktionen und exakte technische Schlüssel, keine Token-/Empfängerwerte) |
 | MAIL-011 | UC-MAIL-02 | **TC-M Manuell**: Resend-Domain `verified`, Testmail zugestellt, Header `spf=pass`, `dkim=pass`, `dmarc=pass`, Provider-ID in `email_log`; Runbook `docs/betrieb.md` §4 |
+| SORT-001 | UC-16 | **TC-I products.test.ts** (Default exkludiert inaktive; include_inactive=1 inkludiert mit `is_active:false`; Fremd-Tenant-Isolation) |
+| SORT-002 | UC-16 | **TC-I products.test.ts** (include_inactive=2 → 400; unbekannter Query-Key → 400) |
+| SORT-003 | UC-16 | **TC-I products.test.ts** (expliziter sort_order persistiert; ohne → MAX+10-Append) |
+| SORT-004 | UC-16 | **TC-I products.test.ts** (Ordering-Assertion Kategorie→Produkt); **TC-IOS AssortmentSortTests** (Komparator-Tabelle inkl. Tie-Breaker + nil-Kategorie zuletzt), **TC-IOS ModelDecodingTests** (sort_order-Fixtures) |
+| SORT-005 | UC-16 | **TC-I products.test.ts** (Reorder happy + idempotent (2×), fremde ID → 404 + unverändert, falsche Kategorie → 404, Duplikate → 422, staff → 403) |
+| SORT-006 | UC-16 | Copy-Review SortimentView (Dialogtext beschreibt Soft-Delete + 409-Fall; Server-409-Meldung wird angezeigt) |
 
 ---
 

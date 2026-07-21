@@ -139,15 +139,16 @@ niemand `drainEmailQueue` periodisch auf.
 Landscape-iPad. Er braucht stabile Positionen, große Ziele und eindeutige Farb-/Symbolhinweise; eine
 foto-lastige Speisekarte darf die Kasse nicht langsamer oder unruhiger machen.
 
-- **UX-S1 — Fundament:** `GET /products` liefert nur aktive Produkte, deshalb ist die vorhandene
-  Inaktiv-Statistik immer 0 und deaktivierte Produkte können in der App nicht wieder aktiviert werden.
-  Kategorie-Reihenfolge wird angekündigt, aber `ProductCategoryRef` führt `sort_order` nicht; Produkte
-  haben gar keine persistente Kassen-Reihenfolge und werden alphabetisch sortiert. Der Kategorie-Löschtext
-  behauptet „Produkte werden nicht zugeordnet", während das Backend bei aktiven Produkten 409 liefert.
-- **UX-S2 — Ein gemeinsamer Bereich „Sortiment":** Kategorienleiste links, Produkte rechts, Umschalter
-  **Kassenansicht / Liste**, Inline-Kategorieanlage, Drag-Reihenfolge, Aktiv/Inaktiv-Filter und echte Vorschau
-  der späteren Kassenkacheln. Produkt anlegen zunächst nur mit Name, Preis, Kategorie; Steuer/Modifier als
-  „Weitere Einstellungen" statt drei gleichgewichtiger Tabs.
+- ~~**UX-S1 — Fundament**~~ **erledigt 2026-07-21 (S17A):** `GET /products?include_inactive=1`
+  (Management; Kasse bleibt active-only), `products.sort_order` (V010) + `sort_order` auf
+  `ProductCategoryRef`/`Product` bis SwiftUI, deterministische Sortierung (Backend-SQL == iOS
+  `assortmentSorted`), Reorder-Endpoints (`PATCH /products/reorder` + `/categories/reorder`),
+  Kategorie-Löschtext an 409-Verhalten angeglichen. Tests: REQ-SORT-001…006.
+- ~~**UX-S2 — Ein gemeinsamer Bereich „Sortiment"**~~ **erledigt 2026-07-21 (S17A):**
+  `SortimentView` ersetzt ProdukteView + KategorienView (NavItem `.sortiment`): Kategorienleiste
+  links, Kassenansicht (echte `ProductCard`-Kacheln) / Liste, Suche, Aktiv/Inaktiv-Filter,
+  Inline-Kategorieanlage, Reihenfolge-Modus (native List + `.onMove`, VoiceOver-Rearrange),
+  Quick-Create Name+Preis+Kategorie mit „Weitere Einstellungen" (DisclosureGroup).
 - **UX-S3 — Starter-Sortimente:** versionierte Pakete **Shisha-Bar, Café, Späti, leer starten**. Betreiber
   wählt Kategorien/Produkte per Checkliste, trägt Preise in einer kompakten Tabelle ein und bestätigt
   MwSt.-Vorschläge ausdrücklich (keine stillen Steuerannahmen). Import idempotent und über denselben
@@ -219,7 +220,7 @@ Nikos Insider-Blick (Deutsche Post ITS, POS-Testing) gezielt nutzen — die Punk
 2. **Vor Go-live (Reihenfolge):** B1 E-Mail → B2 Cron → B3 Passwort-Reset → B6/B7 Prozess-Härtung → B4/B5 → A3/A6/A9 → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
 3. **Phase 2 (TSE scharf):** A1 + A2 + A11 lösen → Fiskaly-Sandbox-E2E → N2/N3
 4. **Nach Pilot:** §6 impeccable-Pass komplett, T5, S2–S4
-5. **Vor öffentlichem Go-live:** UX-S1–S3 + Visuals V1 (Roadmap S17A/S17B), B9 (S17C)
+5. **Vor öffentlichem Go-live:** UX-S3 + Visuals V1 (Roadmap S17B — UX-S1/S2 erledigt 2026-07-21), B9 (S17C)
 6. **Phase 3+:** Eigene Produktfotos/digitales Menü, Trinkgeld (nach Steuerberater), SyncManager-Vollausbau, Phase-5-Features
 
 ---
