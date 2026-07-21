@@ -40,6 +40,25 @@ export const changePriceSchema = z.object({
   vat_rate_takeaway: z.enum(['7', '19']).optional(),
 });
 
+// GET /products: validationMiddleware validiert nur req.body — Query-Params
+// werden im Controller via safeParse geprüft (CLAUDE.md-Regel).
+// include_inactive=1 ist die Management-Ansicht (Sortiment); die Kasse nutzt
+// den Default und sieht weiterhin ausschließlich aktive Produkte.
+export const listProductsQuerySchema = z.object({
+  include_inactive: z.enum(['0', '1']).optional(),
+}).strict();
+
+export const reorderProductsSchema = z.object({
+  category_id: z.number().int().positive().nullable(),
+  product_ids: z.array(z.number().int().positive()).min(1).max(500)
+    .refine(ids => new Set(ids).size === ids.length, { message: 'product_ids enthält Duplikate.' }),
+});
+
+export const reorderCategoriesSchema = z.object({
+  category_ids: z.array(z.number().int().positive()).min(1).max(500)
+    .refine(ids => new Set(ids).size === ids.length, { message: 'category_ids enthält Duplikate.' }),
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function forbiddenPriceFields(body: Record<string, unknown>): string | null {
@@ -166,17 +185,25 @@ export async function deleteCategory(req: Request, res: Response): Promise<void>
 export async function listProducts(req: Request, res: Response): Promise<void> {
   const tenantId = req.auth!.tenantId;
 
+  const parsedQuery = listProductsQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    res.status(400).json({ error: 'Ungültige Query-Parameter.', details: parsedQuery.error.issues });
+    return;
+  }
+  const includeInactive = parsedQuery.data.include_inactive === '1';
+
   // Alle Produkte + Kategorien in einer Query
   const [products] = await db.execute<any[]>(
     `SELECT p.id, p.name, p.price_cents, p.vat_rate_inhouse, p.vat_rate_takeaway,
-            p.is_active, p.created_at,
+            p.is_active, p.sort_order, p.created_at,
             c.id   AS category_id,
             c.name AS category_name,
-            c.color AS category_color
+            c.color AS category_color,
+            c.sort_order AS category_sort_order
      FROM products p
      LEFT JOIN product_categories c ON c.id = p.category_id AND c.tenant_id = ?
-     WHERE p.tenant_id = ? AND p.is_active = TRUE
-     ORDER BY c.sort_order ASC, p.name ASC`,
+     WHERE p.tenant_id = ?${includeInactive ? '' : ' AND p.is_active = TRUE'}
+     ORDER BY (c.id IS NULL) ASC, c.sort_order ASC, c.name ASC, p.sort_order ASC, p.name ASC, p.id ASC`,
     [tenantId, tenantId]
   );
 
@@ -220,8 +247,11 @@ export async function listProducts(req: Request, res: Response): Promise<void> {
     vat_rate_inhouse: p.vat_rate_inhouse,
     vat_rate_takeaway: p.vat_rate_takeaway,
     is_active:        Boolean(p.is_active),   // MySQL TINYINT(1) → JS boolean
+    sort_order:       p.sort_order,
     created_at:       p.created_at,
-    category: p.category_id ? { id: p.category_id, name: p.category_name, color: p.category_color } : null,
+    category: p.category_id
+      ? { id: p.category_id, name: p.category_name, color: p.category_color, sort_order: p.category_sort_order }
+      : null,
     modifier_groups: groupsWithOptions
       .filter(g =>
         g.product_id === p.id ||
@@ -239,7 +269,7 @@ export async function listProducts(req: Request, res: Response): Promise<void> {
 
 export async function createProduct(req: Request, res: Response): Promise<void> {
   const tenantId = req.auth!.tenantId;
-  const { name, category_id, price_cents, vat_rate_inhouse, vat_rate_takeaway } =
+  const { name, category_id, price_cents, vat_rate_inhouse, vat_rate_takeaway, sort_order } =
     req.body as z.infer<typeof createProductSchema>;
 
   // Kategorie-Zugehörigkeit prüfen (nur wenn explizit eine ID angegeben)
@@ -256,10 +286,21 @@ export async function createProduct(req: Request, res: Response): Promise<void> 
 
   const vatTakeaway = vat_rate_takeaway ?? vat_rate_inhouse;
 
+  // Ohne expliziten sort_order ans Ende der Kategorie anhängen (Lücken von 10)
+  let effectiveSortOrder = sort_order;
+  if (effectiveSortOrder === undefined) {
+    const [maxRows] = await db.execute<any[]>(
+      `SELECT COALESCE(MAX(sort_order), 0) + 10 AS next_sort
+       FROM products WHERE tenant_id = ? AND category_id <=> ?`,
+      [tenantId, category_id ?? null]
+    );
+    effectiveSortOrder = maxRows[0].next_sort as number;
+  }
+
   const [result] = await db.execute<any>(
-    `INSERT INTO products (tenant_id, category_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [tenantId, category_id ?? null, name, price_cents, vat_rate_inhouse, vatTakeaway]
+    `INSERT INTO products (tenant_id, category_id, name, price_cents, vat_rate_inhouse, vat_rate_takeaway, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [tenantId, category_id ?? null, name, price_cents, vat_rate_inhouse, vatTakeaway, effectiveSortOrder]
   );
 
   const newId = result.insertId as number;
@@ -281,7 +322,10 @@ export async function createProduct(req: Request, res: Response): Promise<void> 
     ipAddress: req.ip, deviceId: req.auth!.deviceId,
   });
 
-  res.status(201).json({ id: newId, name, price_cents, vat_rate_inhouse, vat_rate_takeaway: vatTakeaway });
+  res.status(201).json({
+    id: newId, name, price_cents, vat_rate_inhouse, vat_rate_takeaway: vatTakeaway,
+    sort_order: effectiveSortOrder,
+  });
 }
 
 export async function updateProduct(req: Request, res: Response): Promise<void> {
@@ -432,6 +476,89 @@ export async function deleteProduct(req: Request, res: Response): Promise<void> 
     tenantId, userId: req.auth!.userId, action: 'product.deleted',
     entityType: 'product', entityId: targetId,
     diff: { old: { name: rows[0].name } },
+    ipAddress: req.ip, deviceId: req.auth!.deviceId,
+  });
+
+  res.json({ ok: true });
+}
+
+// ─── Reorder (S17A) ──────────────────────────────────────────────────────────
+// Vollständige geordnete ID-Liste je Scope; sort_order = (index+1)*10.
+// Idempotent: gleiche Eingabe ⇒ gleicher Endzustand. Fremde/falsche IDs ⇒ 404
+// (kein Informationsleck über fremde Tenants), nichts wird geändert.
+
+async function applyReorder(
+  table: 'products' | 'product_categories',
+  ids: number[],
+  tenantId: number
+): Promise<void> {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (let i = 0; i < ids.length; i++) {
+      await conn.execute(
+        `UPDATE ${table} SET sort_order = ? WHERE id = ? AND tenant_id = ?`,
+        [(i + 1) * 10, ids[i], tenantId]
+      );
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+export async function reorderProducts(req: Request, res: Response): Promise<void> {
+  const tenantId = req.auth!.tenantId;
+  const { category_id, product_ids } = req.body as z.infer<typeof reorderProductsSchema>;
+
+  // Alle IDs müssen dem Tenant gehören UND in der angegebenen Kategorie liegen
+  const placeholders = product_ids.map(() => '?').join(', ');
+  const [rows] = await db.execute<any[]>(
+    `SELECT id FROM products
+     WHERE tenant_id = ? AND category_id <=> ? AND id IN (${placeholders})`,
+    [tenantId, category_id, ...product_ids]
+  );
+  if (rows.length !== product_ids.length) {
+    res.status(404).json({ error: 'Produkt nicht gefunden.' });
+    return;
+  }
+
+  await applyReorder('products', product_ids, tenantId);
+
+  await writeAuditLog({
+    tenantId, userId: req.auth!.userId, action: 'product.reordered',
+    entityType: 'product_category', entityId: category_id ?? 0,
+    diff: { new: { category_id, product_ids } },
+    ipAddress: req.ip, deviceId: req.auth!.deviceId,
+  });
+
+  res.json({ ok: true });
+}
+
+export async function reorderCategories(req: Request, res: Response): Promise<void> {
+  const tenantId = req.auth!.tenantId;
+  const { category_ids } = req.body as z.infer<typeof reorderCategoriesSchema>;
+
+  const placeholders = category_ids.map(() => '?').join(', ');
+  const [rows] = await db.execute<any[]>(
+    `SELECT id FROM product_categories
+     WHERE tenant_id = ? AND is_active = TRUE AND id IN (${placeholders})`,
+    [tenantId, ...category_ids]
+  );
+  if (rows.length !== category_ids.length) {
+    res.status(404).json({ error: 'Kategorie nicht gefunden.' });
+    return;
+  }
+
+  await applyReorder('product_categories', category_ids, tenantId);
+
+  await writeAuditLog({
+    tenantId, userId: req.auth!.userId, action: 'category.reordered',
+    entityType: 'product_category', entityId: category_ids[0],
+    diff: { new: { category_ids } },
     ipAddress: req.ip, deviceId: req.auth!.deviceId,
   });
 

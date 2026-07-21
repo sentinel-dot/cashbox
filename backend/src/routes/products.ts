@@ -9,8 +9,10 @@ import { requireRole } from '../middleware/roleMiddleware.js';
 import {
   createCategorySchema, updateCategorySchema,
   createProductSchema,  updateProductSchema,  changePriceSchema,
+  reorderProductsSchema, reorderCategoriesSchema,
   listCategories, createCategory, updateCategory, deleteCategory,
   listProducts,   createProduct,  updateProduct,  deleteProduct, changePrice,
+  reorderProducts, reorderCategories,
 } from '../controllers/productsController.js';
 
 const IMMUTABLE_PRICE_FIELDS = ['price_cents', 'vat_rate_inhouse', 'vat_rate_takeaway'];
@@ -34,12 +36,16 @@ router.use(authMiddleware, deviceMiddleware, tenantMiddleware, subscriptionMiddl
 // ─── Kategorien ──────────────────────────────────────────────────────────────
 router.get( '/categories',     listCategories);
 router.post('/categories',     requireRole('owner', 'manager'), validationMiddleware(createCategorySchema), createCategory);
+// /categories/reorder VOR /categories/:id registrieren (sonst matcht :id = "reorder")
+router.patch('/categories/reorder', requireRole('owner', 'manager'), validationMiddleware(reorderCategoriesSchema), reorderCategories);
 router.patch('/categories/:id', requireRole('owner', 'manager'), validationMiddleware(updateCategorySchema), updateCategory);
 router.delete('/categories/:id', requireRole('owner', 'manager'), deleteCategory);
 
 // ─── Produkte ─────────────────────────────────────────────────────────────────
 router.get('/',          listProducts);
 router.post('/',         requireRole('owner', 'manager'), planLimitMiddleware('products'), validationMiddleware(createProductSchema), createProduct);
+// /reorder VOR /:id-Routen registrieren
+router.patch('/reorder', requireRole('owner', 'manager'), validationMiddleware(reorderProductsSchema), reorderProducts);
 router.post('/:id/price', requireRole('owner', 'manager'), validationMiddleware(changePriceSchema), changePrice);
 router.patch('/:id',     requireRole('owner', 'manager'), rejectImmutablePriceFields, validationMiddleware(updateProductSchema), updateProduct);
 router.delete('/:id',    requireRole('owner', 'manager'), deleteProduct);
