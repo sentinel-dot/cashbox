@@ -11,6 +11,20 @@ export const loginRateLimit = rateLimit({
   message: { error: 'Zu viele Login-Versuche. Bitte 1 Minute warten.' },
 });
 
+// S08: gilt für „Link anfordern" UND für das Absenden der Reset-Seite.
+// Bewusst großzügiger als der Login (ein Tippfehler bei „Passwort wiederholen"
+// darf niemanden aussperren) und über 15 min statt 1 min gemessen. Gegen
+// Mail-Bombing eines einzelnen Postfachs greift zusätzlich das Stundenlimit
+// pro Nutzer in `services/passwordReset.ts`.
+export const passwordResetRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skip: isTest,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Zu viele Anfragen. Bitte 15 Minuten warten.' },
+});
+
 export const onboardingRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 3,

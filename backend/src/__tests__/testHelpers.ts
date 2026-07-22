@@ -41,6 +41,7 @@ export async function cleanTestDB(): Promise<void> {
     'z_reports', 'cash_register_sessions', 'receipt_sequences',
     'tables', 'zones', 'product_modifier_options', 'product_modifier_groups',
     'product_price_history', 'products', 'product_categories',
+    'password_reset_tokens',
     'devices', 'users', 'tenants',
   ];
   for (const table of tables) {

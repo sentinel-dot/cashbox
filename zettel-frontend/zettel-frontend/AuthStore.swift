@@ -43,6 +43,24 @@ class AuthStore: ObservableObject {
         await applyAuthResponse(response)
     }
 
+    // MARK: - Passwort vergessen
+
+    /// Fordert einen Reset-Link an. Das Backend antwortet **immer** 200 — auch bei
+    /// unbekannter Adresse (kein Rückschluss auf existierende Konten). Die App darf
+    /// deshalb nie behaupten, dass eine Mail unterwegs *ist*, sondern nur, dass sie
+    /// unterwegs *wäre*, falls die Adresse hinterlegt ist.
+    ///
+    /// Der Link führt auf eine vom Backend gerenderte Seite; das Passwort wird dort
+    /// gesetzt, nicht in der App. Danach meldet sich der Nutzer hier neu an.
+    func requestPasswordReset(email: String) async throws {
+        struct Body: Encodable { let email: String; let deviceToken: String }
+        struct Response: Decodable { let ok: Bool }
+        let _: Response = try await api.post(
+            "/auth/forgot-password",
+            body: Body(email: email, deviceToken: api.deviceTokenOrCreate)
+        )
+    }
+
     // MARK: - Registrierung (neuer Tenant)
 
     func register(

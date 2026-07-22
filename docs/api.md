@@ -151,3 +151,56 @@ Snapshot (inkl. `tax_basis_version`) landet als `preset.imported` im Audit-Log.
 39 semantische Schlüssel (`backend/src/services/presets/presetTypes.ts`,
 Spec §6.2). Die DB speichert nie SF-Symbol-Namen; `null` = Textkachel.
 Unbekannte Werte rendert iOS defensiv als `generic`.
+
+---
+
+## Passwort-Reset (S08)
+
+Drei Routen, alle **ohne** `authMiddleware` (wer sein Passwort vergessen hat,
+hat kein Token). Rate-Limit auf allen dreien; zusätzlich greift ein Limit pro
+Nutzer und Stunde (`services/passwordReset.ts`).
+
+### POST /auth/forgot-password
+
+Body: `email`, `device_token`. Der Tenant kommt wie beim Login aus dem
+registrierten Gerät — `users.email` ist nur je Tenant eindeutig.
+
+Antwortet **immer** `200 {"ok": true}`. Unbekannte Adresse, gesperrtes Gerät,
+deaktivierter Nutzer und Drosselung sind von außen nicht unterscheidbar; sonst
+wäre der Endpunkt ein Verzeichnis aller Konten eines Betriebs. Einzige
+Ausnahme: 422 bei Schema-Verstoß (fehlende Felder).
+
+### GET /auth/reset-password?token=…
+
+Liefert **HTML**, nicht JSON — der einzige HTML-Endpunkt des Backends. Grund:
+Der Link aus der Mail muss auf jedem Gerät funktionieren, ein Web-Frontend gibt
+es nicht. Die Seite ist selbsttragend (Inline-CSS, **kein JavaScript** — helmets
+CSP erlaubt keine Inline-Skripte), `noindex`, `Cache-Control: no-store`,
+`Referrer-Policy: no-referrer`.
+
+Der Aufruf prüft den Token **nicht** gegen die DB und verbraucht ihn nicht.
+
+### POST /auth/reset-password
+
+Formular-Submit der Seite oben — `application/x-www-form-urlencoded`
+(`token`, `new_password`, `new_password_repeat`), Antwort ist wieder HTML.
+Validierung per `safeParse` im Controller statt `validationMiddleware`, weil
+dessen 422-JSON der Nutzer im Browser roh sähe.
+
+| Fall | Status | Antwort |
+|---|---|---|
+| Erfolg | 200 | Bestätigungsseite („jetzt am iPad anmelden") |
+| Passwort < 8 Zeichen / Wiederholung abweichend | 422 | Formular erneut, mit Meldung — Token bleibt gültig |
+| Token unbekannt / abgelaufen / verbraucht / Nutzer inaktiv | 400 | Fehlerseite mit Grund im Klartext |
+
+**Token-Regeln:** 32 Byte Zufall (base64url), in der DB nur `SHA2(…,256)`,
+eine Stunde gültig, genau einmal einlösbar; ein neu angeforderter Link entwertet
+den vorherigen. Zwei gleichzeitige Submits desselben Links werden über
+`FOR UPDATE` serialisiert — genau einer gewinnt.
+
+**Sitzungen:** Ein erfolgreicher Reset setzt `users.password_changed_at`.
+`POST /auth/refresh` gibt danach 401 für jedes Refresh-Token, dessen
+`session_start` davor liegt — ein gestohlenes Token überlebt den Reset nicht.
+
+**Betrieb:** `PUBLIC_API_URL` muss auf die von außen per HTTPS erreichbare
+Basis-URL dieses Backends zeigen, sonst läuft jeder Reset-Link ins Leere.
