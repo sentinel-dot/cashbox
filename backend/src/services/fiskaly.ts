@@ -9,7 +9,8 @@ export interface TseTransactionParams {
   tenantId:        number;
   deviceId:        number;
   orderId:         number;
-  userId:          number;
+  /** null bei Läufen ohne angemeldeten Benutzer (serverseitiger Cron-Drain, S07). */
+  userId:          number | null;
   tssId:           string;
   clientId:        string;
   vat7GrossCents:  number;

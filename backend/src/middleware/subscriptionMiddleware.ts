@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
-
-const TRIAL_DAYS        = 14;
-const GRACE_PERIOD_DAYS = 3;
+import { GRACE_PERIOD_DAYS, graceEndsAt, trialExpiresAt } from '../services/subscription.js';
 
 export async function subscriptionMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.auth) {
@@ -23,8 +21,7 @@ export async function subscriptionMiddleware(req: Request, res: Response, next: 
   const { subscription_status: status, created_at, subscription_current_period_end } = rows[0];
 
   if (status === 'trial') {
-    const trialExpiry = new Date(created_at);
-    trialExpiry.setDate(trialExpiry.getDate() + TRIAL_DAYS);
+    const trialExpiry = trialExpiresAt(new Date(created_at));
 
     if (new Date() > trialExpiry) {
       res.status(402).json({ error: 'Trial abgelaufen. Bitte Abonnement abschließen.' });
@@ -43,8 +40,7 @@ export async function subscriptionMiddleware(req: Request, res: Response, next: 
 
   if (status === 'past_due') {
     if (subscription_current_period_end) {
-      const graceExpiry = new Date(subscription_current_period_end);
-      graceExpiry.setDate(graceExpiry.getDate() + GRACE_PERIOD_DAYS);
+      const graceExpiry = graceEndsAt(new Date(subscription_current_period_end));
       if (new Date() > graceExpiry) {
         res.status(402).json({ error: 'Zahlung überfällig. Bitte Zahlungsmethode aktualisieren.' });
         return;
