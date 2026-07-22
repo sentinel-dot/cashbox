@@ -4,7 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import pinoHttp from 'pino-http';
 import { apiRateLimit } from './middleware/rateLimitMiddleware.js';
-import { logger } from './logger.js';
+import { logger, redactUrl } from './logger.js';
 import { captureException } from './sentry.js';
 
 dotenv.config();
@@ -20,7 +20,7 @@ app.use(pinoHttp({
   serializers: {
     req: (req) => ({
       method: req.method,
-      url:    req.url,
+      url:    redactUrl(req.url),
       // tenant_id aus JWT wenn vorhanden (gesetzt von tenantMiddleware)
       tenant: (req.raw as any).auth?.tenantId,
     }),

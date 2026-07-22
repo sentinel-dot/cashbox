@@ -4,6 +4,21 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { AuthPayload } from '../middleware/authMiddleware.js';
+import { logger } from '../logger.js';
+import { captureException } from '../sentry.js';
+import { writeAuditLog } from '../services/audit.js';
+import { sendPasswordReset } from '../services/email/index.js';
+import {
+  consumePasswordResetToken,
+  issuePasswordResetToken,
+  passwordResetUrl,
+} from '../services/passwordReset.js';
+import {
+  MIN_PASSWORD_LENGTH,
+  renderResetErrorPage,
+  renderResetFormPage,
+  renderResetSuccessPage,
+} from '../views/passwordResetPage.js';
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -20,6 +35,27 @@ export const refreshSchema = z.object({
 export const pinSchema = z.object({
   device_token: z.string().min(1),
   pin:          z.string().length(4).regex(/^\d{4}$/),
+});
+
+// Wie beim Login liefert das Gerät den Tenant — `email` allein ist nicht
+// eindeutig (UNIQUE ist (tenant_id, email)). Der Reset wird ohnehin am iPad
+// angestoßen, das den Device-Token im Keychain hat.
+export const forgotPasswordSchema = z.object({
+  email:        z.string().email(),
+  device_token: z.string().min(1),
+});
+
+// Die Reset-Seite ist HTML, kein JSON — deshalb hier `safeParse` im Controller
+// statt `validationMiddleware` (dessen 422-JSON würde der Wirt im Browser roh
+// sehen). Gleiches Muster wie bei den Query-Param-Routen, CLAUDE.md §Validierung.
+export const resetPasswordQuerySchema = z.object({
+  token: z.string().min(1).max(200),
+});
+
+export const resetPasswordFormSchema = z.object({
+  token:               z.string().min(1).max(200),
+  new_password:        z.string().min(MIN_PASSWORD_LENGTH).max(200),
+  new_password_repeat: z.string().max(200).optional(),
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -193,12 +229,24 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 
   // Prüfen ob User noch aktiv ist
   const [userRows] = await db.execute<any[]>(
-    'SELECT id, role FROM users WHERE id = ? AND tenant_id = ? AND is_active = TRUE',
+    `SELECT id, role, UNIX_TIMESTAMP(password_changed_at) AS password_changed_ts
+       FROM users
+      WHERE id = ? AND tenant_id = ? AND is_active = TRUE`,
     [payload.userId, payload.tenantId]
   );
 
   if (userRows.length === 0) {
     res.status(401).json({ error: 'Benutzer nicht aktiv.' });
+    return;
+  }
+
+  // Passwortwechsel beendet ältere Sitzungen (S08): Wer das Passwort zurücksetzt,
+  // weil es kompromittiert wurde, sperrt damit auch das gestohlene Refresh-Token
+  // aus — sonst überlebte es den Reset bis zu SESSION_MAX_HOURS.
+  // Der Vergleich läuft über UNIX_TIMESTAMP, damit die Zeitzone der DB egal ist.
+  const passwordChangedTs = userRows[0].password_changed_ts;
+  if (passwordChangedTs !== null && sessionStart < Number(passwordChangedTs)) {
+    res.status(401).json({ error: 'Sitzung abgelaufen — bitte neu anmelden.' });
     return;
   }
 
@@ -268,4 +316,157 @@ export async function pinSwitch(req: Request, res: Response): Promise<void> {
       role: matchedUser.role,
     },
   });
+}
+
+// ─── Passwort-Reset (S08 / OFFEN.md B3) ─────────────────────────────────────
+
+/**
+ * Antwortet **immer** 200 — unbekannte E-Mail, gesperrtes Gerät, inaktiver
+ * Nutzer und gedrosselte Anfrage sind von außen nicht unterscheidbar. Sonst
+ * wäre dieser Endpoint ein Verzeichnis aller Konten eines Betriebs.
+ */
+export async function forgotPassword(req: Request, res: Response): Promise<void> {
+  const { email, device_token } = req.body as z.infer<typeof forgotPasswordSchema>;
+
+  // Antwort zuerst festlegen, damit unten kein Pfad versehentlich mehr verrät.
+  const ok = { ok: true as const };
+
+  const device = await findDeviceByToken(device_token);
+  if (!device) {
+    res.json(ok);
+    return;
+  }
+
+  const [rows] = await db.execute<any[]>(
+    `SELECT u.id, u.email, t.name AS tenant_name
+       FROM users u
+       JOIN tenants t ON t.id = u.tenant_id
+      WHERE u.email = ? AND u.tenant_id = ? AND u.is_active = TRUE
+      LIMIT 1`,
+    [email, device.tenant_id]
+  );
+  const user = rows[0];
+  if (!user) {
+    logger.info({ tenant: device.tenant_id }, 'Passwort-Reset für unbekannte Adresse angefragt');
+    res.json(ok);
+    return;
+  }
+
+  const issued = await issuePasswordResetToken({
+    tenantId: device.tenant_id,
+    userId:   user.id,
+  });
+  if (!issued) {
+    logger.warn(
+      { tenant: device.tenant_id, userId: user.id },
+      'Passwort-Reset gedrosselt (Stundenlimit erreicht)'
+    );
+    res.json(ok);
+    return;
+  }
+
+  await sendPasswordReset({
+    tenantId:   device.tenant_id,
+    tenantName: user.tenant_name,
+    recipient:  user.email,
+    // Idempotenz-Marker: die Token-Zeilen-ID = pro ausgestelltem Token genau
+    // eine Mail. Bewusst nicht der Token selbst (Klartext gehört nicht in
+    // email_queue) und bewusst kein Zeitstempel (zwei Anfragen in derselben
+    // Sekunde würden sich sonst die Mail wegnehmen).
+    requestId:  `${user.id}:${issued.id}`,
+    resetUrl:   passwordResetUrl(issued.rawToken),
+    expiresAt:  issued.expiresAt,
+  });
+
+  await writeAuditLog({
+    tenantId:   device.tenant_id,
+    userId:     user.id,
+    action:     'user.password_reset_requested',
+    entityType: 'user',
+    entityId:   user.id,
+    ipAddress:  req.ip,
+    deviceId:   device.id,
+  }).catch((err: unknown) => {
+    logger.error({ err }, 'audit_log für Passwort-Reset-Anfrage fehlgeschlagen');
+  });
+
+  res.json(ok);
+}
+
+/** GET /auth/reset-password?token=… — die Seite aus der Mail. */
+export function showResetPasswordPage(req: Request, res: Response): void {
+  noStore(res);
+  const parsed = resetPasswordQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).type('html').send(renderResetErrorPage('invalid'));
+    return;
+  }
+  // Der Token wird hier bewusst NICHT gegen die DB geprüft: Ein gültiger Token
+  // soll nicht schon durch das Öffnen der Seite verbraucht wirken, und ein
+  // Fehlschlag zeigt sich beim Absenden ohnehin. Das Formular ist harmlos.
+  res.type('html').send(renderResetFormPage({ token: parsed.data.token }));
+}
+
+/** POST /auth/reset-password — Formular-Submit der Seite oben (urlencoded). */
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  noStore(res);
+  const parsed = resetPasswordFormSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    const token = typeof (req.body as any)?.token === 'string' ? (req.body as any).token : '';
+    if (!token) {
+      res.status(400).type('html').send(renderResetErrorPage('invalid'));
+      return;
+    }
+    res.status(422).type('html').send(
+      renderResetFormPage({
+        token,
+        error: `Das Passwort braucht mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`,
+      })
+    );
+    return;
+  }
+
+  const { token, new_password, new_password_repeat } = parsed.data;
+
+  // Ohne JavaScript kann nur der Server vergleichen.
+  if (new_password_repeat !== undefined && new_password_repeat !== new_password) {
+    res.status(422).type('html').send(
+      renderResetFormPage({ token, error: 'Die beiden Passwörter stimmen nicht überein.' })
+    );
+    return;
+  }
+
+  const result = await consumePasswordResetToken(token, new_password);
+
+  if (!result.ok) {
+    res.status(400).type('html').send(renderResetErrorPage(result.reason));
+    return;
+  }
+
+  await writeAuditLog({
+    tenantId:   result.tenantId,
+    userId:     result.userId,
+    action:     'user.password_reset',
+    entityType: 'user',
+    entityId:   result.userId,
+    ipAddress:  req.ip,
+  }).catch((err: unknown) => {
+    // Passwort ist bereits geändert — der fehlende Nachweis ist ein
+    // Betriebsvorfall, aber kein Grund, den Nutzer scheitern zu lassen.
+    logger.error({ err }, 'audit_log für Passwort-Reset fehlgeschlagen');
+    captureException(err instanceof Error ? err : new Error(String(err)), {
+      tenant: result.tenantId,
+      source: 'auth:password-reset-audit',
+    });
+  });
+
+  res.type('html').send(renderResetSuccessPage());
+}
+
+/** Reset-Seiten tragen einen Token in der URL — sie dürfen weder im
+ *  Browser-Cache noch in einem Proxy liegen bleiben. */
+function noStore(res: Response): void {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Referrer-Policy', 'no-referrer');
 }
