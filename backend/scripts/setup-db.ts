@@ -80,6 +80,14 @@ const AUDIT_INSERT_TABLES = [
   'email_log',
 ];
 
+// Nicht-Finanztabellen, die der Seed-Rollback (V005 down) leeren darf — das
+// einzige DELETE, das app_user außerhalb der Test-DB bekommt.
+const DELETABLE_TABLES = [
+  'tenants', 'users', 'devices', 'products', 'product_categories',
+  'product_modifier_groups', 'product_modifier_options',
+  'tables', 'zones', 'receipt_sequences',
+];
+
 // Readonly-User (SELECT only — für Reports, Admin-Panel)
 const DB_READONLY_USER     = require_env('DB_READONLY_USER');
 const DB_READONLY_PASSWORD = require_env('DB_READONLY_PASSWORD');
@@ -131,7 +139,7 @@ async function main(): Promise<void> {
     ? `${DB_ADMIN_USER} via ${DB_ADMIN_SOCKET}`
     : `${DB_ADMIN_USER}@${DB_HOST}:${DB_PORT}`;
 
-  const conn = await mysql.createConnection(connConfig).catch((err) => {
+  const connectAdmin = () => mysql.createConnection(connConfig).catch((err) => {
     console.error(`❌  Admin-Verbindung fehlgeschlagen (${connDesc})`);
     console.error(`    Fehler: ${err.message}`);
     console.error(`    Optionen:`);
@@ -140,6 +148,8 @@ async function main(): Promise<void> {
     console.error(`      3. DB_ADMIN_SOCKET=<pfad> anpassen (Standard: /var/run/mysqld/mysqld.sock)`);
     process.exit(1);
   });
+
+  const conn = await connectAdmin();
 
   try {
     // 1. Datenbank anlegen
@@ -163,7 +173,11 @@ async function main(): Promise<void> {
       `User '${DB_READONLY_USER}'`
     );
 
-    // 3. Grants
+    // 3. Datenbankweite Grants
+    //
+    // Tabellen-scoped Grants können hier NICHT stehen: MariaDB verlangt, dass
+    // die Tabelle existiert, und die Migrations laufen erst in Schritt 5. Sie
+    // kommen deshalb in Schritt 6.
     //
     // app_user: App-Rechte + ALTER/CREATE/INDEX für Migrations — OHNE pauschales
     // DELETE: die GoBD-Tabellen (orders, order_items, receipts, payments,
@@ -191,43 +205,21 @@ async function main(): Promise<void> {
       } catch {
         // kein bestehender DELETE-Grant — nichts zu entziehen
       }
-      // Nicht-Finanztabellen, die der Seed-Rollback (V005 down) leeren darf.
-      // Tabellen-Grants funktionieren auch bevor die Tabelle existiert.
-      const DELETABLE_TABLES = [
-        'tenants', 'users', 'devices', 'products', 'product_categories',
-        'product_modifier_groups', 'product_modifier_options',
-        'tables', 'zones', 'receipt_sequences',
-      ];
-      for (const table of DELETABLE_TABLES) {
-        await run(conn,
-          `GRANT DELETE ON \`${DB_NAME}\`.\`${table}\` TO '${DB_USER}'@'${DB_USER_HOST}'`,
-        );
-      }
-      console.log(`  ✓ Grants für '${DB_USER}' (DELETE nur auf ${DELETABLE_TABLES.length} Nicht-Finanztabellen)`);
     }
 
-    // audit_insert_user: INSERT, und zwar NUR auf den append-only-Tabellen
-    // (GoBD). Ein pauschales INSERT auf *.* hieße: wer diese Zugangsdaten
-    // erbeutet, schreibt auch orders, payments oder users — der Sinn des
-    // zweiten Users ist aber, dass genau das nicht geht (Audit #1, A6).
-    // Beim Erweitern: Tabelle hier eintragen UND in CLAUDE.md
-    // "DB-Berechtigungen" nachziehen, sonst scheitert der INSERT zur Laufzeit.
-    // Grants auf noch nicht existierende Tabellen sind zulässig — das Script
-    // läuft vor den Migrations.
-    for (const table of AUDIT_INSERT_TABLES) {
-      await run(conn,
-        `GRANT INSERT ON \`${DB_NAME}\`.\`${table}\` TO '${DB_AUDIT_USER}'@'${DB_USER_HOST}'`,
-      );
-    }
-    // Früher vergebenes pauschales INSERT entziehen (Grants sind additiv —
-    // ohne REVOKE bliebe es auf bestehenden Dev-/Prod-DBs stehen)
+    // audit_insert_user darf NUR in die append-only-Tabellen schreiben (GoBD).
+    // Ein pauschales INSERT auf `db`.* hieße: wer diese Zugangsdaten erbeutet,
+    // schreibt auch orders, payments oder users — der Sinn des zweiten Users
+    // ist aber, dass genau das nicht geht (Audit #1, A6). Die Tabellen-Grants
+    // folgen in Schritt 6; hier fliegt nur ein früher vergebenes
+    // datenbankweites INSERT raus (Grants sind additiv — ohne REVOKE bliebe es
+    // auf bestehenden Dev-/Prod-DBs neben den Tabellen-Grants stehen).
     try {
       await conn.execute(`REVOKE INSERT ON \`${DB_NAME}\`.* FROM '${DB_AUDIT_USER}'@'${DB_USER_HOST}'`);
       console.log(`  ✓ Pauschales INSERT für '${DB_AUDIT_USER}' entzogen`);
     } catch {
       // kein bestehender datenbankweiter INSERT-Grant — nichts zu entziehen
     }
-    console.log(`  ✓ Grants für '${DB_AUDIT_USER}' (INSERT nur auf ${AUDIT_INSERT_TABLES.length} Audit-Tabellen)`);
 
     // app_readonly: nur SELECT
     await run(conn,
@@ -242,7 +234,7 @@ async function main(): Promise<void> {
     await conn.end();
   }
 
-  // 4. Migrations ausführen
+  // 5. Migrations ausführen (als app_user — der hat CREATE/ALTER/INDEX)
   console.log('\n📦  Migrations ausführen...');
   const migrateCmd = NODE_ENV === 'test'
     ? 'npm run migrate:test'
@@ -253,6 +245,41 @@ async function main(): Promise<void> {
   } catch {
     console.error('❌  Migration fehlgeschlagen. DB-Zustand prüfen.');
     process.exit(1);
+  }
+
+  // 6. Tabellen-scoped Grants — erst jetzt, weil MariaDB dafür die Tabelle
+  //    verlangt (auf einer frischen DB gäbe es sonst "Table doesn't exist").
+  console.log('\n🔐  Tabellen-Grants...');
+  const conn2 = await connectAdmin();
+  try {
+    // audit_insert_user: INSERT auf genau die append-only-Tabellen.
+    // Beim Erweitern: AUDIT_INSERT_TABLES ergänzen, in
+    // integration/db-grants.test.ts nachziehen, CLAUDE.md "DB-Berechtigungen"
+    // und docs/betrieb.md §7 anpassen — sonst scheitert der INSERT in
+    // Produktion erst zur Laufzeit.
+    for (const table of AUDIT_INSERT_TABLES) {
+      await run(conn2,
+        `GRANT INSERT ON \`${DB_NAME}\`.\`${table}\` TO '${DB_AUDIT_USER}'@'${DB_USER_HOST}'`,
+      );
+    }
+    console.log(`  ✓ '${DB_AUDIT_USER}': INSERT auf ${AUDIT_INSERT_TABLES.length} Audit-Tabellen`);
+
+    // app_user: DELETE nur auf den Nicht-Finanztabellen, die der Seed-Rollback
+    // (V005 down) leeren darf. In der Test-DB ist DELETE bereits datenbankweit
+    // vergeben (testHelpers wischen zwischen Testläufen alle Tabellen).
+    if (NODE_ENV !== 'test') {
+      for (const table of DELETABLE_TABLES) {
+        await run(conn2,
+          `GRANT DELETE ON \`${DB_NAME}\`.\`${table}\` TO '${DB_USER}'@'${DB_USER_HOST}'`,
+        );
+      }
+      console.log(`  ✓ '${DB_USER}': DELETE auf ${DELETABLE_TABLES.length} Nicht-Finanztabellen`);
+    }
+
+    await conn2.execute('FLUSH PRIVILEGES');
+    console.log('  ✓ FLUSH PRIVILEGES');
+  } finally {
+    await conn2.end();
   }
 
   console.log(`\n✅  Setup abgeschlossen. Nächster Schritt: npm run dev\n`);

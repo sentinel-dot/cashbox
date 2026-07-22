@@ -20,15 +20,21 @@ const AUDIT_INSERT_TABLES = [
   'z_reports',
 ];
 
+const DB_NAME = process.env['DB_NAME'] ?? 'cashbox_test';
+
 // SHOW GRANTS ohne FOR-Klausel zeigt die Rechte des verbundenen Users selbst —
-// dafür braucht auditDb keine Sonderrechte. `TO PUBLIC` fliegt raus: MariaDB
-// listet dort serverweite Defaults (u.a. auf der `test`-Datenbank), die nicht
-// diesem User gehören und über die dieses Projekt nicht entscheidet.
+// dafür braucht auditDb keine Sonderrechte. Zwei Filter:
+//   - `TO PUBLIC`: MariaDB listet dort serverweite Defaults (u.a. auf der
+//     `test`-Datenbank), die nicht diesem User gehören.
+//   - fremde Datenbanken: auf einer Entwicklermaschine hängen am selben User
+//     schnell Reste anderer (auch gelöschter) DBs — MariaDB räumt Tabellen-
+//     Grants bei DROP DATABASE nicht ab. Geprüft wird nur die DB dieses Laufs.
 async function auditGrants(): Promise<string[]> {
   const [rows] = await auditDb.query<any[]>('SHOW GRANTS');
   return rows
     .map((r) => String(Object.values(r)[0]))
-    .filter((g) => !/\bTO\s+PUBLIC\b/i.test(g));
+    .filter((g) => !/\bTO\s+PUBLIC\b/i.test(g))
+    .filter((g) => g.includes(`\`${DB_NAME}\`.`) || / ON\s+\*\.\*/.test(g));
 }
 
 describe('DB-Grants: audit_insert_user', () => {
