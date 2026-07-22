@@ -16,6 +16,13 @@
 // ohne echten Server/DB testbar sind.
 
 export interface ShutdownDeps {
+  /**
+   * Zeitgesteuerte Jobs stoppen (S07). Läuft VOR dem Drain: ein Cron, der
+   * während des Herunterfahrens noch startet, würde mitten im Pool-Schließen
+   * eine Query absetzen. Bereits laufende Jobs beendet der Drain-Timeout —
+   * sie sind alle idempotent und laufen nach dem Neustart erneut.
+   */
+  stopSchedulers?: () => Promise<void>;
   /** HTTP-Server drainen: keine neuen Verbindungen, laufende Requests zu Ende. */
   closeServer:     () => Promise<void>;
   /** Gepufferte Monitoring-Events rausschreiben (Sentry). */
@@ -62,6 +69,11 @@ export function createShutdown(deps: ShutdownDeps): ShutdownFn {
 
     let code = exitCode;
     try {
+      if (deps.stopSchedulers) {
+        await deps.stopSchedulers();
+        deps.log.info({ reason }, 'Cron-Jobs gestoppt');
+      }
+
       await deps.closeServer();
       deps.log.info({ reason }, 'HTTP-Server gedrained — keine offenen Requests mehr');
 
