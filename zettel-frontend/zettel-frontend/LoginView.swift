@@ -517,6 +517,7 @@ private struct EmailPasswordPanel: View {
     @State private var isLoading   = false
     @State private var error:        AppError?
     @State private var showError   = false
+    @State private var showForgot  = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -567,10 +568,13 @@ private struct EmailPasswordPanel: View {
 
                 HStack {
                     Spacer()
-                    // Kein Self-Service-Reset (kommt später) — der ehrliche Weg:
-                    Text("Passwort vergessen? support@cashbox.de")
-                        .dsFont(.caption)
-                        .foregroundColor(DS.C.text2)
+                    Button("Passwort vergessen?") {
+                        showForgot = true
+                    }
+                    .dsFont(.caption)
+                    .foregroundColor(DS.C.accT)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
                 }
                 .padding(.bottom, 10)
 
@@ -612,6 +616,10 @@ private struct EmailPasswordPanel: View {
         } message: {
             Text(error?.localizedDescription ?? "Unbekannter Fehler")
         }
+        .sheet(isPresented: $showForgot) {
+            ForgotPasswordSheet(prefilledEmail: email)
+                .presentationDetents([.height(440)])
+        }
     }
 
     private func doLogin() async {
@@ -624,6 +632,123 @@ private struct EmailPasswordPanel: View {
             error = e; showError = true
         } catch {
             self.error = .unknown(error.localizedDescription); showError = true
+        }
+    }
+}
+
+// MARK: - Passwort vergessen
+
+/// Fordert einen Reset-Link an (S08). Bewusst zweistufig statt „Sheet schließt
+/// sich und alles war gut": Der Nutzer soll lesen, dass der Link in der Mail
+/// steht, eine Stunde gilt und im Browser eingelöst wird — sonst sucht er ihn
+/// in der App.
+///
+/// Die Bestätigung ist absichtlich im Konjunktiv formuliert. Das Backend
+/// antwortet für unbekannte Adressen genauso wie für bekannte (kein
+/// User-Enumeration-Leak); eine Zusage „Mail ist raus" wäre hier gelogen.
+private struct ForgotPasswordSheet: View {
+    let prefilledEmail: String
+
+    @EnvironmentObject var authStore: AuthStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var email     = ""
+    @State private var isLoading = false
+    @State private var sent      = false
+    @State private var error:      AppError?
+
+    private var trimmed: String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        DSSheetScaffold(
+            title:    sent ? "E-Mail unterwegs" : "Passwort vergessen",
+            subtitle: sent ? nil : "Wir schicken dir einen Link",
+            icon:     sent ? "checkmark" : "key",
+            isDirty:  false
+        ) {
+            if sent { confirmation } else { form }
+        } footer: {
+            if sent {
+                Button("Fertig") { dismiss() }
+                    .buttonStyle(DSPrimaryButton())
+            } else {
+                HStack(spacing: 10) {
+                    Button("Abbrechen") { dismiss() }
+                        .buttonStyle(DSSecondaryButton())
+
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        Group {
+                            if isLoading {
+                                ProgressView().progressViewStyle(.circular).tint(.white)
+                            } else {
+                                Text("Link anfordern")
+                            }
+                        }
+                    }
+                    .buttonStyle(DSPrimaryButton())
+                    .disabled(isLoading || trimmed.isEmpty)
+                }
+            }
+        }
+        .onAppear { if email.isEmpty { email = prefilledEmail } }
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Gib die E-Mail-Adresse deines Kontos ein. Du bekommst einen Link, mit dem du ein neues Passwort setzt.")
+                .dsFont(.sub)
+                .foregroundColor(DS.C.text2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            DSTextField(
+                label:       "E-Mail",
+                placeholder: "name@betrieb.de",
+                text:        $email,
+                keyboard:    .emailAddress,
+                contentType: .emailAddress,
+                errorText:   error?.localizedDescription
+            )
+        }
+    }
+
+    private var confirmation: some View {
+        VStack(spacing: 18) {
+            DSSuccessCheckmark()
+
+            Text("Falls ein Konto mit **\(trimmed)** existiert, ist eine E-Mail mit dem Link unterwegs.")
+                .dsFont(.sub)
+                .foregroundColor(DS.C.text)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Der Link öffnet sich im Browser und gilt eine Stunde. Danach meldest du dich hier mit dem neuen Passwort an.")
+                .dsFont(.caption)
+                .foregroundColor(DS.C.text2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
+    }
+
+    private func send() async {
+        guard !trimmed.isEmpty else { return }
+        isLoading = true
+        error     = nil
+        defer { isLoading = false }
+
+        do {
+            try await authStore.requestPasswordReset(email: trimmed)
+            Haptics.success()
+            sent = true
+        } catch let e as AppError {
+            error = e
+        } catch {
+            self.error = .unknown(error.localizedDescription)
         }
     }
 }
