@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-22 · Suiten: Backend 162 Unit/Compliance + 375 Integration, iOS 71 XCTests — alle grün.
+**Stand:** 2026-07-22 · Suiten: Backend 188 Unit/Compliance + 406 Integration, iOS 71 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -224,7 +224,7 @@ Entitlement-Matrix in S17C. **Abweichung:** „Sitzung > 24 h" und „TSE-Ausfal
 stündlich statt täglich (pro Vorfall trotzdem genau eine Mail) — eine Meldepflicht bis zu 24 h
 liegen zu lassen, wäre nicht vertretbar.
 
-## [ ] S08 — Passwort-Reset (B3) — ~1 d
+## [x] S08 — Passwort-Reset (B3) — erledigt 2026-07-22
 **Prompt:**
 > Setze Paket S08 aus ROADMAP.md um (OFFEN.md B3): `POST /auth/forgot-password` +
 > `POST /auth/reset-password`. Token einmalig, 1h gültig, nur gehasht in DB; Rate-Limit;
@@ -233,6 +233,32 @@ liegen zu lassen, wäre nicht vertretbar.
 > LoginView (DSTextField-Sheet, Du-Anrede).
 
 **DoD:** Kompletter Reset-Flow einmal real durchgespielt (Mail → Link → neues Passwort → Login).
+
+**Erledigt 2026-07-22:** V013 (`password_reset_tokens` mit SHA-256-Token + `users.password_changed_at`),
+`services/passwordReset.ts` (ausstellen/einlösen, `FOR UPDATE` gegen Doppel-Submit),
+`POST /auth/forgot-password` (**immer 200**, Tenant aus dem Gerät wie beim Login) und
+`GET`+`POST /auth/reset-password`.
+**Entscheidung 1 (mit User):** Der Link landet auf einer **server-gerenderten Seite des Backends**
+(`src/views/passwordResetPage.ts`) statt auf einem Deep Link oder einem In-App-Code — es gibt kein
+Web-Frontend, und der Wirt öffnet die Mail typischerweise am Handy. Die Seite kommt ohne JavaScript
+aus (helmets CSP erlaubt keine Inline-Skripte), ist `noindex` + `no-store` und escaped den Token.
+**Entscheidung 2 (mit User):** Ein Reset beendet ältere Sitzungen — `/auth/refresh` gibt 401, wenn
+`session_start` vor `users.password_changed_at` liegt; sonst überlebte ein gestohlenes Refresh-Token
+genau den Reset, der es aussperren soll.
+Zwei Missbrauchsbremsen: IP-Rate-Limit auf beiden Routen **und** höchstens 3 Reset-Mails pro Nutzer
+und Stunde. Der Klartext-Token existiert nur in der Mail: `redactUrl` (`src/logger.ts`) hält ihn aus
+den Pino-Logs, und der Mail-Idempotenzschlüssel benutzt die Token-Zeilen-ID.
+**Beim Testen gefunden und behoben:** Ein Zeitstempel als Idempotenz-Marker ließ zwei Anfragen in
+derselben Sekunde kollidieren — die zweite Mail fiel weg, der erste Link war aber schon entwertet
+(Sackgasse).
+iOS: `ForgotPasswordSheet` im LoginView ersetzt den „support@cashbox.de"-Hinweis; die Bestätigung ist
+im Konjunktiv formuliert, weil das Backend auch für unbekannte Adressen 200 antwortet.
+Tests: **+26 Unit** (`unit/passwordReset`), **+31 Integration** (`integration/password-reset`) →
+**188 + 406** grün, iOS 71 unverändert grün. REQ-PWR-001…010 + UC-PWR-01…05.
+Doku: `docs/api.md` (Vertrag), `docs/betrieb.md` §6 (Runbook).
+**Offen (User):** Der reale Durchlauf Mail → Link → Passwort → Login hängt am selben externen Gate
+wie S05/S06 (Resend-Domain) — bis dahin läuft der Versand im Dry-Run. Zusätzlich muss **`PUBLIC_API_URL`
+in Prod gesetzt** sein (S20), sonst zeigt jeder Reset-Link ins Leere.
 
 ## [ ] S09 — Audit-Reste A3 + A6 (B8) — ~1 d
 **Prompt:**

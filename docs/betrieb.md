@@ -266,3 +266,57 @@ niemandem. Alle Jobs sind idempotent, ein manueller Lauf neben dem Zeitplan ist 
   (`tse_outages.reported_to_finanzamt` anschließend manuell setzen).
 - **„Kulanzfrist abgelaufen"** — der Zugriff ist gesperrt; der Wirt braucht eine gültige
   Zahlungsmethode oder ein neues Abo.
+
+---
+
+## 6. Passwort-Reset (S08)
+
+### Warum das Backend eine HTML-Seite ausliefert
+
+Die App ist iPad-only, ein Web-Frontend gibt es nicht. Der Link aus der
+Reset-Mail muss trotzdem überall funktionieren — typischerweise öffnet der Wirt
+ihn auf dem Handy, während das iPad an der Theke steht. Deshalb rendert das
+Backend die Reset-Seite selbst: eine Datei (`src/views/passwordResetPage.ts`),
+Inline-CSS, **kein JavaScript**, kein externer Request. Das ist bewusst der
+einzige HTML-Endpunkt des Systems; alles andere bleibt JSON-API.
+
+### Pflicht-Variable
+
+`PUBLIC_API_URL` muss auf die von außen per HTTPS erreichbare Basis-URL **dieses
+Backends** zeigen (nicht auf `APP_URL`). Fehlt sie, baut der Server Links auf den
+Default `https://api.cashbox.de` — und jeder Reset-Link läuft ins Leere, ohne
+dass es jemandem auffällt, bis der erste Wirt anruft. Nach dem Deploy einmal
+prüfen: Reset für ein Testkonto anfordern und den Link im Mailtext ansehen.
+
+### Ablauf und Fristen
+
+1. `POST /auth/forgot-password` (App) → Token wird ausgestellt, Mail eingereiht.
+2. Versand über den `email-drain`-Job (alle 5 min) — **eine Reset-Mail kann also
+   bis zu fünf Minuten brauchen.** Das ist der Preis der Queue und für diesen
+   Anlass vertretbar; wer schneller muss: `npm run job -- email-drain`.
+3. Link ist **1 Stunde** gültig und **einmal** einlösbar. Ein neu angeforderter
+   Link entwertet den vorherigen.
+4. Nach dem Reset sind alle vorher begonnenen Sitzungen ungültig
+   (`users.password_changed_at`) — betroffene iPads zeigen das
+   „Sitzung abgelaufen"-Banner und verlangen eine Neuanmeldung.
+
+### Grenzen, die absichtlich so sind
+
+- Der Endpunkt antwortet **immer** 200, auch bei unbekannter Adresse. Ein Wirt,
+  der sich vertippt, bekommt deshalb keine Fehlermeldung, sondern nie eine Mail.
+  Bei Supportfällen zuerst die Schreibweise der Adresse in `users` prüfen.
+- Pro Nutzer gehen höchstens **3 Reset-Mails pro Stunde** raus (Schutz fremder
+  Postfächer). Weitere Anfragen werden still verworfen — sichtbar nur im Log
+  (`Passwort-Reset gedrosselt`).
+- Der Klartext-Token steht ausschließlich in der Mail: nicht in der DB (nur
+  SHA-256), nicht in `email_queue`-Schlüsseln und nicht in Logs (`redactUrl` in
+  `src/logger.ts` entfernt die Query dieser Route). **Wer eine neue Route mit
+  Geheimnis in der URL baut, trägt sie dort ein.**
+
+### Wenn ein Nutzer nicht mehr reinkommt
+
+`SELECT id, expires_at, used_at FROM password_reset_tokens WHERE user_id = ?`
+zeigt, ob überhaupt ein Token ausgestellt wurde. Kein Eintrag ⇒ die Anfrage kam
+nie an oder die Adresse/das Gerät passte nicht. Eintrag vorhanden, aber
+`used_at` gesetzt ⇒ der Link wurde schon benutzt (oder durch einen neueren
+entwertet) — neu anfordern lassen.

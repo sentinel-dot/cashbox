@@ -138,6 +138,21 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-PRESET-009 | Wizard-Bestätigungen: Sammelbestätigung deckt ausschließlich Standard-/Speisenzeilen; Risikozeilen brauchen Einzelbestätigung; Import erst wenn alle ausgewählten Zeilen bestätigt und bepreist (> 0) sind | Spec §2.3, §9 |
 | REQ-PRESET-010 | Jeder Import wird als `preset.imported` mit vollständigem Snapshot (Preset, Version, `tax_basis_version`, bestätigte Werte) im Audit-Log dokumentiert | Spec §8.3.6 |
 
+### Passwort-Reset (REQ-PWR)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-PWR-001 | `POST /auth/forgot-password` antwortet **immer** 200 — unbekannte E-Mail, unbekanntes Gerät, deaktivierter Nutzer und Drosselung sind von außen nicht unterscheidbar (kein User-Enumeration-Leak) | ROADMAP S08 / OFFEN.md B3 |
+| REQ-PWR-002 | Der Tenant kommt wie beim Login aus dem registrierten Gerät, nie aus dem Request-Body — dieselbe E-Mail in einem anderen Betrieb bleibt unberührt | CLAUDE.md Tenant-Isolation |
+| REQ-PWR-003 | Der Klartext-Token existiert ausschließlich in der Mail; in der DB steht nur `SHA2(token,256)`. Er taucht weder in Logfiles (`redactUrl`) noch in `email_queue`-Idempotenzschlüsseln auf | ROADMAP S08 / REQ-MAIL-010 |
+| REQ-PWR-004 | Ein Token ist genau einmal und maximal eine Stunde einlösbar. Ein neu angeforderter Link entwertet den vorherigen; abgelaufene, verbrauchte und unbekannte Token ändern kein Passwort | OFFEN.md B3 |
+| REQ-PWR-005 | Zwei gleichzeitige Einlösungen desselben Links setzen das Passwort genau einmal (`FOR UPDATE` auf der Token-Zeile) | CLAUDE.md Race-Regeln |
+| REQ-PWR-006 | Missbrauchsschutz zweistufig: IP-Rate-Limit auf beiden Routen und höchstens `MAX_REQUESTS_PER_HOUR` Reset-Mails je Nutzer und Stunde (Schutz eines fremden Postfachs trotz „immer 200") | ROADMAP S08 |
+| REQ-PWR-007 | Ein erfolgreicher Reset beendet ältere Sitzungen: `/auth/refresh` gibt 401, wenn der `session_start`-Claim vor `users.password_changed_at` liegt. Danach begonnene Sitzungen und Bestandsnutzer ohne Zeitstempel bleiben gültig | ROADMAP S08 (Entscheidung 2026-07-22) |
+| REQ-PWR-008 | Die Reset-Seite wird serverseitig gerendert, kommt ohne JavaScript aus, escaped den Token im Formular und wird nicht gecacht (`no-store`, `Referrer-Policy: no-referrer`, `noindex`) | ROADMAP S08 (Entscheidung 2026-07-22) |
+| REQ-PWR-009 | Fehleingaben im Formular (zu kurz, Wiederholung abweichend) liefern die Seite mit verständlicher Meldung erneut und verbrauchen den Token nicht | ROADMAP S08 DoD |
+| REQ-PWR-010 | Anfrage und Durchführung sind im `audit_log` nachvollziehbar (`user.password_reset_requested`, `user.password_reset`) | GoBD/Sicherheit |
+
 ---
 
 ## 2. Use Cases (Kassenalltag)
@@ -179,6 +194,11 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-CRON-09 | Betrieb löst nach einem Vorfall einen Job von Hand aus | CRON-009 |
 | UC-16 | Sortiment pflegen (Produkt deaktivieren → reaktivieren, Reihenfolge ziehen, Kategorie anlegen/löschen) | SORT-001…006, TENANT-* |
 | UC-17 | Frischer Tenant richtet Starter-Sortiment ein (< 10 min, 3 Kategorien + 15 Produkte; Doppeltap/Timeout/Retry sicher) | PRESET-001…010, TENANT-* |
+| UC-PWR-01 | Wirt hat sein Passwort vergessen: Link anfordern → Mail → Browser-Seite → neues Passwort → Anmeldung am iPad | PWR-001/003/004/008, MAIL-004 |
+| UC-PWR-02 | Jemand fischt mit fremden E-Mail-Adressen nach existierenden Konten | PWR-001/002/006 |
+| UC-PWR-03 | Reset-Mail kommt spät an, der Wirt hat längst einen neuen Link angefordert | PWR-004 |
+| UC-PWR-04 | Passwort war kompromittiert — der Angreifer hält noch ein Refresh-Token | PWR-007 |
+| UC-PWR-05 | Wirt vertippt sich beim Wiederholen des Passworts oder wählt es zu kurz | PWR-009 |
 
 ---
 
@@ -257,6 +277,16 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | PRESET-008 | UC-17 | **TC-IOS VisualSuggestionTests** (alle V1-Presetnamen exakt + Negativfälle: leer, Emoji, nur Menge, Teekanne/Nussecke, Groß-/Kleinschreibung, Umlaute) |
 | PRESET-009 | UC-17 | **TC-IOS WizardReviewStateTests** (Sammelbestätigung deckt Risikozeilen nicht; Einzelbestätigung je Zeile; leere Auswahl) |
 | PRESET-010 | UC-17 | **TC-I presets.test.ts** (implizit über Happy Path); Audit-Snapshot-Sichtprüfung `audit_log.action = 'preset.imported'` |
+| PWR-001 | UC-PWR-02 | **TC-I password-reset.test.ts** (unbekannte E-Mail, unbekanntes Gerät, deaktivierter Nutzer, Drosselung ⇒ je 200 ohne Mail; Treffer- und Fehlantwort byte-gleich) |
+| PWR-002 | UC-PWR-02 | **TC-I password-reset.test.ts** (Tenant-Isolation-`it()`s: gleiche E-Mail im Fremdbetrieb bleibt tokenlos; Fremd-Passwort-Hash nach Reset unverändert) |
+| PWR-003 | UC-PWR-01 | **TC-U unit/passwordReset.test.ts** (`hashResetToken` ≠ Klartext, 64 Hex; `redactUrl`); **TC-I password-reset.test.ts** (DB hält nur den SHA-256; Token wird aus dem Mailtext gelesen) |
+| PWR-004 | UC-PWR-03 | **TC-I password-reset.test.ts** (zweiter Klick, abgelaufen via rückdatiertem `expires_at`, unbekannter Token, neuer Link entwertet alten — je ohne Passwortänderung) |
+| PWR-005 | UC-PWR-01 | **TC-I password-reset.test.ts** (Promise.all auf denselben Link ⇒ `{200, 400}`, `used_at` gesetzt) |
+| PWR-006 | UC-PWR-02 | **TC-I password-reset.test.ts** (5 Anfragen ⇒ 3 Token, 3 Mails); **TC-U unit/passwordReset.test.ts** (Limit-Konstante) |
+| PWR-007 | UC-PWR-04 | **TC-I password-reset.test.ts** (Refresh-Token von vor dem Reset ⇒ 401; danach begonnene Sitzung ⇒ 200; Bestandsnutzer ohne `password_changed_at` ⇒ 200) |
+| PWR-008 | UC-PWR-01 | **TC-U unit/passwordReset.test.ts** (kein `<script>`, Token escaped, `noindex`, vollständiges HTML5); **TC-I password-reset.test.ts** (`no-store`, `Referrer-Policy`, GET verbraucht den Token nicht) |
+| PWR-009 | UC-PWR-05 | **TC-I password-reset.test.ts** (Wiederholung abweichend ⇒ 422 mit Formular + Token; zu kurz ⇒ 422, danach ist derselbe Link noch gültig) |
+| PWR-010 | UC-PWR-01 | **TC-I password-reset.test.ts** (`user.password_reset_requested` + `user.password_reset` im audit_log) |
 
 ---
 

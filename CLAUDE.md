@@ -13,7 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Suiten:** Backend 162 Unit/Compliance + 375 Integration, iOS 71 XCTests — alle grün (2026-07-22)
+**Suiten:** Backend 188 Unit/Compliance + 406 Integration, iOS 71 XCTests — alle grün (2026-07-22)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -214,6 +214,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | Bereich | Endpoints | Tests |
 |---------|-----------|-------|
 | Auth | POST /auth/login, /refresh, /logout, /pin | ✅ |
+| Passwort-Reset | POST /auth/forgot-password (immer 200), GET+POST /auth/reset-password — **einzige HTML-Antworten des Backends** (server-gerenderte Seite ohne JS, `src/views/passwordResetPage.ts`), Vertrag: `docs/api.md` — S08 | ✅ |
 | Tenants | GET+PATCH /tenants/me | ✅ |
 | Users | GET /users, POST, PATCH /:id, DELETE /:id (soft) | ✅ |
 | Devices | POST /devices/register, /:id/revoke, GET / | ✅ |
@@ -252,12 +253,12 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | `DSComponents.swift` | v3.1-Komponenten: `.dsFont(_:)` (Dynamic-Type-Typo-Tokens via UIFontMetrics; `.money`-Tokens mit Tabellenziffern, `.mono` für Beleg-Ästhetik, `.icon`/`.raw` für Sondergrößen), `DSTextField` (das eine Eingabefeld: Label/Hint/Error/Secure-Reveal, NoAssistant-Engine), `DSSheetScaffold` (einheitliches Sheet-Chrome: Icon-Badge + xmark + Footer, `isDirty` → Dismiss-Guard), `DSSegmentedControl`, `DSSkeleton`, `DSSuccessCheckmark` (Reduce-Motion-safe), `Haptics`, `dsBannerTransition()`, `DSAppearance` | ✅ |
 | `AppError.swift` | App-weite Fehlertypen (LocalizedError, deutsche Meldungen) | ✅ |
 | `Models.swift` | User, AuthUser, Tenant, UserRole, SubscriptionPlan, SubscriptionStatus, AuthResponse | ✅ |
-| `AuthStore.swift` | ObservableObject: Login, Register, PIN-Login, Logout, User-Cache (UserDefaults), sendet deviceToken aus Keychain | ✅ |
+| `AuthStore.swift` | ObservableObject: Login, Register, PIN-Login, Logout, `requestPasswordReset` (S08), User-Cache (UserDefaults), sendet deviceToken aus Keychain | ✅ |
 | `APIClient.swift` | async/await HTTP-Client: JWT im Keychain, Device-Token persistent, get/post/patch/delete, Refresh-Logic | ✅ |
 | `KeychainHelper.swift` | Sicherer Token-Speicher (save/load/delete, Service: com.cashbox.app) | ✅ |
 | `NetworkMonitor.swift` | NWPathMonitor Wrapper, isOnline @Published | ✅ |
 | `OfflineBanner.swift` | Offline-Hinweisband; liest `pendingCount` live aus `SyncManager.shared` (zeigt „N Bons warten auf TSE-Signatur") | ✅ |
-| `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular (DSTextField), PIN-Liste, Darstellungs-Umschalter (System/Hell/Dunkel), PINEntrySheet | ✅ |
+| `LoginView.swift` | 2-Spalten Login: Brand-Panel + Formular (DSTextField), PIN-Liste, Darstellungs-Umschalter (System/Hell/Dunkel), PINEntrySheet, `ForgotPasswordSheet` (S08 — Bestätigung bewusst im Konjunktiv: das Backend antwortet auch für unbekannte Adressen 200) | ✅ |
 | `OnboardingView.swift` | Registrierungs-Flow (6 Schritte) mit Abbrechen-X (+ Verwerfen-Rückfrage), erzwungener Pflicht-Checkliste (Schritt 5 gated `canContinue`), ehrlichem TSE-Pending-Status; Felder = exakt das Backend-Schema (vatId/Standort entfernt — registerSchema nimmt sie nicht an). Einziger Registrierungsweg (RegisterView.swift gelöscht 2026-07-10) | ✅ |
 | `ContentView.swift` | Auth-Router: LoginView ↔ App; app-weite Modifier: Dynamic-Type-Deckel (AX1), `preferredColorScheme` aus `DSAppearance`, `.tint(DS.C.acc)` | ✅ |
 | `zettel_frontendApp.swift` | Root mit @StateObject Stores + EnvironmentObject Injection | ✅ |
@@ -321,6 +322,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
   Prozess-Manager braucht ≥ 15 s Kulanz (PM2 `kill_timeout`, systemd `TimeoutStopSec`).
 
 ### Auth — kritische Backend-Details
+- **Passwort-Reset (S08):** Token 32 Byte, in `password_reset_tokens` **nur als SHA-256** (V013), 1 h gültig, einmalig (`used_at`); ein neuer Link entwertet den alten, Doppel-Submit wird per `FOR UPDATE` serialisiert. `POST /auth/forgot-password` antwortet **immer 200** (kein User-Enumeration-Leak) und nimmt den Tenant aus dem Gerät, nie aus dem Body. Ein erfolgreicher Reset setzt `users.password_changed_at` — `/auth/refresh` gibt danach 401 für jede Sitzung, die davor begann. Klartext-Token darf **nirgends** persistiert werden: nicht in `email_queue`-Idempotenzschlüsseln, nicht in Logs (`redactUrl` in `src/logger.ts`). Prod braucht `PUBLIC_API_URL`
 - **Token-Modell:** Access-JWT 15 min (`JWT_EXPIRY`), Refresh-Token 7 d rotierend (`JWT_REFRESH_EXPIRY`), **absolutes Session-Limit 16 h** (`SESSION_MAX_HOURS`, Schicht-Modell: 1× Login pro Tag). `session_start`-Claim im Refresh-Token wird bei Rotation unverändert weitergereicht; `/auth/refresh` gibt 401 wenn Limit überschritten oder Claim fehlt, Token-`exp` ist zusätzlich auf `session_start + Limit` gedeckelt. iOS zeigt danach automatisch das „Sitzung abgelaufen"-Banner (forceLogout)
 - `POST /auth/login` erwartet **auch `device_token`** — Gerät muss registriert sein (via `/onboarding/register` oder `/devices/register`)
 - Login/Register-Response: `{token, refreshToken, user: {id, name, role}}` — **kein `tenant`-Objekt**
@@ -368,6 +370,9 @@ src/
 │            webhookController liegt unter POST /webhooks/stripe (kein authMiddleware,
 │            rawBody als Buffer aus express.raw() in app.ts).
 │
+├── views/              -- passwordResetPage.ts: die EINZIGE HTML-Seite des Backends
+│                          (S08, Reset-Link aus der Mail — pure Render-Funktionen,
+│                          kein JavaScript, kein externer Request)
 ├── middleware/         -- authMiddleware, deviceMiddleware, planMiddleware,
 │                          rateLimitMiddleware, sessionMiddleware,
 │                          subscriptionMiddleware, tenantMiddleware,
@@ -392,6 +397,8 @@ src/
 │   ├── subscription.ts -- Trial-/Grace-Fristen an einer Stelle (TRIAL_DAYS,
 │   │                      GRACE_PERIOD_DAYS, trialWarningMarker) — Middleware und
 │   │                      Cron müssen dieselben Grenzen benutzen (S17C baut hier um)
+│   ├── passwordReset.ts -- S08: Token ausstellen/einlösen (SHA-256, 1 h, einmalig,
+│   │                      FOR UPDATE gegen Doppel-Submit) + pure Helfer
 │   ├── priceHistory.ts -- product_price_history INSERT
 │   ├── products.ts     -- createProductWithHistory: DER Produktanlage-Pfad (S17B) —
 │   │                      inaktiv → Historie (auditDb) → Verify → aktivieren;
@@ -415,7 +422,9 @@ src/
 │   │                        UNIQUE je Tenant, preset_imports = Idempotenz-Anker),
 │   │                      V012__offline_queue_alerted_at (Alert-Dedup für den
 │   │                        Cron + UNIQUE z_reports.session_id = ein Z-Bericht
-│   │                        pro Sitzung, Backstop für den Nachtrag)
+│   │                        pro Sitzung, Backstop für den Nachtrag),
+│   │                      V013__password_reset (password_reset_tokens +
+│   │                        users.password_changed_at — Reset entwertet Sitzungen)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/
@@ -433,7 +442,9 @@ src/
     │                      Pfand exakt 11 — S17B),
     │                      subscriptionDates (Trial-/Grace-Schwellen, trialWarningMarker),
     │                      cronRegistry (Zeitpläne valide + entzerrt, start/stopCron,
-    │                      geworfener Job reißt den Prozess nicht mit — S07)
+    │                      geworfener Job reißt den Prozess nicht mit — S07),
+    │                      passwordReset (Token-Entropie/Hash, Link-Bau, redactUrl,
+    │                      Reset-Seite: kein JS, Token escaped, noindex — S08)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
     │                      cron-jobs (alle 8 Jobs einzeln + Doppellauf-Idempotenz,
     │                      Zeit-Fixtures durch rückdatierte Daten — S07),
@@ -442,7 +453,10 @@ src/
     │                      Retry + failed, Stuck-Claim, Tenant-Isolation),
     │                      errorHandler (5xx→Sentry, 4xx nicht, kein Leak in Prod),
     │                      export, mixed-payments, modifierGroups, offline-queue,
-    │                      onboarding, orders, payments, presets (Import-Idempotenz,
+    │                      onboarding, orders, password-reset (Enumerations-Schutz,
+    │                      Einmal-/Ablauf-Regeln, Doppel-Submit-Race, Sitzungs-
+    │                      entwertung — Token wird aus dem Mailtext gelesen, S08),
+    │                      payments, presets (Import-Idempotenz,
     │                      Failure-Injection/Repair, Pfand-Gate, gehärteter POST),
     │                      products, receipts,
     │                      receipts-list, reports, sessions, split-bill,
