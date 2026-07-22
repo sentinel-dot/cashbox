@@ -149,7 +149,7 @@ describe('E-Mail-Queue — Einreihen', () => {
     });
     await sendSubscriptionEvent({
       ...common,
-      stripeEventId: 'evt_123',
+      eventMarker: 'evt_123',
       event: 'past_due',
     });
     await sendLongOpenSessionWarning({

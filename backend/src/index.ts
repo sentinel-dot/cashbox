@@ -11,6 +11,7 @@ import app from './app.js';
 import { db, auditDb, readonlyDb } from './db/index.js';
 import { logger } from './logger.js';
 import { createShutdown } from './shutdown.js';
+import { startCron, stopCron } from './cron.js';
 import type { Server } from 'node:http';
 
 const PORT = Number(process.env['PORT'] ?? 3000);
@@ -18,6 +19,7 @@ const PORT = Number(process.env['PORT'] ?? 3000);
 let server: Server | undefined;
 
 const shutdown = createShutdown({
+  stopSchedulers: () => stopCron(),
   closeServer: () =>
     new Promise<void>((resolve) => {
       if (!server) return resolve();
@@ -81,6 +83,9 @@ async function start() {
       `Server läuft auf Port ${PORT}`,
     );
   });
+
+  // Erst wenn der Server steht: Mail-Versand, Nachsignierung, Warnmails (S07).
+  startCron();
 }
 
 void start();

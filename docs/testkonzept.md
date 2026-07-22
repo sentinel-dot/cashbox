@@ -98,6 +98,20 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-MAIL-010 | Öffentliche Anlassfunktionen verwenden ausschließlich stabile technische IDs im Idempotenzschlüssel; Reset-Token, Empfänger und Betriebsnamen dürfen dort nicht auftauchen | ROADMAP S06 |
 | REQ-MAIL-011 | Produktionsversand wird erst mit einer eigenen, in Resend SPF-/DKIM-verifizierten Domain und eingerichtetem DMARC aktiviert; ohne API-Key bleibt der Dienst im sicheren Dry-Run | ROADMAP S05/S06 |
 
+### Hintergrund-Jobs / Cron (REQ-CRON)
+
+| ID | Anforderung | Quelle |
+|----|-------------|--------|
+| REQ-CRON-001 | Die Trial-Warnung geht an Tag 10 und Tag 13 an den Owner — je Marker genau einmal, auch bei mehrfachem Lauf. Warnung und Sperre benutzen dieselben Fristen (`services/subscription.ts`); vor Tag 10, nach Ablauf und bei bezahltem Abo wird nicht gewarnt | ROADMAP S07 / OFFEN.md B2 |
+| REQ-CRON-002 | Läuft die Kulanzfrist nach `past_due` ab, wird das einmalig sichtbar: Mail an den Owner, `audit_log`-Eintrag, Sentry-Alert. Der Job ändert `subscription_status` **nicht** — gesperrt wird in der `subscriptionMiddleware`, Stripe bleibt alleinige Quelle des Abo-Status | ROADMAP S07 (Entscheidung 2026-07-22) |
+| REQ-CRON-003 | Kassensitzungen, die länger als 24 h offen sind, lösen genau eine Owner-Mail je Sitzung aus (GoBD: täglicher Abschluss); geschlossene und junge Sitzungen bleiben unberührt | OFFEN.md B2 / CLAUDE.md Kassensitzungspflicht |
+| REQ-CRON-004 | TSE-Ausfälle > 48 h werden gemeldet und mit `tse_outages.notified_at` als Nachweis markiert; beendete oder bereits gemeldete Ausfälle lösen nichts mehr aus. Die Mail wird vor dem Setzen des Markers eingereiht — eine Pflichtmeldung darf eher doppelt als gar nicht rausgehen | KassenSichV / OFFEN.md B2 |
+| REQ-CRON-005 | Die Nachsignierung offener Offline-Bons läuft serverseitig und tenant-übergreifend, ohne dass ein iPad synchronisiert — über denselben Code und dieselben atomaren Claims wie `POST /sync/offline-queue`, sodass Client und Cron parallel laufen dürfen | OFFEN.md B2 / KassenSichV |
+| REQ-CRON-006 | Jeder endgültig gescheiterte Offline-Queue-Eintrag wird genau einmal gemeldet (`offline_queue.alerted_at`) — kein stündlich wiederholter Alarm für denselben Vorfall | OFFEN.md B2 |
+| REQ-CRON-007 | Geschlossene Sitzungen ohne `z_reports`-Zeile werden gefunden, aus den unveränderten Buchungsdaten nachgetragen und gemeldet. Der Nachtrag ist im Snapshot als solcher markiert, rechnet identisch zum regulären Abschluss und kann nicht doppelt entstehen (UNIQUE `z_reports.session_id`, V012) | OFFEN.md §1 A9 |
+| REQ-CRON-008 | Die Mail-Queue wird periodisch geleert — ohne diesen Job bleibt jede eingereihte Mail liegen (S05/S06 hatten keinen Auslöser) | ROADMAP S05/S07 |
+| REQ-CRON-009 | Jeder Job ist einzeln auslösbar (`npm run job -- <name>`), hat einen gültigen Zeitplan in Europe/Berlin, und ein geworfener Job beendet weder den Prozess noch verhindert er die übrigen Jobs | ROADMAP S07 DoD |
+
 ### Sortiment (REQ-SORT)
 
 | ID | Anforderung | Quelle |
@@ -154,6 +168,15 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-MAIL-05 | Tagesabschluss — Owner erhält opt-in Umsatz, Zahlarten und Kassendifferenz | MAIL-001…004/009 |
 | UC-MAIL-06 | Abo-Status ändert sich — past_due, Kündigung und Reaktivierung führen zu einer handlungsfähigen Nachricht | MAIL-003/004/009/010 |
 | UC-MAIL-07 | Schicht bleibt länger als 24 Stunden offen — Owner erhält eine GoBD-Warnung | MAIL-002…004/009/010 |
+| UC-CRON-01 | Trial läuft aus, während niemand zusieht — Warnungen und Sperre bleiben synchron | CRON-001, MAIL-006 |
+| UC-CRON-02 | Zahlung scheitert dauerhaft: Kulanzfrist läuft ab, der Wirt erfährt es (ohne dass die Kasse still den Status umschreibt) | CRON-002 |
+| UC-CRON-03 | Schicht wurde abends vergessen zu schließen | CRON-003, GOBD-011 |
+| UC-CRON-04 | TSE fällt über zwei Tage aus — Meldepflicht wird belegbar ausgelöst | CRON-004, TSE-005, MAIL-007 |
+| UC-CRON-05 | Das iPad kommt nach dem Ausfall nie wieder online — der Server signiert trotzdem nach | CRON-005, TSE-001/005 |
+| UC-CRON-06 | Ein Bon lässt sich endgültig nicht signieren — genau ein Alarm, nicht 24 pro Tag | CRON-006 |
+| UC-CRON-07 | Z-Bericht fehlt nach dem Schließen (A9) — Nachtrag aus unveränderten Daten, sichtbar markiert | CRON-007, GOBD-011 |
+| UC-CRON-08 | Deploy/Neustart löst alle Jobs erneut aus — nichts passiert doppelt | CRON-001…008 |
+| UC-CRON-09 | Betrieb löst nach einem Vorfall einen Job von Hand aus | CRON-009 |
 | UC-16 | Sortiment pflegen (Produkt deaktivieren → reaktivieren, Reihenfolge ziehen, Kategorie anlegen/löschen) | SORT-001…006, TENANT-* |
 | UC-17 | Frischer Tenant richtet Starter-Sortiment ein (< 10 min, 3 Kategorien + 15 Produkte; Doppeltap/Timeout/Retry sicher) | PRESET-001…010, TENANT-* |
 
@@ -215,6 +238,15 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | SORT-004 | UC-16 | **TC-I products.test.ts** (Ordering-Assertion Kategorie→Produkt); **TC-IOS AssortmentSortTests** (Komparator-Tabelle inkl. Tie-Breaker + nil-Kategorie zuletzt), **TC-IOS ModelDecodingTests** (sort_order-Fixtures) |
 | SORT-005 | UC-16 | **TC-I products.test.ts** (Reorder happy + idempotent (2×), fremde ID → 404 + unverändert, falsche Kategorie → 404, Duplikate → 422, staff → 403) |
 | SORT-006 | UC-16 | Copy-Review SortimentView (Dialogtext beschreibt Soft-Delete + 409-Fall; Server-409-Meldung wird angezeigt) |
+| CRON-001 | UC-CRON-01/08 | **TC-U unit/subscriptionDates.test.ts** (Schwellen 9/10/12/13/14, kein Seiteneffekt auf das Datum); **TC-I cron-jobs.test.ts** (Tag 10 + Doppellauf, Tag 13, kein Versand bei jung/abgelaufen/`active`, Tenant ohne aktiven Owner) |
+| CRON-002 | UC-CRON-02/08 | **TC-I cron-jobs.test.ts** (Mail + genau ein `audit_log`-Eintrag, Doppellauf ohne zweiten Eintrag, `subscription_status` bleibt `past_due`, innerhalb der Kulanzfrist passiert nichts) |
+| CRON-003 | UC-CRON-03/08 | **TC-I cron-jobs.test.ts** (30 h offen → eine Mail, Doppellauf ohne zweite; 2 h und geschlossen bleiben unberührt; Tenant-Isolation-`it()`: jeder Owner bekommt nur die eigene Sitzung) |
+| CRON-004 | UC-CRON-04/08 | **TC-I cron-jobs.test.ts** (50 h → Mail + `notified_at`; junge, beendete und bereits gemeldete Ausfälle lösen nichts aus) |
+| CRON-005 | UC-CRON-05 | **TC-I cron-jobs.test.ts** (zwei Tenants ohne TSS → beide Einträge requeued statt verworfen, `retry_count` erhöht; Eintrag ohne `receipt_id` failt erst nach Frist); Bestandsabdeckung des gemeinsamen Pfads: offline-queue.test.ts |
+| CRON-006 | UC-CRON-06 | **TC-I cron-jobs.test.ts** (failed → genau ein Alert + `alerted_at`; zweiter Lauf 0; `pending` löst nichts aus) |
+| CRON-007 | UC-CRON-07 | **TC-U unit/zReportAggregation.test.ts** (`composeZReportJson`: Format identisch zum Abschluss, Nachtrag markiert); **TC-I cron-jobs.test.ts** (Nachtrag mit korrekten Summen, Doppellauf ohne zweiten Bericht, Karenz für frisch geschlossene, vorhandener Bericht bleibt unverändert, offene Sitzung ignoriert) |
+| CRON-008 | UC-CRON-01 | **TC-I cron-jobs.test.ts** (eingereihte Mail wird versendet, `email_log`-Nachweis, Inhalte genullt, zweiter Drain leer) |
+| CRON-009 | UC-CRON-09 | **TC-U unit/cronRegistry.test.ts** (Cron-Ausdrücke valide, Namen eindeutig, stündliche Jobs entzerrt, Europe/Berlin, `startCron`/`stopCron` idempotent, `CRON_ENABLED=false`, geworfener Job ⇒ `null` statt Prozessende); **TC-U unit/shutdown.test.ts** (Jobs stoppen vor dem Drain) |
 | PRESET-001 | UC-17 | **TC-U unit/presetData.test.ts** (Counts, Eindeutigkeit, Referenzen, MwSt.-Leitplanken, recipe_review-Allowlist, exakt 11 Pfandzeilen) |
 | PRESET-002 | UC-17 | **TC-I presets.test.ts** (Failure-Injection: History-Fehler ⇒ 500 + inaktiver Rest ohne Historie; gehärteter POST /products ebenso; Happy Path: je Produkt exakt eine initiale History-Zeile) |
 | PRESET-003 | UC-17 | **TC-I presets.test.ts** (Replay 200 mit gespeichertem Ergebnis; neuer Key ⇒ alles already_imported; paralleler Doppeltap via Promise.all; Retry nach Fehler ⇒ `repaired`, gleiche Produkt-ID) |

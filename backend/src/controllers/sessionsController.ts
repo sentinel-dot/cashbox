@@ -28,6 +28,52 @@ export const movementSchema = z.object({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+export type ZReportData = Awaited<ReturnType<typeof buildZReportData>>;
+
+export type ZReportComposeInput = {
+  sessionId:           number;
+  tenantId:            number;
+  closedAt:            Date;
+  opening_cash_cents:  number;
+  closing_cash_cents:  number | null;
+  expected_cash_cents: number | null;
+  difference_cents:    number | null;
+  reportData:          ZReportData;
+  /**
+   * Nur beim Nachtrag durch den Cron-Job (A9): der Z-Bericht wurde nicht beim
+   * Schließen geschrieben, sondern später aus den unveränderten Buchungsdaten
+   * rekonstruiert. Das muss im unveränderlichen Snapshot stehen — ein Prüfer
+   * muss sehen können, dass dieser Bericht nachgetragen wurde.
+   */
+  reconstructed?:      { at: Date; reason: string };
+};
+
+/**
+ * Baut den unveränderlichen z_reports-Snapshot. Pure Funktion, weil sie von zwei
+ * Pfaden benutzt wird (closeSession und dem Nachtrags-Cron) und beide exakt
+ * dasselbe Format schreiben müssen — sonst laufen Berichte und Prüfsoftware
+ * gegen zwei Varianten desselben Dokuments.
+ */
+export function composeZReportJson(input: ZReportComposeInput): Record<string, unknown> {
+  return {
+    session_id:          input.sessionId,
+    tenant_id:           input.tenantId,
+    closed_at:           input.closedAt.toISOString(),
+    opening_cash_cents:  input.opening_cash_cents,
+    closing_cash_cents:  input.closing_cash_cents,
+    expected_cash_cents: input.expected_cash_cents,
+    difference_cents:    input.difference_cents,
+    ...input.reportData,
+    ...(input.reconstructed
+      ? {
+          reconstructed: true,
+          reconstructed_at: input.reconstructed.at.toISOString(),
+          reconstructed_reason: input.reconstructed.reason,
+        }
+      : {}),
+  };
+}
+
 /**
  * Berechnet den Z-Bericht-Snapshot für eine Session.
  * Wird bei session.close() generiert und unveränderlich in z_reports gespeichert.
@@ -311,16 +357,16 @@ export async function closeSession(req: Request, res: Response): Promise<void> {
   // Läuft nach dem Commit (anderer DB-User/Pool — keine gemeinsame TX möglich):
   // schlägt der INSERT fehl, ist die Session geschlossen OHNE Z-Bericht — laut
   // loggen, damit das nachgeholt werden kann (Daten sind rekonstruierbar).
-  const zReportJson = {
-    session_id:            sessionId,
-    tenant_id:             tenantId,
-    closed_at:             new Date().toISOString(),
+  const zReportJson = composeZReportJson({
+    sessionId,
+    tenantId,
+    closedAt: new Date(),
     opening_cash_cents,
     closing_cash_cents,
     expected_cash_cents,
     difference_cents,
-    ...reportData,
-  };
+    reportData,
+  });
   let zResult: any;
   try {
     [zResult] = await auditDb.execute<any>(

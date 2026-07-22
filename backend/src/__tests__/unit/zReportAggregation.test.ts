@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Pool } from 'mysql2/promise';
-import { buildZReportData } from '../../controllers/sessionsController.js';
+import { buildZReportData, composeZReportJson } from '../../controllers/sessionsController.js';
 
 // REQ-GOBD-011 (UC-09/12): Z-Bericht-Aggregation — Fixture-basiert über
 // Mock-Executor. Reihenfolge der Queries in buildZReportData:
@@ -114,5 +114,62 @@ describe('buildZReportData', () => {
     }));
     const report = await buildZReportData(1, 1, exec);
     expect(report.vat_breakdown).toEqual([{ vat_rate: '19', net_plus_vat_cents: -2849 }]);
+  });
+});
+
+// REQ-CRON-007 (UC-CRON-07): Der Nachtrags-Cron (A9) schreibt denselben
+// Snapshot wie closeSession — sonst gäbe es zwei Varianten desselben
+// unveränderlichen Dokuments. Deshalb bauen beide über composeZReportJson.
+describe('composeZReportJson', () => {
+  const reportData = {
+    payments:             [{ method: 'cash', total_amount_cents: 2500, order_count: 1 }],
+    vat_breakdown:        [{ vat_rate: '19', net_plus_vat_cents: 2500 }],
+    total_revenue_cents:  2500,
+    total_orders:         1,
+    total_discount_cents: 0,
+    cancellation_count:   0,
+    movements:            [],
+  } as any;
+
+  const base = {
+    sessionId:           7,
+    tenantId:            3,
+    closedAt:            new Date('2026-07-21T20:00:00Z'),
+    opening_cash_cents:  10000,
+    closing_cash_cents:  12500,
+    expected_cash_cents: 12500,
+    difference_cents:    0,
+    reportData,
+  };
+
+  it('enthält Kassenbestände, Session-Bezug und die Aggregation', () => {
+    expect(composeZReportJson(base)).toEqual({
+      session_id:           7,
+      tenant_id:            3,
+      closed_at:            '2026-07-21T20:00:00.000Z',
+      opening_cash_cents:   10000,
+      closing_cash_cents:   12500,
+      expected_cash_cents:  12500,
+      difference_cents:     0,
+      ...reportData,
+    });
+  });
+
+  it('markiert einen Nachtrag als solchen — ein Prüfer muss das sehen können', () => {
+    const json = composeZReportJson({
+      ...base,
+      reconstructed: { at: new Date('2026-07-22T07:30:00Z'), reason: 'INSERT beim Schließen fehlgeschlagen' },
+    }) as any;
+
+    expect(json.reconstructed).toBe(true);
+    expect(json.reconstructed_at).toBe('2026-07-22T07:30:00.000Z');
+    expect(json.reconstructed_reason).toBe('INSERT beim Schließen fehlgeschlagen');
+    // Beträge bleiben identisch zum regulären Bericht — nachgetragen heißt nicht anders gerechnet.
+    expect(json.total_revenue_cents).toBe(2500);
+    expect(json.closed_at).toBe('2026-07-21T20:00:00.000Z');
+  });
+
+  it('setzt die Nachtrags-Felder im Normalfall gar nicht', () => {
+    expect(Object.keys(composeZReportJson(base))).not.toContain('reconstructed');
   });
 });

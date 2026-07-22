@@ -123,7 +123,12 @@ export async function sendDailyZReport(input: {
 type SendSubscriptionEventInput = {
   tenantId: number;
   recipient: string;
-  stripeEventId: string;
+  /**
+   * Anlass-Marker für die Idempotenz: die Stripe-Event-ID (`evt_…`) beim
+   * Webhook, ein Cron-Anlass (`grace_expired:2026-07-01`) beim Cron-Job.
+   * Derselbe Marker = dieselbe Mail, egal wie oft der Auslöser feuert.
+   */
+  eventMarker: string;
 } & (
   | { event: 'past_due'; tenantName: string }
   | { event: 'cancelled'; tenantName: string; effectiveAt: Date }
@@ -150,7 +155,7 @@ export async function sendSubscriptionEvent(input: SendSubscriptionEventInput): 
     tenantId: input.tenantId,
     template: 'subscription_event',
     recipient: input.recipient,
-    idempotencyKey: emailIdempotencyKey('subscription_event', input.tenantId, input.stripeEventId),
+    idempotencyKey: emailIdempotencyKey('subscription_event', input.tenantId, input.eventMarker),
     data: subscriptionData(input),
   });
 }

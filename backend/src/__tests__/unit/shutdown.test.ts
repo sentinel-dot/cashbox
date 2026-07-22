@@ -27,6 +27,15 @@ describe('createShutdown', () => {
     expect(calls).toEqual(['closeServer', 'flushMonitoring', 'closePools', 'exit:0']);
   });
 
+  it('stoppt die Cron-Jobs vor dem Drain (S07: kein Job startet ins Herunterfahren hinein)', async () => {
+    const { deps, calls } = makeDeps();
+    deps.stopSchedulers = vi.fn(async () => { calls.push('stopSchedulers'); });
+
+    await createShutdown(deps)('SIGTERM');
+
+    expect(calls).toEqual(['stopSchedulers', 'closeServer', 'flushMonitoring', 'closePools', 'exit:0']);
+  });
+
   it('meldet Fehler an das Monitoring, bevor der Prozess endet', async () => {
     // Sonst geht genau der Fehler verloren, der uns beendet hat.
     const { deps, calls } = makeDeps();

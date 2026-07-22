@@ -31,7 +31,7 @@ Neue Tests: UNIQUE-Backstop (Race-Simulation via Direkt-INSERT), Folgetag-Storno
 | A5 | **Reports: `DATE(CONVERT_TZ(created_at))` in WHERE** ist nicht index-fähig (Full Scan pro Tenant) | Datumsgrenzen in UTC vorberechnen und `created_at BETWEEN ? AND ?` filtern | Nach Pilot |
 | A6 | **`audit_insert_user` hat INSERT auf alle Tabellen** statt nur die 5 Audit-Tabellen | Prod: tabellen-scoped Grants (Kommentar in setup-db.ts listet sie) | Vor Go-live |
 | A7 | **`changePrice` ohne Lock/TX**: parallele Preisänderungen können Historie-Reihenfolge ≠ finalem Preis erzeugen | Produkt-Zeile FOR UPDATE + Historie und UPDATE seriell | Nach Pilot |
-| A9 | **closeSession: z_reports-INSERT nach Commit** (anderer DB-User, keine gemeinsame TX möglich) — schlägt er fehl, ist die Session zu ohne Z-Bericht (wird jetzt laut geloggt, Daten rekonstruierbar) | Cron/Monitoring: geschlossene Sessions ohne z_reports-Zeile finden + nachtragen | Vor Go-live |
+| A9 | ~~**closeSession: z_reports-INSERT nach Commit**~~ — **erledigt 2026-07-22 (S07):** stündlicher Job `z-report-backfill` findet geschlossene Sessions ohne `z_reports`-Zeile, rekonstruiert den Bericht aus den unveränderten Buchungsdaten (`composeZReportJson` — dasselbe Format wie closeSession, markiert als `reconstructed`), meldet den Vorfall an Sentry. Backstop gegen Doppelberichte: UNIQUE `z_reports.session_id` (V012). Das Grundproblem (zwei DB-User ⇒ keine gemeinsame TX) bleibt bauartbedingt bestehen — es ist jetzt nur nicht mehr unbemerkt | ✅ |
 | A10 | **Bewusster Trade-off, dokumentieren nicht fixen:** Refresh-Tokens sind stateless — Logout ist rein clientseitig, Session-Kill nur via Geräte-Revoke; 16h-Limit begrenzt den Schaden | — | — |
 | A11 | **TSE-Lifecycle startet aktuell erst beim Bezahlen:** `processTseTransaction()` fährt `ACTIVE → FINISHED` vollständig in `payOrder`/`splitBill`; die Bestellung läuft vorher ohne persistierte TSE-TX. § 2 KassenSichV verlangt den Start unmittelbar mit dem aufzuzeichnenden Vorgang; der AEAO nennt auch Bestellungen/nicht abgeschlossene Vorgänge, und Fiskaly weist für Gastronomie auf langlebige `order`-/`Bestellung-V1`-Transaktionen hin. Das ist wichtiger als die Zahlungsart-Frage: Bar, Karte und gemischt werden bereits korrekt als `CASH`/`NON_CASH` übertragen. | Vor Fiskaly-Live fachlich gegen aktuelle DSFinV-K/Fiskaly-Doku + Steuerberater entscheiden und implementieren: Start bei Bestellbeginn bzw. zulässige Erleichterungsregel, persistente TX-ID/Recovery, Abbruch/Timeout/Offline und Bon-Startzeit. Eigenes Paket S13A + Regressionstests. | Phase 2 |
 
@@ -50,13 +50,13 @@ Reihenfolge = empfohlene Umsetzungsreihenfolge. E-Mail zuerst, weil Cron-Jobs un
 | # | Paket | Inhalt | Aufwand |
 |---|---|---|---|
 | B1 | **E-Mail-Service** | **Code vollständig 2026-07-20 (S05/S06):** `src/services/email/` (Resend via REST, Queue mit Retry + Idempotenz, `email_log`-Nachweis, Ledger-Green-Layout), alle 6 Template-Gruppen und öffentliche Anlassfunktionen. **Extern offen:** Domain kaufen/festlegen, `mail.<domain>` in Resend mit SPF/DKIM/DMARC verifizieren und Echtmail nach `docs/betrieb.md` §4 zustellen | User-Gate |
-| B2 | **Cron-Jobs** (`src/cron.ts`, node-cron, läuft neben index.ts) | Täglich: Trial-Ablauf-Warnung (Tag 10+13), `past_due`-Sperrung nach Grace Period, Sessions >24h offen → Owner-Mail (GoBD), TSE-Ausfall >48h → Meldung + `tse_outages.notified_at`. Stündlich: `failed`-Offline-Queue-Einträge → Alert; **serverseitiger Offline-Queue-Drain** (Nachsignierung darf nicht davon abhängen, dass das iPad wiederkommt); geschlossene Sessions ohne z_report → Alert (A9) | 2 d |
+| B2 | ~~**Cron-Jobs**~~ | **Erledigt 2026-07-22 (S07):** `src/cron.ts` (node-cron, Europe/Berlin, `CRON_ENABLED`, Stopp vor dem Drain) + `src/jobs/` mit 8 Jobs: `email-drain` (alle 5 min — vorher rief `drainEmailQueue` niemand), `long-open-sessions`, `tse-outage-report`, `offline-queue-drain` (serverseitige Nachsignierung über `services/offlineSync.ts`, denselben Pfad nutzt POST /sync/offline-queue), `offline-queue-alerts`, `z-report-backfill` (A9), `trial-warnings`, `subscription-grace`. Jeder Job idempotent über einen DB-Marker, einzeln auslösbar via `npm run job -- <name>`. **Entscheidung:** `subscription-grace` meldet nur (Mail + audit_log + Sentry) und ändert `subscription_status` NICHT — gesperrt wird weiterhin in der `subscriptionMiddleware`, Stripe bleibt Quelle des Abo-Status (Ablösung: S17C-Entitlement-Matrix). Details: `docs/betrieb.md` §5 | ✅ |
 | B3 | **Passwort-Reset** | `POST /auth/forgot-password` + `/reset-password`: Token (einmalig, 1h, gehasht in DB) per Mail, Rate-Limit, kein User-Enumeration-Leak (immer 200) | 1 d |
 | B4 | **`versionMiddleware`** | `X-App-Version`-Header, semver-Vergleich gegen `devices.min_app_version` → 426; iOS zeigt Update-Hinweis | 0,5 d |
 | B5 | **`GET /tenants/me` Subscription-Details** | `trial_expires_at`, `subscription_current_period_end` in Response; iOS EinstellungenView zeigt Trial-Restzeit + Banner ab Tag 10 | 0,5 d |
 | B6 | ~~**Prozess-Härtung**~~ | Erledigt 2026-07-19 (S03): `src/shutdown.ts` (Drain → Sentry-Flush → Pools, idempotent, 10-s-Notbremse), SIGTERM/SIGINT + `unhandledRejection`/`uncaughtException` in `index.ts`, Pino statt console. Nachweis-Protokolle in `docs/betrieb.md` §2. **Achtung bei S20:** PM2 `kill_timeout: 15000` / systemd `TimeoutStopSec=15`, sonst wirkungslos | ✅ |
 | B7 | ~~**`.env.example` vervollständigen**~~ | Erledigt 2026-07-19 (S03): `ALLOWED_ORIGIN`, `LOG_LEVEL`, `SENTRY_DSN` ergänzt | ✅ |
-| B8 | **A3 + A6 + A9** aus dem Audit | s.o. | 1 d |
+| B8 | **A3 + A6** aus dem Audit (A9 erledigt in S07) | s.o. | 1 d |
 | B9 | **Trial-/Entitlement-Härtung** | 14-Tage-Trial existiert, ist aber nicht launch-sicher: Plan-Auswahl im iOS-Onboarding wird nicht gespeichert (Tenant bleibt `starter`), Copy verspricht automatische Umstellung trotz „keine Kreditkarte“, und die pauschale `subscriptionMiddleware` blockiert nach Ablauf auch sichere Abschluss-/Lesewege wie Session-Schluss, Sync, Bons und Export. Entscheidung: kein permanenter Live-Free-Tier; 14 Tage ohne Kreditkarte, Start erst bei bewusster Aktivierung/erster Kassensitzung, danach kein Auto-Charge. Explizite Entitlement-Matrix: keine neue Schicht nach Ablauf, aber offene Schicht sicher beenden, TSE nachsignieren, Bons/DSFinV-K lesen/exportieren und Billing erreichen. | 1,5–2 d |
 
 ---
@@ -96,8 +96,8 @@ Erfolg genullt — DSGVO), `email_log` INSERT-only via `audit_insert_user` (Vers
 
 **Noch offen (externes Gate):** Hauptdomain festlegen/kaufen, `mail.<domain>` in Resend per
 SPF/DKIM/DMARC verifizieren, `MAIL_FROM`/`RESEND_API_KEY` in Prod setzen und eine Echtmail samt
-`email_log`-Nachweis zustellen (`docs/betrieb.md` §4). Drain per Cron kommt in S07 — bisher ruft
-niemand `drainEmailQueue` periodisch auf.
+`email_log`-Nachweis zustellen (`docs/betrieb.md` §4). Der periodische Drain läuft seit S07
+(Job `email-drain`, alle 5 min; manuell: `npm run job -- email-drain`).
 
 **Design:** HTML-Templates im Ledger-Green-Look, Tokens aus `DesignSystem.swift` gespiegelt:
 - Palette: Ledger-Green-Primär, Brass-Akzent, olivgetönte Neutrals (Hex-Werte aus DS.C übernehmen)
@@ -219,7 +219,7 @@ Nikos Insider-Blick (Deutsche Post ITS, POS-Testing) gezielt nutzen — die Punk
 ## 10. Priorisierte Reihenfolge
 
 1. **Jetzt (Pilot läuft an):** Pilot-Feedback-Schleife (A4 + T1–T4 sind erledigt, 2026-07-19)
-2. **Vor Go-live (Reihenfolge):** B1 E-Mail → B2 Cron → B3 Passwort-Reset → B6/B7 Prozess-Härtung → B4/B5 → A3/A6/A9 → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
+2. **Vor Go-live (Reihenfolge):** ~~B1 E-Mail~~ (Code fertig, externes Domain-Gate offen) → ~~B2 Cron~~ → B3 Passwort-Reset → ~~B6/B7~~ → B4/B5 → A3/A6 (~~A9~~) → S1/S6 → N1–N9 parallel (Rechtliches/Fiskaly/ELSTER haben Vorlauf!)
 3. **Phase 2 (TSE scharf):** A1 + A2 + A11 lösen → Fiskaly-Sandbox-E2E → N2/N3
 4. **Nach Pilot:** §6 impeccable-Pass komplett, T5, S2–S4
 5. **Vor öffentlichem Go-live:** B9 (S17C) — UX-S1–S5 erledigt 2026-07-21 (S17A/S17B); Späti-Pfandzeilen bleiben bis zum separaten Pfand-Paket gesperrt
