@@ -5,7 +5,7 @@ aufgeteilt in Pakete, von denen **eines pro Claude-Session** umgesetzt wird. Kei
 kein Gate ignorieren. Was ein Paket *inhaltlich* bedeutet, steht in `OFFEN.md` (bleibt die einzige
 Quelle für offene Punkte); hier stehen Reihenfolge, Session-Prompts und Abnahmekriterien.
 
-**Stand:** 2026-07-21 · Suiten: Backend 139 Unit/Compliance + 354 Integration, iOS 71 XCTests — alle grün.
+**Stand:** 2026-07-22 · Suiten: Backend 162 Unit/Compliance + 375 Integration, iOS 71 XCTests — alle grün.
 Backend-Suiten laufen seit S01 als PR-Gate in GitHub Actions (`docs/ci.md`); `main` ist geschützt.
 
 ---
@@ -188,7 +188,7 @@ Idempotenz-ID bereit. Tests: **+16 Unit** (`unit/emailTemplates`, jetzt 39 in de
 `docs/betrieb.md` §4. **Checkbox bleibt offen**, bis eine noch zu kaufende/festzulegende Domain als
 `mail.<domain>` verifiziert, eine Echtmail zugestellt und die Resend-ID in `email_log` geprüft wurde.
 
-## [ ] S07 — Cron-Jobs (B2, inkl. A9) — ~2 d
+## [x] S07 — Cron-Jobs (B2, inkl. A9) — erledigt 2026-07-22
 **Prompt:**
 > Setze Paket S07 aus ROADMAP.md um (OFFEN.md B2): `backend/src/cron.ts` (node-cron, läuft
 > neben index.ts). Täglich: Trial-Warnung Tag 10+13 (via S05/S06-Templates), past_due-Sperrung
@@ -200,6 +200,29 @@ Idempotenz-ID bereit. Tests: **+16 Unit** (`unit/emailTemplates`, jetzt 39 in de
 > email_log als Dedup-Quelle). Integrationstests mit Zeit-Fixtures.
 
 **DoD:** Jeder Job einzeln per Test ausgelöst; Doppellauf-Test beweist Idempotenz; A9 in OFFEN.md streichen.
+
+**Erledigt 2026-07-22:** `src/cron.ts` (node-cron 4, Zeitzone Europe/Berlin, `CRON_ENABLED`,
+`noOverlap`, Job-Fehler → Sentry statt Prozessende) + `src/jobs/` mit acht Jobs: **email-drain**
+(alle 5 min — vorher rief `drainEmailQueue` niemand, S05-Lücke), **long-open-sessions**,
+**tse-outage-report**, **offline-queue-drain**, **offline-queue-alerts**, **z-report-backfill**
+(A9), **trial-warnings**, **subscription-grace**. Jeder Job hat einen expliziten DB-Marker als
+Idempotenz-Anker (Mail-Idempotenzschlüssel, `tse_outages.notified_at`, `offline_queue.alerted_at`,
+Existenz der `z_reports`-Zeile) — je ein Doppellauf-Test beweist es. Der Nachsignierungs-Pfad
+wanderte aus dem Controller nach `services/offlineSync.ts`; Client-Sync und Cron nutzen jetzt
+denselben Code mit denselben atomaren Claims (`userId = null` beim Server). Trial-/Grace-Fristen
+liegen in `services/subscription.ts`, das auch die `subscriptionMiddleware` liest — Warnung und
+Sperre können nicht mehr auseinanderlaufen. V012: `offline_queue.alerted_at` + UNIQUE
+`z_reports.session_id` (Backstop gegen doppelte Z-Berichte). Shutdown stoppt die Jobs vor dem
+Drain. CLI: `npm run job -- <name>`; Betriebsdoku inkl. Alert-Runbook: `docs/betrieb.md` §5.
+Tests: **+23 Unit** (`unit/subscriptionDates`, `unit/cronRegistry`, `composeZReportJson` in
+`unit/zReportAggregation`, Shutdown-Reihenfolge), **+21 Integration** (`integration/cron-jobs`,
+Zeit-Fixtures über rückdatierte Daten) → **162 + 375** grün. REQ-CRON-001…009 + UC-CRON-01…09.
+**Entscheidung (mit User, 2026-07-22):** `subscription-grace` meldet nur (Mail + audit_log +
+Sentry) und schreibt `subscription_status` nicht um — gesperrt wird weiterhin in der
+`subscriptionMiddleware`, Stripe bleibt alleinige Quelle des Abo-Status; abgelöst von der
+Entitlement-Matrix in S17C. **Abweichung:** „Sitzung > 24 h" und „TSE-Ausfall > 48 h" laufen
+stündlich statt täglich (pro Vorfall trotzdem genau eine Mail) — eine Meldepflicht bis zu 24 h
+liegen zu lassen, wäre nicht vertretbar.
 
 ## [ ] S08 — Passwort-Reset (B3) — ~1 d
 **Prompt:**

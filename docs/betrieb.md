@@ -1,6 +1,7 @@
-# Betrieb — Monitoring, Prozess-Lebenszyklus und E-Mail
+# Betrieb — Monitoring, Prozess-Lebenszyklus, E-Mail und Hintergrund-Jobs
 
-Stand: 2026-07-20 (ROADMAP S03/S06). Betrifft Monitoring, Shutdown und Resend-Betrieb.
+Stand: 2026-07-22 (ROADMAP S03/S06/S07). Betrifft Monitoring, Shutdown, Resend-Betrieb
+und die zeitgesteuerten Jobs (§5).
 
 ---
 
@@ -72,11 +73,15 @@ aus — Node würde sonst hart crashen, ohne Drain und ohne Sentry-Meldung.
 
 ```
 Signal
- └─ 1. HTTP-Server drainen   (closeIdleConnections() + close(); laufende Requests laufen aus)
-    2. Sentry flushen        (sonst geht genau der Fehler verloren, der uns beendet hat)
-    3. DB-Pools schließen    (db, auditDb, readonlyDb — allSettled)
-    4. process.exit(code)
+ └─ 1. Cron-Jobs stoppen     (S07; kein Job startet mehr in das Herunterfahren hinein)
+    2. HTTP-Server drainen   (closeIdleConnections() + close(); laufende Requests laufen aus)
+    3. Sentry flushen        (sonst geht genau der Fehler verloren, der uns beendet hat)
+    4. DB-Pools schließen    (db, auditDb, readonlyDb — allSettled)
+    5. process.exit(code)
 ```
+
+Ein Job, der beim Signal schon läuft, wird nicht abgewartet — alle Jobs sind idempotent
+und laufen nach dem Neustart erneut (siehe §5).
 
 Die Reihenfolge ist die eigentliche Zusage und in `unit/shutdown.test.ts` festgenagelt.
 Ein zweites Signal während des Drains wird ignoriert (Idempotenz) — sonst würden die Pools
@@ -142,8 +147,8 @@ committete Produktions-`.env`:
 | `APP_URL` | Öffentliche Basis-URL für Abo-, Export-, Reset- und Berichtslinks |
 
 API-Key, Reset-Token und reale Empfängeradressen dürfen weder in Git noch in Nachweisprotokolle.
-Der periodische Queue-Drain folgt erst in S07; für die einmalige Abnahme kann er gezielt über
-einen lokalen, nicht committeten Aufruf gestartet werden.
+Der periodische Queue-Drain läuft seit S07 alle 5 Minuten (§5); für die einmalige Abnahme
+lässt er sich mit `npm run job -- email-drain` sofort auslösen.
 
 ### Domain, SPF und DKIM
 
@@ -188,3 +193,76 @@ S06 ist extern erst abgenommen, wenn alle Punkte belegt sind:
 - [ ] Header zeigen `spf=pass`, `dkim=pass` und `dmarc=pass`
 - [ ] Resend-Message-ID stimmt mit `email_log.provider_message_id` überein
 - [ ] Datum und anonymisierte Nachweis-ID hier ergänzt: **offen — Domain noch nicht vorhanden**
+
+---
+
+## 5. Hintergrund-Jobs (Cron)
+
+### Warum im selben Prozess
+
+`src/cron.ts` läuft neben dem API-Server (`startCron()` in `index.ts`), nicht als eigener
+Dienst. Ein zweiter Prozess wäre vor allem eine weitere Sache, die man beim Deploy zu
+starten vergessen kann — und laut S20 fährt PM2 ohnehin eine einzelne Instanz. Für den
+Fall, dass daraus später mehrere werden, ist der Schutz trotzdem eingebaut: jeder Job
+claimt seine Zeilen atomar und dedupliziert über einen Marker in der DB, ein Doppellauf
+erzeugt also keine zweite Mail und keinen zweiten Z-Bericht. `CRON_ENABLED=false` schaltet
+einzelne Instanzen zusätzlich stumm.
+
+Zeitzone aller Zeitpläne: **Europe/Berlin** — „täglich 6 Uhr" heißt Ortszeit des Wirts,
+auch wenn der Server auf UTC läuft.
+
+### Was läuft wann
+
+| Job | Zeitplan | Aufgabe | Idempotenz-Marker |
+|-----|----------|---------|-------------------|
+| `email-drain` | alle 5 min | Fällige Mails versenden, Backoff, `email_log`-Nachweis | `email_queue.status` + `idempotency_key` |
+| `long-open-sessions` | stündlich :10 | Sitzung > 24 h offen → Owner-Mail (GoBD) | Mail-Key `long_open_session:<tenant>:<session>:24h` |
+| `tse-outage-report` | stündlich :15 | TSE-Ausfall > 48 h → Owner-Mail (KassenSichV) | `tse_outages.notified_at` |
+| `offline-queue-drain` | stündlich :20 | Offene Offline-Bons serverseitig nachsignieren | atomarer Claim (`processing_started_at`) |
+| `offline-queue-alerts` | stündlich :25 | Endgültig gescheiterte Einträge melden | `offline_queue.alerted_at` |
+| `z-report-backfill` | stündlich :30 | Fehlende Z-Berichte nachtragen (A9) | Existenz der `z_reports`-Zeile + UNIQUE(session_id) |
+| `trial-warnings` | täglich 06:00 | Trial-Warnung Tag 10 + 13 | Mail-Key `trial_warning:<tenant>:day10\|day13` |
+| `subscription-grace` | täglich 06:15 | Abgelaufene Kulanzfrist melden | Mail-Key `subscription_event:<tenant>:grace_expired:<periodEnd>` |
+
+Die stündlichen Jobs liegen bewusst auf verschiedenen Minuten: alle gleichzeitig hieße,
+dass fünf Jobs mit dem laufenden Kassenbetrieb um dieselben Zeilen konkurrieren.
+
+**Abweichung von der ROADMAP-Planung:** „Sitzung > 24 h" und „TSE-Ausfall > 48 h" waren dort
+als Tagesjobs geplant und laufen stündlich. Beide Mails gehen pro Vorfall genau einmal raus,
+es entsteht also kein Spam — aber eine Meldepflicht bis zu 24 h liegen zu lassen, wäre bei
+einem TSE-Ausfall nicht vertretbar.
+
+### Was der `subscription-grace`-Job bewusst NICHT tut
+
+Er ändert `subscription_status` nicht. Gesperrt wird weiterhin bei jedem Request in der
+`subscriptionMiddleware` (402 nach Ablauf der Kulanzfrist), die dieselben Fristen aus
+`services/subscription.ts` liest. Würde der Cron zusätzlich auf `cancelled` schreiben,
+wäre Stripe nicht mehr die alleinige Quelle des Abo-Status und der Wirt läse „Abonnement
+gekündigt", wo nur eine Zahlung fehlgeschlagen ist. Der Job macht das Ereignis sichtbar:
+Mail, `audit_log`, Sentry. Abgelöst wird das von der Entitlement-Matrix in S17C.
+
+### Einen Job von Hand auslösen
+
+```bash
+npm run job -- --list              # alle Jobs mit Zeitplan und Zweck
+npm run job -- z-report-backfill   # genau diesen Job jetzt laufen lassen
+```
+
+Das ist nach einem Vorfall der normale Weg — auf die nächste volle Stunde zu warten, hilft
+niemandem. Alle Jobs sind idempotent, ein manueller Lauf neben dem Zeitplan ist ungefährlich.
+
+### Wenn ein Alert kommt
+
+- **„Offline-Queue-Eintrag endgültig fehlgeschlagen"** — ein Bon hat keine TSE-Signatur und
+  bekommt sie nicht mehr von allein. `offline_queue.error_message` lesen; typisch sind
+  Fiskaly-4xx (Konfiguration) oder ein Eintrag ohne `receipt_id` (Zahlung nie abgeschlossen).
+  Nach der Ursachenbehebung: Zeile wieder auf `pending` setzen und `offline-queue-drain`
+  von Hand starten.
+- **„Z-Bericht fehlte und wurde nachgetragen"** — der Bericht ist da, aber der `z_reports`-
+  INSERT beim Schließen ist gescheitert (Grants von `audit_insert_user`? DB weg?). Der
+  Snapshot trägt `reconstructed: true` und ist damit auch für einen Prüfer nachvollziehbar.
+  Die Ursache gehört trotzdem angesehen.
+- **„TSE-Ausfall länger als 48 h"** — jetzt ist die Meldung ans Finanzamt über ELSTER fällig
+  (`tse_outages.reported_to_finanzamt` anschließend manuell setzen).
+- **„Kulanzfrist abgelaufen"** — der Zugriff ist gesperrt; der Wirt braucht eine gültige
+  Zahlungsmethode oder ein neues Abo.

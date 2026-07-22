@@ -13,7 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Suiten:** Backend 139 Unit/Compliance + 354 Integration, iOS 71 XCTests — alle grün (2026-07-21)
+**Suiten:** Backend 162 Unit/Compliance + 375 Integration, iOS 71 XCTests — alle grün (2026-07-22)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -60,7 +60,7 @@ Dasselbe gilt für das **Frontend (SwiftUI):** Nach jeder Implementierung (neuer
 - **Erlaubte UPDATEs** (operative Zustandsfelder, keine Buchungsdaten):
   - `orders.status` (`open` → `paid` / `cancelled`) und `orders.closed_at`
   - `cash_register_sessions.status`, `.closed_at`, `.closing_cash_cents`, `.expected_cash_cents`, `.difference_cents`
-  - `offline_queue.status`, `.retry_count`, `.error_message`, `.synced_at`, `.payload_json`, `.processing_started_at`
+  - `offline_queue.status`, `.retry_count`, `.error_message`, `.synced_at`, `.payload_json`, `.processing_started_at`, `.alerted_at`
   - `tse_outages.ended_at`, `.notified_at`, `.reported_to_finanzamt`
   - `email_queue.status`, `.attempts`, `.next_attempt_at`, `.last_error`, `.processing_started_at`,
     `.sent_at` sowie das Nullen von `.subject`/`.body_html`/`.body_text` nach Erfolg (DSGVO).
@@ -195,6 +195,7 @@ npm test                     # unit + compliance (< 30s)
 npm run test:integration     # echte MariaDB Test-DB (< 2min)
 npm run test:external        # Fiskaly Sandbox + Stripe (nightly)
 npm run test:coverage        # Coverage-Report
+npm run job -- --list        # Cron-Jobs auflisten / einzeln auslösen (S07)
 ```
 
 **CI (PR-Gate):** `.github/workflows/ci.yml` fährt bei jedem PR/Push auf `main` zwei Jobs — `backend`
@@ -231,6 +232,7 @@ Das Xcode-Scheme muss **shared** bleiben (`xcshareddata/xcschemes/`) — `xcuser
 | Berichte | GET /reports/daily, GET /reports/summary (Plan-Limit: 30/365/3650 Tage) | ✅ |
 | DSFinV-K Export | GET /export/dsfinvk, /:exportId/status, /:exportId/file | ✅ |
 | E-Mail (Resend) | **kein Endpoint** — Service `services/email/` (enqueue + drain), 6 von 6 Template-Gruppen inkl. 3 Subscription-Varianten | ✅ |
+| Hintergrund-Jobs | **kein Endpoint** — `src/cron.ts` (node-cron, Europe/Berlin, `CRON_ENABLED`) + `src/jobs/` mit 8 Jobs: email-drain, long-open-sessions, tse-outage-report, offline-queue-drain, offline-queue-alerts, z-report-backfill (A9), trial-warnings, subscription-grace. Jeder idempotent über einen DB-Marker, einzeln auslösbar (`npm run job -- <name>`). Zeitpläne + Alert-Runbook: `docs/betrieb.md` §5 | ✅ |
 
 ### Noch nicht implementiert ❌
 | Bereich | Endpoints | Phase |
@@ -336,7 +338,15 @@ src/
 ├── app.ts
 ├── index.ts           -- Start, Signal-Handler, Prozess-Ende (sentry.js zuerst importieren!)
 ├── sentry.ts          -- Error-Monitoring (No-Op ohne SENTRY_DSN)
-├── shutdown.ts        -- createShutdown(): Drain → Flush → Pools (pure, DI-testbar)
+├── shutdown.ts        -- createShutdown(): Cron-Stopp → Drain → Flush → Pools (pure, DI-testbar)
+├── cron.ts            -- startCron/stopCron/runJob (node-cron, Europe/Berlin, CRON_ENABLED)
+├── jobs/               -- ein Modul je Hintergrund-Job + Registry (index.ts):
+│                          trialWarnings, subscriptionGrace, longOpenSessions,
+│                          tseOutageReport, offlineQueueDrain, offlineQueueAlerts,
+│                          zReportBackfill, email-drain (in index.ts) — shared.ts hält
+│                          JobDefinition + ownerRecipient. Jeder Job: run() → Zahlen,
+│                          idempotent über einen DB-Marker, ohne Express/Scheduler.
+├── scripts/            -- sentry-test.ts, run-job.ts (npm run job -- <name>)
 ├── routes/             -- auth, devices, export, modifierGroups, onboarding, orders,
 │                          products, receipts, reports, sessions, sync, tables,
 │                          tenants, users, webhooks
@@ -371,11 +381,17 @@ src/
 │   │                                   + drainEmailQueue (Claim, Backoff, email_log)
 │   │                      send.ts    = Resend-Call, Dry-Run ohne RESEND_API_KEY
 │   │                      templates.ts / layout.ts / palette.ts / format.ts
-│   │                      HINWEIS: drainEmailQueue ruft bisher NIEMAND periodisch auf —
-│   │                               der Cron-Drain kommt in S07.
+│   │                      HINWEIS: drainEmailQueue läuft seit S07 als Cron-Job
+│   │                               `email-drain` (alle 5 min).
 │   ├── fiskaly.ts      -- TSE-Operationen + Offline-Fallback (enqueueOffline);
 │   │                      10s-Timeout je Request; befüllt tse_outages
 │   │                      (Offline-Fallback öffnet, Erfolg schließt Eintrag)
+│   ├── offlineSync.ts  -- syncOfflineQueueForTenant: DER Nachsignierungs-Pfad (S07) —
+│   │                      genutzt von POST /sync/offline-queue UND vom Cron-Drain
+│   │                      (userId null = Server); atomarer Claim erlaubt Parallellauf
+│   ├── subscription.ts -- Trial-/Grace-Fristen an einer Stelle (TRIAL_DAYS,
+│   │                      GRACE_PERIOD_DAYS, trialWarningMarker) — Middleware und
+│   │                      Cron müssen dieselben Grenzen benutzen (S17C baut hier um)
 │   ├── priceHistory.ts -- product_price_history INSERT
 │   ├── products.ts     -- createProductWithHistory: DER Produktanlage-Pfad (S17B) —
 │   │                      inaktiv → Historie (auditDb) → Verify → aktivieren;
@@ -396,7 +412,10 @@ src/
 │   │                        email_log INSERT-only = Versandnachweis),
 │   │                      V010__products_sort_order (persistente Kassen-Reihenfolge),
 │   │                      V011__visual_key_preset_origin (visual_key, origin_* +
-│   │                        UNIQUE je Tenant, preset_imports = Idempotenz-Anker)
+│   │                        UNIQUE je Tenant, preset_imports = Idempotenz-Anker),
+│   │                      V012__offline_queue_alerted_at (Alert-Dedup für den
+│   │                        Cron + UNIQUE z_reports.session_id = ein Z-Bericht
+│   │                        pro Sitzung, Backstop für den Nachtrag)
 │   ├── migrate.ts
 │   └── index.ts
 └── __tests__/
@@ -411,8 +430,13 @@ src/
     │                      Registry-Vollständigkeit, backoffMinutes),
     │                      sentryConfig (Testlauf meldet nichts — T10-Regression),
     │                      presetData (V1-Counts, Eindeutigkeit, MwSt.-Leitplanken,
-    │                      Pfand exakt 11 — S17B)
+    │                      Pfand exakt 11 — S17B),
+    │                      subscriptionDates (Trial-/Grace-Schwellen, trialWarningMarker),
+    │                      cronRegistry (Zeitpläne valide + entzerrt, start/stopCron,
+    │                      geworfener Job reißt den Prozess nicht mit — S07)
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
+    │                      cron-jobs (alle 8 Jobs einzeln + Doppellauf-Idempotenz,
+    │                      Zeit-Fixtures durch rückdatierte Daten — S07),
     │                      devices, e2e-tagesablauf (kompletter Kassentag),
     │                      email-queue (Enqueue/Idempotenz, Drain, email_log-Nachweis,
     │                      Retry + failed, Stuck-Claim, Tenant-Isolation),
