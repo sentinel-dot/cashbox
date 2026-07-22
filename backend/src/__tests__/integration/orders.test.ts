@@ -1,11 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import app from '../../app.js';
 import { db } from '../../db/index.js';
+import * as orderItemModifiers from '../../services/orderItemModifiers.js';
 import type { AuthPayload } from '../../middleware/authMiddleware.js';
+
+// spy: true — echte Implementierung bleibt aktiv, einzelne Aufrufe können für
+// den A3-Kompensationspfad gezielt scheitern gelassen werden
+vi.mock('../../services/orderItemModifiers.js', { spy: true });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -257,9 +262,14 @@ describe('GET /orders/:id', () => {
 // ─── POST /orders/:id/items ───────────────────────────────────────────────────
 
 describe('POST /orders/:id/items', () => {
-  let token: string; let tenantId: number; let productId: number;
+  let token: string; let tenantId: number; let productId: number; let userId: number;
 
-  beforeEach(async () => { ({ token, tenantId, productId } = await setup(db)); });
+  beforeEach(async () => {
+    // mockReset stellt beim Spy die echte Implementierung wieder her und wirft
+    // eine evtl. nicht verbrauchte …Once-Injektion weg
+    vi.mocked(orderItemModifiers.writeOrderItemModifiers).mockReset();
+    ({ token, tenantId, productId, userId } = await setup(db));
+  });
   afterEach(() => { /* cleanup in setup.ts */ });
 
   it('fügt Item hinzu — Snapshot und Berechnung korrekt', async () => {
@@ -296,6 +306,89 @@ describe('POST /orders/:id/items', () => {
     expect(res.status).toBe(201);
     // (1500 + 200) × 2 = 3400
     expect(res.body.subtotal_cents).toBe(3400);
+  });
+
+  // A3: Die Modifier-Zeilen laufen über den INSERT-only-Audit-User und damit
+  // zwingend nach dem Commit der Position. Scheitern sie, darf keine Position
+  // ohne ihre Modifier stehen bleiben — sonst erzeugt der Client-Retry eine
+  // zweite Position, und der Bon der ersten wäre nicht nachvollziehbar.
+  it('A3: Modifier-INSERT scheitert → 500, Position kompensiert (kein DELETE), Retry ohne Duplikat', async () => {
+    const orderId = await createOrderHelper(token);
+
+    const [g] = await db.execute(
+      `INSERT INTO product_modifier_groups (tenant_id, product_id, name, is_required, min_selections, max_selections)
+       VALUES (?, ?, 'Tabak', FALSE, 0, 1)`,
+      [tenantId, productId]
+    ) as any;
+    const [o] = await db.execute(
+      `INSERT INTO product_modifier_options (modifier_group_id, tenant_id, name, price_delta_cents)
+       VALUES (?, ?, 'Al Fakher', 200)`,
+      [g.insertId, tenantId]
+    ) as any;
+
+    vi.mocked(orderItemModifiers.writeOrderItemModifiers).mockImplementationOnce(async () => {
+      throw new Error('auditDb down');
+    });
+
+    const failed = await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 2, modifier_option_ids: [o.insertId] });
+
+    expect(failed.status).toBe(500);
+
+    // GoBD: Die Zeile bleibt bestehen (kein DELETE) …
+    const [rows] = await db.execute<any[]>(
+      'SELECT id FROM order_items WHERE order_id = ?', [orderId]
+    );
+    expect(rows.length).toBe(1);
+    const failedItemId = rows[0].id as number;
+
+    // … ist aber als entfernt dokumentiert, inkl. Grund
+    const [removals] = await db.execute<any[]>(
+      'SELECT removed_by_user_id, reason FROM order_item_removals WHERE order_item_id = ?',
+      [failedItemId]
+    );
+    expect(removals.length).toBe(1);
+    expect(removals[0].removed_by_user_id).toBe(userId);
+    expect(removals[0].reason).toMatch(/Modifier/);
+
+    // Die Bestellung sieht die kompensierte Position nicht mehr
+    const afterFail = await request(app)
+      .get(`/orders/${orderId}`).set('Authorization', `Bearer ${token}`);
+    expect(afterFail.status).toBe(200);
+    expect(afterFail.body.items).toHaveLength(0);
+    expect(afterFail.body.total_cents).toBe(0);
+
+    // Retry funktioniert und erzeugt genau eine sichtbare Position
+    const retry = await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 2, modifier_option_ids: [o.insertId] });
+    expect(retry.status).toBe(201);
+    expect(retry.body.subtotal_cents).toBe(3400);
+
+    const afterRetry = await request(app)
+      .get(`/orders/${orderId}`).set('Authorization', `Bearer ${token}`);
+    expect(afterRetry.body.items).toHaveLength(1);
+    expect(afterRetry.body.items[0].modifiers).toHaveLength(1);
+    expect(afterRetry.body.total_cents).toBe(3400);
+  });
+
+  it('A3: Position ohne Modifier läuft nicht durch den Kompensationspfad', async () => {
+    const orderId = await createOrderHelper(token);
+
+    const res = await request(app)
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ product_id: productId, quantity: 1 });
+
+    expect(res.status).toBe(201);
+    expect(orderItemModifiers.writeOrderItemModifiers).not.toHaveBeenCalled();
+    const [removals] = await db.execute<any[]>(
+      'SELECT id FROM order_item_removals WHERE order_item_id = ?', [res.body.id]
+    );
+    expect(removals.length).toBe(0);
   });
 
   it('fügt Item mit Rabatt hinzu', async () => {

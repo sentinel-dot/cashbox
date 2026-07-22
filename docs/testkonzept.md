@@ -36,6 +36,8 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | REQ-GOBD-009 | Item-Entfernung = INSERT in `order_item_removals` (wer/wann/warum), Original-Zeile bleibt | CLAUDE.md |
 | REQ-GOBD-010 | Bon-Pflichtfelder (KassenSichV § 6, § 14 UStG): device_id/device_name-Snapshot, Tenant-Snapshot, MwSt-Aufschlüsselung, TSE-Felder bzw. tse_pending | receipts-Service |
 | REQ-GOBD-011 | Z-Bericht wird beim Schließen unveränderlich in `z_reports` persistiert; expected_cash = opening + bar-Zahlungen ± Movements; Storno-Bons netten | sessionsController |
+| REQ-GOBD-012 | `audit_insert_user` hat INSERT **nur** auf den sechs append-only-Tabellen (audit_log, z_reports, product_price_history, order_item_modifiers, order_item_removals, email_log) — kein datenbankweites INSERT, keine anderen Rechte | OFFEN.md A6 (S09) |
+| REQ-GOBD-013 | Scheitert der `order_item_modifiers`-INSERT nach dem Commit der Position, wird die Position unter dem Order-Lock über `order_item_removals` kompensiert (kein DELETE) und 500 geantwortet — Retry erzeugt kein Duplikat; ist die Order nicht mehr offen, wird nicht entfernt, sondern gemeldet | OFFEN.md A3 (S09) |
 
 ### Tenant-Isolation (REQ-TENANT)
 
@@ -160,7 +162,7 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | ID | Use Case | Berührte REQs |
 |----|----------|---------------|
 | UC-01 | Schicht öffnen (Eröffnungsbestand zählen) | GOBD-006, GOBD-011 |
-| UC-02 | Bestellung aufnehmen (Tisch, Items, Modifier, Rabatt) | GELD-001/002, GOBD-009, TENANT-* |
+| UC-02 | Bestellung aufnehmen (Tisch, Items, Modifier, Rabatt) | GELD-001/002, GOBD-009/013, TENANT-* |
 | UC-03 | Bar bezahlen (mit Rückgeld) | GELD-003/005, GOBD-002/003/010 |
 | UC-04 | Karte bezahlen (ehrlicher 2-Schritt, Phase 1 ohne Terminal) | GELD-003/005, GOBD-* |
 | UC-05 | Gemischt bezahlen (bar + Karte) | GELD-005, UX-003 |
@@ -171,7 +173,8 @@ Quellen der Anforderungen: `CLAUDE.md` (Kritische Regeln), `implementierungsplan
 | UC-10 | WLAN-Aussetzer beim Bezahlen → Retry | UX-001, GOBD-006 |
 | UC-11 | Doppel-Tap / paralleler Zugriff (2 Requests gleichzeitig) | GOBD-002/006/007 |
 | UC-12 | Folgetag-Storno (Storno in Session B für Bon aus Session A) | GOBD-004/011 |
-| UC-13 | Betriebsprüfung: DSFinV-K-Export | GOBD-001…011 |
+| UC-13 | Betriebsprüfung: DSFinV-K-Export | GOBD-001…012 |
+| UC-18 | Der Audit-DB-Account fällt aus (Grant weg, Pool tot) mitten in einer Bestellung | GOBD-012/013 |
 | UC-14 | Preis ändern (GoBD-Historie) | GOBD-008 |
 | UC-15 | Offline-Betrieb / TSE-Nachsignierung | TSE-001/005 |
 | UC-OPS-01 | Deploy/Neustart während des Betriebs (SIGTERM, laufende Zahlung) | OPS-001/003 |
@@ -214,7 +217,7 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | GELD-004 | UC-06 | **TC-U unit/splitPartition.test.ts**; TC-I split-bill.test.ts |
 | GELD-005 | UC-03/05 | TC-I payments.test.ts (422 bei Summenabweichung), mixed-payments.test.ts |
 | GELD-006 | UC-03 | **TC-IOS VatBreakdownTests** (Paritätsfälle aus vatCalculation.test.ts) |
-| GOBD-001 | UC-13 | DB-Grants: scripts/setup-db.ts (Prod-Absicherung, A6 offen); Storno-statt-DELETE: cancellations.test.ts |
+| GOBD-001 | UC-13 | DB-Grants: scripts/setup-db.ts + **TC-I db-grants.test.ts**; Storno-statt-DELETE: cancellations.test.ts |
 | GOBD-002 | UC-03/06 | **TC-U unit/sequences.test.ts**; **TC-E2E e2e-tagesablauf** (Lückenlosigkeit 1…N); **TC-C concurrency** |
 | GOBD-003 | UC-03 | TC-I payments.test.ts (voided bei TX-Fehler) |
 | GOBD-004 | UC-07/12 | **TC-U unit/cancellationNegation.test.ts**; TC-I cancellations.test.ts (inkl. Folgetag-Storno); **TC-E2E** |
@@ -225,6 +228,8 @@ Bestandsdateien: `backend/src/__tests__/integration/*` (20 Dateien), `compliance
 | GOBD-009 | UC-02 | TC-I orders.test.ts (removeItem → order_item_removals) |
 | GOBD-010 | UC-03/13 | compliance/receipt-fields.test.ts |
 | GOBD-011 | UC-08/09/12 | **TC-U unit/zReportAggregation.test.ts**; TC-I sessions.test.ts; **TC-E2E** (expected_cash, Differenz 0) |
+| GOBD-012 | UC-13/18 | **TC-I db-grants.test.ts** (SHOW GRANTS: keine `.*`-INSERT-Zeile, exakt sechs Tabellen, außer INSERT/USAGE keine Rechte; funktional: `auditDb`-INSERT in `orders` → `ER_TABLEACCESS_DENIED_ERROR`) |
+| GOBD-013 | UC-02/18 | **TC-I orders.test.ts** (injizierter Modifier-INSERT-Fehler → 500, `order_items`-Zeile bleibt, `order_item_removals` dokumentiert sie, GET zeigt 0 Positionen, Retry ergibt genau eine Position mit Modifier; Position ohne Modifier läuft nicht durch den Pfad) |
 | TENANT-001…003 | alle | je ein Tenant-Isolation-`it()` in allen 20 Integrationsdateien (Konvention: Pflicht bei jeder neuen Route) |
 | TSE-001 | UC-15 | TC-I offline-queue.test.ts |
 | TSE-002/003/004 | UC-15 | **TC-U unit/fiskalyPayload.test.ts**; external/fiskaly.test.ts (Sandbox, nightly) |

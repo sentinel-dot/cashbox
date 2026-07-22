@@ -13,7 +13,7 @@ Pilotkunde: Shishabar (Freund, kostenlos gegen Feedback + Referenz).
 ## Aktueller Stand
 
 **Phase:** Phase 1 + Phase 2 Frontend vollständig ✅ — Pilot-Testing bereit
-**Suiten:** Backend 188 Unit/Compliance + 406 Integration, iOS 71 XCTests — alle grün (2026-07-22)
+**Suiten:** Backend 188 Unit/Compliance + 411 Integration, iOS 71 XCTests — alle grün (2026-07-22)
 **Alle offenen Punkte + Priorisierung:** `OFFEN.md` (einzige Quelle — Backend, Frontend, Tests, Infra, Recht)
 **Abarbeitungsreihenfolge bis Go-live:** `ROADMAP.md` — ein Paket pro Session, jedes Paket hat dort einen fertigen Session-Prompt + Definition of Done. Beim Start einer Session mit Paket-Auftrag („Setze Paket Sxx um") zuerst ROADMAP.md lesen.
 
@@ -71,6 +71,7 @@ Dasselbe gilt für das **Frontend (SwiftUI):** Nach jeder Implementierung (neuer
   **Storno-Bon trägt negierte Beträge** (`vat_*`, `total_gross_cents`) **+ negative `payments`-Zeilen** je Original-Zahlungsmittel — so netten alle `SUM()`-Aggregationen (Berichte, Z-Bericht, Kassenbestand) automatisch aus. Items im `raw_receipt_json` bleiben der positive Original-Snapshot.
 - Preisänderung **nur** über `POST /products/:id/price`: schreibt zuerst den GoBD-Pflicht-Eintrag in `product_price_history` (INSERT-only via auditDb), danach `UPDATE products SET price_cents` (operativer Preis — addItem/listProducts lesen diese Spalte). Direktes `price_cents` via `PATCH /products/:id` bleibt verboten (Route-Guard).
 - **Order-Item entfernen** = `INSERT INTO order_item_removals` (wer, wann, warum) — `order_items`-Zeile bleibt erhalten; Queries filtern via `NOT EXISTS (SELECT 1 FROM order_item_removals r WHERE r.order_item_id = oi.id)`
+- **Nach-dem-Commit-Schreibvorgänge über `auditDb` brauchen einen Kompensationspfad** (zwei DB-User ⇒ keine gemeinsame TX). Vorbilder: `addItem` markiert die Position bei fehlgeschlagenem `order_item_modifiers`-INSERT unter dem Order-Lock als entfernt und gibt 500 (A3/S09); `closeSession` wird vom `z-report-backfill`-Job aufgefangen (A9/S07). Nie einfach 500 werfen und den Halbzustand stehen lassen
 - Bon-Nummer vergeben → TX schlägt fehl → Receipt mit `status='voided'` anlegen, niemals skippen
 - **Session-Lock-Invariante (Audit #2):** `payOrder`, `splitBill` und `cancelReceipt` sperren in ihrer TX die `cash_register_sessions`-Zeile (`FOR UPDATE`) und geben 409, wenn sie nicht mehr `open` ist; `closeSession` läuft komplett in einer TX unter demselben Lock (Aggregation + Schließen). So kann kein Bon in eine geschlossene Session buchen und im unveränderlichen Z-Bericht fehlen. **Jeder neue Buchungspfad muss dieses Lock übernehmen.** Lock-Reihenfolge: Order/Receipt → Session → receipt_sequences (Deadlock-Vermeidung)
 - **Doppel-Storno:** `cancellations.original_receipt_id` ist UNIQUE (V008) — Controller prüft zusätzlich unter FOR-UPDATE-Lock auf dem Original-Bon
@@ -134,7 +135,12 @@ rateLimitMiddleware
 app_user          SELECT, INSERT, UPDATE, CREATE, ALTER, INDEX (inkl. Migrations) —
                   KEIN pauschales DELETE (Audit #2): DELETE nur tabellen-scoped auf
                   Nicht-Finanztabellen (Seed-Rollback); in der Test-DB pauschal (testHelpers)
-audit_insert_user NUR INSERT auf: audit_log, z_reports, product_price_history, order_item_modifiers, order_item_removals
+audit_insert_user NUR INSERT, und zwar tabellen-scoped auf genau diese sechs (S09):
+                  audit_log, z_reports, product_price_history, order_item_modifiers,
+                  order_item_removals, email_log — Liste = AUDIT_INSERT_TABLES in
+                  scripts/setup-db.ts. Neue Audit-Tabelle ⇒ dort eintragen, in
+                  integration/db-grants.test.ts nachziehen und den Prod-Grant per DBA
+                  vergeben (docs/betrieb.md §7), sonst 500 erst zur Laufzeit
 app_readonly      SELECT only (für Reports, Admin-Panel)
 ```
 
@@ -400,6 +406,9 @@ src/
 │   ├── passwordReset.ts -- S08: Token ausstellen/einlösen (SHA-256, 1 h, einmalig,
 │   │                      FOR UPDATE gegen Doppel-Submit) + pure Helfer
 │   ├── priceHistory.ts -- product_price_history INSERT
+│   ├── orderItemModifiers.ts -- order_item_modifiers INSERT (S09) — eigene
+│   │                      Funktion, damit addItem den Fehlerpfad testen kann
+│   │                      (Kompensation via order_item_removals)
 │   ├── products.ts     -- createProductWithHistory: DER Produktanlage-Pfad (S17B) —
 │   │                      inaktiv → Historie (auditDb) → Verify → aktivieren;
 │   │                      Origin-Retry repariert, reaktiviert nie Betreiber-Deaktiviertes
@@ -448,12 +457,16 @@ src/
     ├── integration/    -- auth, cancellations, concurrency (Promise.all-Races),
     │                      cron-jobs (alle 8 Jobs einzeln + Doppellauf-Idempotenz,
     │                      Zeit-Fixtures durch rückdatierte Daten — S07),
+    │                      db-grants (audit_insert_user: SHOW GRANTS nur die sechs
+    │                      Audit-Tabellen, INSERT in orders scheitert — A6/S09),
     │                      devices, e2e-tagesablauf (kompletter Kassentag),
     │                      email-queue (Enqueue/Idempotenz, Drain, email_log-Nachweis,
     │                      Retry + failed, Stuck-Claim, Tenant-Isolation),
     │                      errorHandler (5xx→Sentry, 4xx nicht, kein Leak in Prod),
     │                      export, mixed-payments, modifierGroups, offline-queue,
-    │                      onboarding, orders, password-reset (Enumerations-Schutz,
+    │                      onboarding, orders (inkl. A3-Kompensation: injizierter
+    │                      Modifier-INSERT-Fehler → 500 + order_item_removals,
+    │                      Retry ohne Duplikat — S09), password-reset (Enumerations-Schutz,
     │                      Einmal-/Ablauf-Regeln, Doppel-Submit-Race, Sitzungs-
     │                      entwertung — Token wird aus dem Mailtext gelesen, S08),
     │                      payments, presets (Import-Idempotenz,

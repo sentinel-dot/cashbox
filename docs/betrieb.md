@@ -1,7 +1,8 @@
 # Betrieb — Monitoring, Prozess-Lebenszyklus, E-Mail und Hintergrund-Jobs
 
-Stand: 2026-07-22 (ROADMAP S03/S06/S07). Betrifft Monitoring, Shutdown, Resend-Betrieb
-und die zeitgesteuerten Jobs (§5).
+Stand: 2026-07-22 (ROADMAP S03/S06/S07/S08/S09). Betrifft Monitoring, Shutdown,
+Resend-Betrieb, die zeitgesteuerten Jobs (§5), den Passwort-Reset (§6) und die
+DB-Berechtigungen in Produktion (§7).
 
 ---
 
@@ -320,3 +321,79 @@ zeigt, ob überhaupt ein Token ausgestellt wurde. Kein Eintrag ⇒ die Anfrage k
 nie an oder die Adresse/das Gerät passte nicht. Eintrag vorhanden, aber
 `used_at` gesetzt ⇒ der Link wurde schon benutzt (oder durch einen neueren
 entwertet) — neu anfordern lassen.
+
+---
+
+## 7. DB-Berechtigungen in Produktion (S09 / Audit A6)
+
+### Warum drei User
+
+`app_user` schreibt den Alltagsbetrieb, `audit_insert_user` ausschließlich die
+append-only-Tabellen, `app_readonly` liest für Berichte. Der Sinn des zweiten
+Users ist, dass er **nichts anderes kann**: GoBD-Zeilen sollen sich nicht
+überschreiben lassen, und zwar erzwungen von der Datenbank, nicht nur vom Code.
+Ein pauschales `GRANT INSERT ON cashbox.*` hätte diesen Schutz aufgehoben —
+damit hätte derselbe Account auch `orders`, `payments` oder `users` befüllen
+können.
+
+### Soll-Zustand
+
+`scripts/setup-db.ts` setzt ihn für Dev und Test automatisch (Liste
+`AUDIT_INSERT_TABLES`). In Produktion läuft das Script **nicht** — dort legt der
+DBA die User an, mit exakt diesen Grants:
+
+```sql
+-- append-only: nur INSERT, nur diese sechs Tabellen
+GRANT INSERT ON cashbox.audit_log             TO 'audit_insert_user'@'<host>';
+GRANT INSERT ON cashbox.z_reports             TO 'audit_insert_user'@'<host>';
+GRANT INSERT ON cashbox.product_price_history TO 'audit_insert_user'@'<host>';
+GRANT INSERT ON cashbox.order_item_modifiers  TO 'audit_insert_user'@'<host>';
+GRANT INSERT ON cashbox.order_item_removals   TO 'audit_insert_user'@'<host>';
+GRANT INSERT ON cashbox.email_log             TO 'audit_insert_user'@'<host>';
+
+-- Bestands-DB: ein früher vergebenes datenbankweites INSERT muss weg.
+-- Grants sind additiv — ohne REVOKE bleibt es neben den Tabellen-Grants stehen.
+REVOKE INSERT ON cashbox.* FROM 'audit_insert_user'@'<host>';
+
+FLUSH PRIVILEGES;
+```
+
+Prüfen:
+
+```sql
+SHOW GRANTS FOR 'audit_insert_user'@'<host>';
+```
+
+Erwartet: `USAGE ON *.*` plus genau sechs `INSERT ON cashbox.<tabelle>`-Zeilen.
+Taucht dort `INSERT ON cashbox.*` auf, ist der REVOKE nicht gelaufen.
+
+### Wenn eine neue Audit-Tabelle dazukommt
+
+Drei Stellen, sonst scheitert der INSERT erst zur Laufzeit in Produktion:
+
+1. `AUDIT_INSERT_TABLES` in `scripts/setup-db.ts`
+2. die Liste in `src/__tests__/integration/db-grants.test.ts` (bewusst eine
+   zweite, unabhängige Aufschreibung — sie muss angefasst werden, wenn jemand
+   die Grants aufweicht)
+3. dieser Abschnitt + „DB-Berechtigungen" in `CLAUDE.md`, und der DBA vergibt
+   den Grant auf der Prod-DB nach.
+
+### Symptom bei fehlendem Grant
+
+`ER_TABLEACCESS_DENIED_ERROR` aus einem `auditDb.execute` — im Log als 500 mit
+Sentry-Event. Betroffen sind je nach Tabelle: Audit-Log (jede schreibende
+Aktion), Z-Bericht beim Schichtende (Backfill-Job springt ein, §5),
+Preishistorie und Preset-Import, Modifier beim Bestellen (Position wird
+kompensiert, siehe unten) sowie der Versandnachweis der Mail-Queue.
+
+### Modifier-Kompensation in `addItem` (A3)
+
+`order_item_modifiers` schreibt der Audit-User **nach** dem Commit der Position
+— zwei DB-User können keine gemeinsame Transaktion haben. Scheitert der INSERT,
+markiert der Controller die Position unter dem Order-Lock über
+`order_item_removals` als entfernt (GoBD: kein DELETE) und antwortet 500. Für
+den Betrieb heißt das: die Kasse zeigt „bitte erneut hinzufügen", der Retry
+erzeugt **kein** Duplikat, und in der DB steht eine Position mit dem Grund
+`Systemfehler: Modifier konnten nicht gespeichert werden`. Häufen sich diese
+Einträge, ist die Ursache fast immer der Audit-Grant oder der DB-Pool — nicht
+das Kassenpersonal.

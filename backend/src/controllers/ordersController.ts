@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { db, auditDb } from '../db/index.js';
+import { db } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
+import { writeOrderItemModifiers } from '../services/orderItemModifiers.js';
+import { logger } from '../logger.js';
+import { captureException } from '../sentry.js';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -330,13 +333,34 @@ export async function addItem(req: Request, res: Response): Promise<void> {
     conn.release();
   }
 
-  // order_item_modifiers via auditDb (INSERT-only per DB-User)
-  for (const opt of optRows) {
-    await auditDb.execute(
-      `INSERT INTO order_item_modifiers (order_item_id, modifier_option_id, option_name, price_delta_cents)
-       VALUES (?, ?, ?, ?)`,
-      [itemId, opt.id, opt.name, opt.price_delta_cents]
-    );
+  // order_item_modifiers via auditDb (INSERT-only per DB-User) — läuft nach dem
+  // Commit, weil der Audit-User eine eigene Verbindung hat und nicht Teil der TX
+  // sein kann. Schlägt das fehl, steht die Position ohne ihre Modifier-Zeilen in
+  // der DB: der Betrag stimmt, aber der Bon wäre nicht nachvollziehbar (A3).
+  // Deshalb kompensieren statt nur 500 zu werfen — die Position wird GoBD-konform
+  // als entfernt markiert (kein DELETE), der Client darf gefahrlos erneut senden.
+  if (optRows.length > 0) {
+    try {
+      await writeOrderItemModifiers(
+        itemId,
+        optRows.map((o: any) => ({
+          modifierOptionId: o.id,
+          optionName:       o.name,
+          priceDeltaCents:  o.price_delta_cents,
+        }))
+      );
+    } catch (err) {
+      await compensateFailedItem({
+        itemId, orderId, tenantId, userId,
+        deviceId: req.auth!.deviceId,
+        ipAddress: req.ip,
+        cause: err,
+      });
+      res.status(500).json({
+        error: 'Position konnte nicht vollständig gespeichert werden — bitte erneut hinzufügen.',
+      });
+      return;
+    }
   }
 
   await writeAuditLog({
@@ -347,6 +371,87 @@ export async function addItem(req: Request, res: Response): Promise<void> {
   });
 
   res.status(201).json({ id: itemId, product_id, product_name: product.name, subtotal_cents, quantity });
+}
+
+/** A3-Kompensation für `addItem`: Die Position ist committed, ihre
+ *  `order_item_modifiers`-Zeilen fehlen. GoBD erlaubt kein DELETE — die Position
+ *  wird deshalb wie beim regulären Entfernen über `order_item_removals`
+ *  ausgeblendet (INSERT-only, `NOT EXISTS`-Filter in allen Queries). Damit ist der
+ *  Client-Retry gefahrlos: er erzeugt keine doppelte Position mehr.
+ *
+ *  Läuft unter dem Order-Lock. Ist die Bestellung inzwischen nicht mehr offen,
+ *  steckt die Position schon in einem unveränderlichen Bon — dann wird nichts
+ *  entfernt, der Vorfall geht nur laut nach Sentry (manuelle Klärung).
+ *
+ *  Wirft nie: der Aufrufer antwortet ohnehin 500. */
+async function compensateFailedItem(ctx: {
+  itemId:    number;
+  orderId:   number;
+  tenantId:  number;
+  userId:    number;
+  deviceId:  number;
+  ipAddress: string | undefined;
+  cause:     unknown;
+}): Promise<void> {
+  const asError = (e: unknown) => (e instanceof Error ? e : new Error(String(e)));
+
+  logger.error(
+    { err: ctx.cause, orderId: ctx.orderId, itemId: ctx.itemId, tenant: ctx.tenantId },
+    'order_item_modifiers-INSERT fehlgeschlagen — Position wird kompensiert'
+  );
+  captureException(asError(ctx.cause), { tenant: ctx.tenantId, source: 'orders:add-item-modifiers' });
+
+  let removed = false;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [lockedOrder] = await conn.execute<any[]>(
+      `SELECT id, status FROM orders WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [ctx.orderId, ctx.tenantId]
+    );
+    if (lockedOrder.length > 0 && lockedOrder[0].status === 'open') {
+      await conn.execute(
+        'INSERT INTO order_item_removals (order_item_id, removed_by_user_id, reason) VALUES (?, ?, ?)',
+        [ctx.itemId, ctx.userId, 'Systemfehler: Modifier konnten nicht gespeichert werden (automatische Kompensation)']
+      );
+      removed = true;
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    logger.error(
+      { err, orderId: ctx.orderId, itemId: ctx.itemId, tenant: ctx.tenantId },
+      'Kompensation fehlgeschlagen — Position ohne Modifier bleibt in der Bestellung'
+    );
+    captureException(asError(err), { tenant: ctx.tenantId, source: 'orders:add-item-compensation-failed' });
+    return;
+  } finally {
+    conn.release();
+  }
+
+  if (!removed) {
+    logger.error(
+      { orderId: ctx.orderId, itemId: ctx.itemId, tenant: ctx.tenantId },
+      'Bestellung nicht mehr offen — Position ohne Modifier steht bereits auf einem Bon'
+    );
+    captureException(
+      new Error(`order_item ${ctx.itemId} ohne Modifier auf nicht mehr offener Bestellung ${ctx.orderId}`),
+      { tenant: ctx.tenantId, source: 'orders:add-item-compensation-too-late' }
+    );
+    return;
+  }
+
+  await writeAuditLog({
+    tenantId: ctx.tenantId, userId: ctx.userId, action: 'order.item_add_compensated',
+    entityType: 'order_item', entityId: ctx.itemId,
+    diff: { old: { order_id: ctx.orderId, reason: 'modifier_insert_failed' } },
+    ipAddress: ctx.ipAddress, deviceId: ctx.deviceId,
+  }).catch((err: unknown) => {
+    // Derselbe Audit-Pool ist vermutlich die Ursache des Ausfalls — die
+    // Kompensation selbst steht bereits GoBD-sicher in order_item_removals.
+    logger.error({ err, itemId: ctx.itemId }, 'audit_log für addItem-Kompensation fehlgeschlagen');
+    captureException(asError(err), { tenant: ctx.tenantId, source: 'orders:add-item-compensation-audit' });
+  });
 }
 
 // ─── DELETE /orders/:id/items/:itemId ────────────────────────────────────────

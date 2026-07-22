@@ -260,7 +260,7 @@ Doku: `docs/api.md` (Vertrag), `docs/betrieb.md` §6 (Runbook).
 wie S05/S06 (Resend-Domain) — bis dahin läuft der Versand im Dry-Run. Zusätzlich muss **`PUBLIC_API_URL`
 in Prod gesetzt** sein (S20), sonst zeigt jeder Reset-Link ins Leere.
 
-## [ ] S09 — Audit-Reste A3 + A6 (B8) — ~1 d
+## [x] S09 — Audit-Reste A3 + A6 (B8) — ~1 d
 **Prompt:**
 > Setze Paket S09 aus ROADMAP.md um: (1) A3: In `ordersController.addItem` laufen die
 > Modifier-INSERTs (auditDb) nach dem Commit — bei Fehler Kompensation schreiben:
@@ -270,6 +270,30 @@ in Prod gesetzt** sein (S20), sonst zeigt jeder Reset-Link ins Leere.
 > Kommentar dort), inkl. REVOKE-Pfad für Bestands-DBs; Prod-DBA-Anweisung in der Doku anpassen.
 
 **DoD:** A3-Test grün; `SHOW GRANTS` für audit_insert_user zeigt nur die 5 Tabellen; OFFEN.md A3/A6 streichen.
+
+**Erledigt 2026-07-22:**
+**A3** — Der `order_item_modifiers`-INSERT liegt jetzt in `services/orderItemModifiers.ts`
+(eigene Funktion, damit der Fehlerpfad im Integrationstest injizierbar ist, Muster wie
+`priceHistory`). Scheitert er, kompensiert `addItem` **unter dem Order-Lock** mit einem
+`order_item_removals`-Eintrag (kein DELETE — GoBD) und antwortet 500; alle Queries blenden die
+halbfertige Position über den bestehenden `NOT EXISTS`-Filter aus, der Client-Retry erzeugt kein
+Duplikat mehr.
+**Entscheidung (bewusst über den Prompt hinaus):** Die Kompensation prüft die Order unter dem Lock
+und entfernt **nichts**, wenn sie nicht mehr `open` ist — dann steht die Position bereits in einem
+unveränderlichen Bon, und ein Removal danach würde Bon und Order auseinanderlaufen lassen. Dieser
+(sehr seltene) Fall geht nur laut nach Sentry, ebenso eine gescheiterte Kompensation selbst.
+Der Removal-INSERT läuft über `app_user` (wie in `removeItem`), nicht über `auditDb` — sonst hinge
+die Kompensation an genau dem Pool, dessen Ausfall sie auffangen soll.
+**A6** — `scripts/setup-db.ts` vergibt tabellen-scoped INSERT-Grants aus `AUDIT_INSERT_TABLES` und
+entzieht ein evtl. bestehendes datenbankweites INSERT (Grants sind additiv). Es sind **sechs**
+Tabellen, nicht fünf: `email_log` kam mit S05/S06 dazu und stand nur im Kommentar.
+Nebenbei repariert: `useSocket` galt nur für `root` — auf macOS/Homebrew (Admin ist der
+Unix-User, Socket `/tmp/mysql.sock`) scheiterte `npm run db:setup:test` deshalb immer; jetzt reicht
+ein leeres `DB_ADMIN_PASSWORD`.
+Tests: **+2 Integration** (A3-Kompensation + Negativfall in `integration/orders`), **+3 Integration**
+(`integration/db-grants` — `SHOW GRANTS` und funktionaler Beweis, dass `auditDb` nicht in `orders`
+schreiben kann) → **188 + 411** grün. REQ-GOBD-012/013 + UC-18.
+Doku: `docs/betrieb.md` §7 (Prod-DBA-Anweisung inkl. `REVOKE`-Pfad und Symptomliste).
 
 ## [ ] S10 — versionMiddleware + Subscription-Details (B4 + B5) — ~1 d
 **Prompt:**
